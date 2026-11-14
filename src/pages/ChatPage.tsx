@@ -1,11 +1,14 @@
 import {
+  BookOpenText,
   Camera,
   CheckCircle2,
   ChevronDown,
   CircleHelp,
   LoaderCircle,
+  Leaf,
   MessageCircleHeart,
   Mic,
+  Plus,
   Send,
   ShieldCheck,
   Sparkles,
@@ -47,6 +50,13 @@ const sampleQuestions = [
   "我头晕，是不是药的问题？"
 ];
 
+const identifySuggestions = [
+  "拍药盒，查用法和注意事项",
+  "拍说明书，核对禁忌和风险",
+  "看看这盒药能不能和现在的药一起吃",
+  "识别一种常见中药材与辨识要点"
+];
+
 function wait(milliseconds: number) {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
@@ -72,6 +82,10 @@ export function ChatPage() {
   const [photoProgress, setPhotoProgress] = useState("");
   const [photoNotice, setPhotoNotice] = useState("");
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [view, setView] = useState<"home" | "conversation">(
+    searchParams.get("q") ? "conversation" : "home"
+  );
+  const [homeTab, setHomeTab] = useState<"chat" | "identify">("chat");
   const messagesRef = useRef<HTMLDivElement>(null);
   const initialQueryHandled = useRef(false);
   const autoScrollRef = useRef(false);
@@ -109,6 +123,7 @@ export function ChatPage() {
   async function submitQuestion(question = input, autoScroll = true) {
     const clean = question.trim();
     if (!clean || sending) return;
+    setView("conversation");
     autoScrollRef.current = autoScroll;
     setInput("");
     setSending(true);
@@ -242,6 +257,7 @@ export function ChatPage() {
 
   async function scanMedicationImage(imageDataUrl: string) {
     if (!imageDataUrl || photoBusy) return;
+    setView("conversation");
     setPhotoBusy(true);
     setPhotoProgress("正在读取照片");
     autoScrollRef.current = true;
@@ -502,6 +518,21 @@ export function ChatPage() {
       setPhotoProgress("");
       autoScrollRef.current = false;
     }
+
+  }
+
+  function startCameraScan() {
+    speech.stop();
+    setView("conversation");
+    setCameraOpen(true);
+  }
+
+  function startNewConversation() {
+    speech.stop();
+    setView("home");
+    setInput("");
+    setStages([]);
+    setPhotoNotice("");
   }
 
   const recentMessages = messages.slice(-5);
@@ -538,142 +569,186 @@ export function ChatPage() {
   return (
     <div className="page chat-page">
       <section className="chat-unified-shell">
-        <DiscoveryNav />
-        <header className="page-header">
-        <div>
-          <p className="eyebrow">问药 · 先给结论，再讲原因</p>
-          <h1 className="page-title">哪里不明白，直接说</h1>
-          <p className="page-description">
-            我会先核对当前全部药物。涉及诊断、停药或调剂量时，我会明确停下来。
-          </p>
-        </div>
-        <div className="chip-row">
-          <span className="chip">
-            <ShieldCheck size={15} aria-hidden="true" />
-            高风险受限回答
-          </span>
-          <span className="chip">
-            <Sparkles size={15} aria-hidden="true" />
-            {mode === "llm" ? "大模型 + 本地安全规则" : "本地安全规则演示"}
-          </span>
-        </div>
+        <header className="ai-chat-header">
+          <div className="ai-chat-brand">
+            <span className="ai-chat-mark">
+              <Sparkles size={21} aria-hidden="true" />
+            </span>
+            <span>
+              <strong>智药有方</strong>
+              <small>识药问药 · 家庭用药 AI</small>
+            </span>
+          </div>
+          <div className="ai-chat-header-actions">
+            <span className="chip">
+              <ShieldCheck size={15} aria-hidden="true" />
+              已核对 {medications.filter((item) => item.status === "active").length} 种当前药物
+            </span>
+            <button className="btn" type="button" onClick={startNewConversation}>
+              <Plus size={18} aria-hidden="true" />
+              新对话
+            </button>
+          </div>
         </header>
 
         {searchParams.get("concern") === "1" ? (
           <div className="notice warm chat-unified-notice">
-          <ShieldCheck size={20} aria-hidden="true" />
-          已记录您不舒服，并尝试把求助摘要发送给已授权家属。如果症状紧急，请直接拨打 120。
+            <ShieldCheck size={20} aria-hidden="true" />
+            已记录您不舒服，并尝试把求助摘要发送给已授权家属。如果症状紧急，请直接拨打 120。
           </div>
         ) : null}
 
-        <div className="chat-single">
-        <div className="chat-top-tools">
-          <button
-            type="button"
-            className="btn btn-primary btn-large"
-            aria-label="打开摄像头拍照识药"
-            disabled={photoBusy}
-            onClick={() => {
-              speech.stop();
-              setCameraOpen(true);
-            }}
-          >
-            {photoBusy ? (
-              <LoaderCircle size={21} className="spin" aria-hidden="true" />
-            ) : (
-              <Camera size={21} aria-hidden="true" />
-            )}
-            {photoBusy ? photoProgress || "正在识药" : "拍照识药"}
-          </button>
-          <span className="chip">
-            <ShieldCheck size={15} aria-hidden="true" />
-            已核对 {medications.filter((item) => item.status === "active").length} 种当前药物
-          </span>
-          <details className="chat-stage-details">
-            <summary>查看本次核对步骤</summary>
-            {stages.length ? (
-              stages.map((stage) => (
-                <div className={`agent-stage ${stage.status}`} key={stage.id}>
-                  <span className="stage-dot" aria-hidden="true" />
-                  {stage.label}
-                  {stage.status === "done" ? (
-                    <CheckCircle2 size={16} aria-hidden="true" />
-                  ) : null}
+        <div className={`ai-chat-stage ${view === "home" ? "is-home" : "is-conversation"}`}>
+          {view === "home" ? (
+            <>
+              <section className="ai-chat-welcome">
+                <span className="ai-chat-welcome-icon">
+                  <Sparkles size={30} aria-hidden="true" />
+                </span>
+                <h1>
+                  {homeTab === "chat"
+                    ? "有什么用药问题，直接问我"
+                    : "拍一拍，帮您看懂药"}
+                </h1>
+                <p>
+                  药品、中药材、用法、不良反应和同服风险都可以问。高风险用药会明确提示求助边界。
+                </p>
+                <div className="ai-mode-switch" role="tablist" aria-label="问药方式">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={homeTab === "chat"}
+                    className={homeTab === "chat" ? "active" : ""}
+                    onClick={() => setHomeTab("chat")}
+                  >
+                    问药
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={homeTab === "identify"}
+                    className={homeTab === "identify" ? "active" : ""}
+                    onClick={() => setHomeTab("identify")}
+                  >
+                    识药
+                  </button>
                 </div>
-              ))
-            ) : (
-              <p className="field-hint">提问后会显示识别问题、读取药物和风险核查阶段。</p>
-            )}
-          </details>
-        </div>
-          {photoNotice ? (
-            <div className="notice chat-unified-notice">
-            <Camera size={20} aria-hidden="true" />
-            <span>
-              {photoNotice}{" "}
-              <button
-                type="button"
-                className="text-link"
-                onClick={() => navigate("/add-medication?from=chat")}
-              >
-                去核对并加入用药
-              </button>
-            </span>
-            </div>
-          ) : null}
-          <section className="card chat-panel">
-          <div className="chat-messages" aria-live="polite" ref={messagesRef}>
-            {olderMessages.length ? (
-              <details className="chat-history">
-                <summary>查看更早的 {olderMessages.length} 条对话</summary>
-                <div className="chat-history-list">
-                  {olderMessages.map(renderMessage)}
-                </div>
-              </details>
-            ) : null}
-            {recentMessages.map(renderMessage)}
-            {sending ? (
-              <article className="message assistant">
-                <div className="message-role">智药有方</div>
-                <div className="message-bubble">
-                  <span style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                    <LoaderCircle size={20} className="spin" aria-hidden="true" />
-                    正在帮您核对，请稍等…
+              </section>
+              <section className="ai-recommendations" aria-label="为你推荐">
+                <p>为你推荐</p>
+                {messages.length > 1 ? (
+                  <button
+                    type="button"
+                    className="ai-recommendation"
+                    onClick={() => setView("conversation")}
+                  >
+                    <MessageCircleHeart size={20} aria-hidden="true" />
+                    继续上一次用药对话
+                  </button>
+                ) : null}
+                {(homeTab === "chat" ? sampleQuestions : identifySuggestions).map(
+                  (question, index) => (
+                    <button
+                      type="button"
+                      className="ai-recommendation"
+                      key={question}
+                      onClick={() => {
+                        if (homeTab === "chat") {
+                          void submitQuestion(question);
+                        } else if (index === 3) {
+                          navigate("/herbs");
+                        } else {
+                          startCameraScan();
+                        }
+                      }}
+                    >
+                      {homeTab === "chat" ? (
+                        <MessageCircleHeart size={20} aria-hidden="true" />
+                      ) : (
+                        <Camera size={20} aria-hidden="true" />
+                      )}
+                      {question}
+                    </button>
+                  )
+                )}
+              </section>
+            </>
+          ) : (
+            <>
+              <div className="ai-conversation-head">
+                <strong>当前对话</strong>
+                {stages.length ? (
+                  <details className="chat-stage-details">
+                    <summary>查看本次核对步骤</summary>
+                    {stages.map((stage) => (
+                      <div className={`agent-stage ${stage.status}`} key={stage.id}>
+                        <span className="stage-dot" aria-hidden="true" />
+                        {stage.label}
+                      </div>
+                    ))}
+                  </details>
+                ) : null}
+              </div>
+              {photoNotice ? (
+                <div className="notice chat-unified-notice">
+                  <Camera size={20} aria-hidden="true" />
+                  <span>
+                    {photoNotice}{" "}
+                    <button
+                      type="button"
+                      className="text-link"
+                      onClick={() => navigate("/add-medication?from=chat")}
+                    >
+                      去核对并加入用药
+                    </button>
                   </span>
                 </div>
-              </article>
-            ) : null}
-          </div>
-          <div className="chat-suggestions">
-            {sampleQuestions.map((question) => (
-              <button
-                className="suggestion-chip"
-                type="button"
-                key={question}
-                onClick={() => void submitQuestion(question)}
-              >
-                {question}
-              </button>
-            ))}
-          </div>
-          <div
-            className={`chat-voice-status ${speech.error ? "error" : ""}`}
-            aria-live="polite"
-          >
-            {speech.error
-              ? speech.error
-              : speech.interim
-                ? `正在听：${speech.interim}`
-                : speech.listening
-                  ? "正在聆听，松开后结束"
-                  : "按住语音键说话，松开时结束"}
-          </div>
-          <div className="chat-composer">
+              ) : null}
+              <div className="chat-messages" aria-live="polite" ref={messagesRef}>
+                {olderMessages.length ? (
+                  <details className="chat-history">
+                    <summary>查看更早的 {olderMessages.length} 条对话</summary>
+                    <div className="chat-history-list">
+                      {olderMessages.map(renderMessage)}
+                    </div>
+                  </details>
+                ) : null}
+                {recentMessages.map(renderMessage)}
+                {sending ? (
+                  <article className="message assistant">
+                    <div className="message-role">智药有方</div>
+                    <div className="message-bubble">
+                      <span style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                        <LoaderCircle size={20} className="spin" aria-hidden="true" />
+                        正在帮您核对，请稍等…
+                      </span>
+                    </div>
+                  </article>
+                ) : null}
+              </div>
+              <div className="chat-suggestions">
+                {sampleQuestions.slice(0, 3).map((question) => (
+                  <button
+                    className="suggestion-chip"
+                    type="button"
+                    key={question}
+                    onClick={() => void submitQuestion(question)}
+                  >
+                    {question}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="ai-composer-wrap">
+          <div className="ai-composer">
             <label>
               <span className="sr-only">输入您想问的用药问题</span>
               <textarea
                 value={input}
-                placeholder="例如：这两种药能一起吃吗？"
+                placeholder="有什么用药问题，直接问我…"
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
@@ -683,61 +758,74 @@ export function ChatPage() {
                 }}
               />
             </label>
-            <button
-              type="button"
-              className={`voice-button ${speech.listening ? "listening" : ""}`}
-              aria-label="按住说话，松开结束"
-              disabled={!speech.supported}
-              onContextMenu={(event) => event.preventDefault()}
-              onPointerDown={(event) => {
-                if (event.button !== 0 || speech.listening) return;
-                speech.start();
-              }}
-              onPointerUp={speech.stop}
-              onPointerCancel={speech.stop}
-              onKeyDown={(event) => {
-                if (
-                  (event.key === " " || event.key === "Enter") &&
-                  !event.repeat &&
-                  !speech.listening
-                ) {
-                  event.preventDefault();
+            <div className="ai-composer-actions">
+              <div className="ai-tool-group">
+                <button className="ai-tool-button" type="button" onClick={startNewConversation}>
+                  <Plus size={21} aria-hidden="true" />
+                  <span>新对话</span>
+                </button>
+                <button className="ai-tool-button photo" type="button" onClick={startCameraScan}>
+                  <Camera size={21} aria-hidden="true" />
+                  <span>{photoBusy ? photoProgress || "识药中" : "拍照识药"}</span>
+                </button>
+                <button className="ai-tool-button" type="button" onClick={() => navigate("/catalog")}>
+                  <BookOpenText size={21} aria-hidden="true" />
+                  <span>药品百科</span>
+                </button>
+                <button className="ai-tool-button" type="button" onClick={() => navigate("/herbs")}>
+                  <Leaf size={21} aria-hidden="true" />
+                  <span>识中药材</span>
+                </button>
+              </div>
+              <span className="ai-composer-spacer" />
+              <div className="ai-send-group">
+                <button
+                type="button"
+                className={`ai-mic-button ${speech.listening ? "listening" : ""}`}
+                aria-label="按住说话，松开结束"
+                disabled={!speech.supported}
+                onContextMenu={(event) => event.preventDefault()}
+                onPointerDown={(event) => {
+                  if (event.button !== 0 || speech.listening) return;
                   speech.start();
-                }
-              }}
-              onKeyUp={(event) => {
-                if (event.key === " " || event.key === "Enter") {
-                  event.preventDefault();
-                  speech.stop();
-                }
-              }}
-            >
-              <Mic size={25} aria-hidden="true" />
-              <span>{speech.listening ? "松开结束" : "按住说话"}</span>
-            </button>
-            {speech.listening ? (
-              <button
-                className="btn btn-warm submit-btn"
-                type="button"
-                onClick={speech.stop}
+                }}
+                onPointerUp={speech.stop}
+                onPointerCancel={speech.stop}
               >
-                <Square size={18} aria-hidden="true" />
-                <span className="btn-label">结束语音</span>
-              </button>
-            ) : (
-              <button
-                className="btn btn-primary submit-btn"
-                type="button"
-                disabled={sending || !input.trim()}
-                onClick={() => void submitQuestion()}
-              >
-                <Send size={20} aria-hidden="true" />
-                <span className="btn-label">发送</span>
-              </button>
-            )}
+                <Mic size={23} aria-hidden="true" />
+                </button>
+                {speech.listening ? (
+                  <button
+                    className="ai-send-button stop"
+                    type="button"
+                    aria-label="结束语音"
+                    onClick={speech.stop}
+                  >
+                    <Square size={18} aria-hidden="true" />
+                  </button>
+                ) : (
+                  <button
+                    className="ai-send-button"
+                    type="button"
+                    aria-label="发送"
+                    disabled={sending || !input.trim()}
+                    onClick={() => void submitQuestion()}
+                  >
+                    <Send size={20} aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className={`ai-voice-status ${speech.error ? "error" : ""}`} aria-live="polite">
+              {speech.error
+                ? speech.error
+                : speech.interim
+                  ? `正在听：${speech.interim}`
+                  : speech.listening
+                    ? "正在聆听，松开后结束"
+                    : "语音、照片、药品名和药品百科都可以直接问"}
+            </div>
           </div>
-          </section>
-
         </div>
       </section>
       <CameraCaptureModal
