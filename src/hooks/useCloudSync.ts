@@ -11,6 +11,7 @@ export function useCloudSync() {
   const [status, setStatus] = useState<SyncStatus>("idle");
   const lastFamilyUpdateRef = useRef("");
   const hydrated = useAppStore((state) => state.hydrated);
+  const sessionAccountId = useAppStore((state) => state.sessionAccountId);
   const role = useAppStore((state) => state.role);
   const familyCode = useAppStore((state) => state.familyCode);
   const medications = useAppStore((state) => state.medications);
@@ -24,7 +25,9 @@ export function useCloudSync() {
   // The elder device is the writer. Debouncing prevents one request for every
   // keystroke or short-lived status change.
   useEffect(() => {
-    if (!hydrated || !familyCode || role !== "elder") return;
+    if (!hydrated || !sessionAccountId || !familyCode || role !== "elder") {
+      return;
+    }
     const timer = window.setTimeout(async () => {
       if (!navigator.onLine) {
         setStatus("offline");
@@ -44,6 +47,7 @@ export function useCloudSync() {
     return () => window.clearTimeout(timer);
   }, [
     hydrated,
+    sessionAccountId,
     role,
     familyCode,
     medications,
@@ -59,7 +63,7 @@ export function useCloudSync() {
   // family code; merging snapshots must not restart the interval or make the
   // sync labels alternate on every poll.
   useEffect(() => {
-    if (!hydrated || !familyCode || role !== "family") {
+    if (!hydrated || !sessionAccountId || !familyCode || role !== "family") {
       lastFamilyUpdateRef.current = "";
       return;
     }
@@ -98,7 +102,7 @@ export function useCloudSync() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [hydrated, role, familyCode]);
+  }, [hydrated, sessionAccountId, role, familyCode]);
 
   return status;
 }

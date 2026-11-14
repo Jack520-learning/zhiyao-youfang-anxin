@@ -6,6 +6,7 @@ import {
   CloudOff,
   FileHeart,
   House,
+  LockKeyhole,
   MessageCircleHeart,
   Pill,
   RefreshCw,
@@ -17,6 +18,8 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useCloudSync, type SyncStatus } from "../hooks/useCloudSync";
 import { useAppStore } from "../store/useAppStore";
+import { AuthGate } from "./AuthGate";
+import { FloatingSos } from "./FloatingSos";
 import { SosModal } from "./SosModal";
 import { ReminderOverlay } from "./ReminderOverlay";
 
@@ -64,8 +67,9 @@ function belongsToDiscovery(pathname: string): boolean {
 export function AppShell() {
   const role = useAppStore((state) => state.role);
   const hydrated = useAppStore((state) => state.hydrated);
+  const sessionAccountId = useAppStore((state) => state.sessionAccountId);
+  const accounts = useAppStore((state) => state.accounts);
   const preferences = useAppStore((state) => state.preferences);
-  const setRole = useAppStore((state) => state.setRole);
   const syncStatus = useCloudSync();
   const navigate = useNavigate();
   const location = useLocation();
@@ -82,6 +86,15 @@ export function AppShell() {
       location.pathname === "/chat" ? "chat" : "";
   }, [location.pathname]);
 
+  useEffect(() => {
+    if (!sessionAccountId) return;
+    if (role === "family" && location.pathname === "/chat") {
+      navigate("/family", { replace: true });
+    } else if (role === "elder" && location.pathname === "/family") {
+      navigate("/", { replace: true });
+    }
+  }, [location.pathname, navigate, role, sessionAccountId]);
+
   if (!hydrated) {
     return (
       <div className="loading-screen" aria-live="polite">
@@ -95,14 +108,11 @@ export function AppShell() {
     );
   }
 
+  if (!sessionAccountId) return <AuthGate />;
+
   const nav = role === "elder" ? elderNav : familyNav;
   const roleName = role === "elder" ? "老人端" : "家属端";
-
-  function switchRole() {
-    const nextRole = role === "elder" ? "family" : "elder";
-    setRole(nextRole);
-    navigate(nextRole === "elder" ? "/" : "/family");
-  }
+  const account = accounts.find((item) => item.id === sessionAccountId);
 
   function navClass({ isActive }: { isActive: boolean }) {
     return isActive ? "active" : "";
@@ -157,18 +167,14 @@ export function AppShell() {
                 aria-hidden="true"
               />
             </div>
-            <button className="role-switch" type="button" onClick={switchRole}>
+            <div className="role-switch" aria-label="当前登录账号">
               <span>
                 <strong>{roleName}</strong>
                 <br />
-                演示切换角色
+                {account?.displayName || "本地账号"} · 切换需退出
               </span>
-              {role === "elder" ? (
-                <UsersRound size={21} aria-hidden="true" />
-              ) : (
-                <UserRound size={21} aria-hidden="true" />
-              )}
-            </button>
+              <LockKeyhole size={20} aria-hidden="true" />
+            </div>
           </div>
         </aside>
 
@@ -186,10 +192,10 @@ export function AppShell() {
             <button
               type="button"
               className="icon-btn"
-              aria-label="切换老人端或家属端"
-              onClick={switchRole}
+              aria-label="查看当前账号"
+              onClick={() => navigate("/profile")}
             >
-              {role === "elder" ? <UsersRound size={21} /> : <UserRound size={21} />}
+              {role === "elder" ? <UserRound size={21} /> : <UsersRound size={21} />}
             </button>
             <button
               type="button"
@@ -207,15 +213,7 @@ export function AppShell() {
         </main>
       </div>
 
-      <button
-        type="button"
-        className="sos-fab"
-        aria-label="紧急求助 SOS"
-        onClick={() => setSosOpen(true)}
-      >
-        <ShieldAlert size={21} aria-hidden="true" />
-        <span>SOS 求助</span>
-      </button>
+      <FloatingSos onOpen={() => setSosOpen(true)} />
 
       <nav className="mobile-nav" aria-label={`${roleName}底部导航`}>
         {nav.map(({ to, label, icon: Icon, end }) => (

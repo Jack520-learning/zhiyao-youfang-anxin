@@ -7,6 +7,7 @@ import {
   Eye,
   KeyRound,
   LockKeyhole,
+  LogOut,
   Phone,
   Plus,
   RotateCcw,
@@ -45,6 +46,7 @@ export function ProfilePage() {
   const updateEmergencyContacts = useAppStore(
     (state) => state.updateEmergencyContacts
   );
+  const logoutAccount = useAppStore((state) => state.logoutAccount);
   const setFamilyCode = useAppStore((state) => state.setFamilyCode);
   const resetDemo = useAppStore((state) => state.resetDemo);
   const clearAllData = useAppStore((state) => state.clearAllData);
@@ -125,6 +127,14 @@ export function ProfilePage() {
     }
     await clearAllData();
     setToast("演示档案已经删除");
+    navigate("/");
+  }
+
+  function logout() {
+    if (!window.confirm("退出当前账号？本地用药和对话记录会继续保留。")) {
+      return;
+    }
+    logoutAccount();
     navigate("/");
   }
 
@@ -662,6 +672,10 @@ export function ProfilePage() {
                 <Trash2 size={19} aria-hidden="true" />
                 删除全部数据
               </button>
+              <button className="btn" type="button" onClick={logout}>
+                <LogOut size={19} aria-hidden="true" />
+                退出当前账号
+              </button>
             </div>
             <details style={{ marginTop: 14 }}>
               <summary className="text-link">查看最近操作记录</summary>
@@ -940,6 +954,10 @@ export function ProfilePage() {
           <button className="btn btn-danger" type="button" onClick={deleteData}>
             <Trash2 size={19} aria-hidden="true" />
             删除全部数据
+          </button>
+          <button className="btn" type="button" onClick={logout}>
+            <LogOut size={19} aria-hidden="true" />
+            退出当前账号
           </button>
         </div>
         <div className="form-grid" style={{ marginTop: 18 }}>

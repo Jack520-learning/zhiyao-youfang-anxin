@@ -52,6 +52,13 @@
       "reviewed": false
     },
     {
+      "id": "src-herb-catalog",
+      "title": "智药有方中药材演示资料",
+      "type": "professional-note",
+      "excerpt": "中草药性味、传统用途、辨识要点与安全提醒来自演示整理资料，尚需中医药专业人员逐条复核。",
+      "reviewed": false
+    },
+    {
       "id": "src-emergency",
       "title": "紧急身体状态优先原则",
       "type": "safety-policy",

@@ -395,6 +395,16 @@ async function callQwenTranscription(audioBase64, mimeType) {
 
 async function callAiAssistant(payload) {
   const baseUrl = getAiBaseUrl();
+  const skillFocus = {
+    photo:
+      "围绕照片识别结果回答，明确哪些字段来自图片、哪些仍需包装或说明书确认。",
+    catalog:
+      "围绕具体药品的用法、剂量边界、禁忌、不良反应、价格线索和当前同服风险回答。",
+    herbs:
+      "围绕中药材辨识、传统用途、安全提醒及与当前处方药的搭配风险回答。",
+    "multi-drug":
+      "逐项核对重复成分、同类重复、相互作用和错峰服用，不自行决定停药或改剂量。"
+  }[payload.skill] || "使用普通安全用药问答方式。";
   const context = {
     age: payload.profile?.age,
     conditions: payload.profile?.conditions || [],
@@ -408,6 +418,8 @@ async function callAiAssistant(payload) {
     })),
     evidence: payload.evidence || [],
     riskLevel: payload.riskLevel || "unknown",
+    activeSkill: payload.skillLabel || "",
+    skillFocus,
     groundingText: String(payload.groundingText || "").slice(0, 5000),
     conversationHistory: Array.isArray(payload.history)
       ? payload.history
@@ -438,11 +450,11 @@ async function callAiAssistant(payload) {
         {
           role: "system",
           content:
-            "你是基于通义千问的老人安全用药信息助手。groundingText 是本地安全规则已经确定的结论和依据，只能在不改变其风险等级、剂量边界、禁忌和下一步的前提下改写表达。不得补充 groundingText 之外的药物事实，不诊断、不开处方、不判断停药、不建议调整剂量或替代医生。高风险或紧急状态只能强调求助，不得增加具体用药动作。资料不足时保留“资料不足”。先给结论，再说明原因和下一步，用简短、温和、老人能理解的中文回答。"
+            "你是基于通义千问的老人安全用药信息助手。groundingText 是本地安全规则已经确定的结论和依据，只能在不改变其风险等级、剂量边界、禁忌和下一步的前提下改写表达。当前技能只决定回答重点，不得借技能扩张医疗权限。不得补充 groundingText 之外的药物事实，不诊断、不开处方、不判断停药、不建议调整剂量或替代医生。高风险或紧急状态只能强调求助，不得增加具体用药动作。资料不足时保留“资料不足”。先给结论，再说明原因和下一步，用简短、温和、老人能理解的中文回答。"
         },
         {
           role: "user",
-          content: `安全上下文：${JSON.stringify(context)}\n用户问题：${String(payload.query || "").slice(0, 1000)}`
+          content: `安全上下文：${JSON.stringify(context)}\n当前技能重点：${skillFocus}\n用户问题：${String(payload.query || "").slice(0, 1000)}`
         }
       ]
     })

@@ -6,6 +6,7 @@ import {
   type StateStorage
 } from "zustand/middleware";
 import { createInitialState } from "../data/seed";
+import { createPasswordRecord, verifyPassword } from "../lib/auth";
 import { createId } from "../lib/ids";
 import { nowIso } from "../lib/time";
 import type {
@@ -22,6 +23,7 @@ import type {
   EmergencyContact,
   FamilyAlert,
   IntakeDraft,
+  LocalAccount,
   Medication,
   RiskCheck,
   UserRole
@@ -75,6 +77,18 @@ const indexedDbStorage: StateStorage = {
 interface AppActions {
   hydrated: boolean;
   setHydrated: (value: boolean) => void;
+  registerAccount: (input: {
+    username: string;
+    password: string;
+    displayName: string;
+    role: UserRole;
+    familyCode?: string;
+  }) => Promise<{ ok: boolean; error?: string }>;
+  loginAccount: (
+    username: string,
+    password: string
+  ) => Promise<{ ok: boolean; error?: string }>;
+  logoutAccount: () => void;
   setRole: (role: UserRole) => void;
   setFamilyCode: (familyCode: string) => void;
   updateProfile: (profile: Partial<ElderProfile>) => void;
@@ -98,6 +112,7 @@ interface AppActions {
   replaceChatMessage: (id: string, message: ChatMessage) => void;
   createConversation: () => string;
   setActiveConversation: (id: string) => void;
+  deleteConversation: (id: string) => void;
   setConversationMedicineContext: (
     draft?: IntakeDraft,
     conversationId?: string
@@ -125,20 +140,137 @@ export const useAppStore = create<AppStore>()(
       ...initial,
       hydrated: false,
       setHydrated: (hydrated) => setState({ hydrated }),
-      setRole: (role) =>
-        setState((state) => ({
+      registerAccount: async ({
+        username,
+        password,
+        displayName,
+        role,
+        familyCode
+      }) => {
+        const normalizedUsername = username.trim().toLowerCase();
+        if (!/^[a-zA-Z0-9_\u4e00-\u9fa5]{3,24}$/u.test(normalizedUsername)) {
+          return {
+            ok: false,
+            error: "账号需为 3 到 24 位中文、字母、数字或下划线"
+          };
+        }
+        if (password.length < 6) {
+          return { ok: false, error: "密码至少需要 6 位" };
+        }
+        const state = getState();
+        if (
+          state.accounts.some(
+            (account) => account.username === normalizedUsername
+          )
+        ) {
+          return { ok: false, error: "这个账号已经注册，请直接登录" };
+        }
+        const cleanFamilyCode = String(familyCode || state.familyCode)
+          .trim()
+          .toUpperCase()
+          .replace(/[^A-Z0-9]/g, "")
+          .slice(0, 8);
+        if (role === "family" && cleanFamilyCode.length < 6) {
+          return {
+            ok: false,
+            error: "家属注册需要老人端提供的家庭连接码"
+          };
+        }
+        const passwordRecord = await createPasswordRecord(password);
+        const account: LocalAccount = {
+          id: createId("account"),
+          username: normalizedUsername,
+          displayName: displayName.trim() || normalizedUsername,
           role,
+          familyCode: cleanFamilyCode,
+          ...passwordRecord,
+          createdAt: nowIso()
+        };
+        setState((current) => ({
+          accounts: [...current.accounts, account],
+          sessionAccountId: account.id,
+          role,
+          familyCode: account.familyCode,
+          profile:
+            role === "elder" && account.displayName
+              ? { ...current.profile, name: account.displayName }
+              : current.profile,
           auditEvents: [
             auditEvent(
               "settings-updated",
-              `切换为${role === "elder" ? "老人端" : "家属端"}`
+              `注册并登录${role === "elder" ? "老人端" : "家属端"}账号`
             ),
+            ...current.auditEvents
+          ].slice(0, 100)
+        }));
+        return { ok: true };
+      },
+      loginAccount: async (username, password) => {
+        const normalizedUsername = username.trim().toLowerCase();
+        const account = getState().accounts.find(
+          (item) => item.username === normalizedUsername
+        );
+        if (!account) return { ok: false, error: "账号或密码不正确" };
+        const valid = await verifyPassword(
+          password,
+          account.passwordHash,
+          account.passwordSalt
+        );
+        if (!valid) return { ok: false, error: "账号或密码不正确" };
+        setState((current) => ({
+          sessionAccountId: account.id,
+          role: account.role,
+          familyCode: account.familyCode,
+          auditEvents: [
+            auditEvent(
+              "settings-updated",
+              `登录${account.role === "elder" ? "老人端" : "家属端"}账号`
+            ),
+            ...current.auditEvents
+          ].slice(0, 100)
+        }));
+        return { ok: true };
+      },
+      logoutAccount: () =>
+        setState((state) => ({
+          sessionAccountId: undefined,
+          auditEvents: [
+            auditEvent("settings-updated", "退出当前账号，数据已保留"),
             ...state.auditEvents
           ].slice(0, 100)
         })),
+      setRole: (role) =>
+        setState((state) => {
+          const account = state.accounts.find(
+            (item) => item.id === state.sessionAccountId
+          );
+          if (!account || account.role !== role) return state;
+          return {
+            role,
+            auditEvents: [
+              auditEvent(
+                "settings-updated",
+                `恢复${role === "elder" ? "老人端" : "家属端"}登录身份`
+              ),
+              ...state.auditEvents
+            ].slice(0, 100)
+          };
+        }),
       setFamilyCode: (familyCode) =>
-        setState({
-          familyCode: familyCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8)
+        setState((state) => {
+          const clean = familyCode
+            .trim()
+            .toUpperCase()
+            .replace(/[^A-Z0-9]/g, "")
+            .slice(0, 8);
+          return {
+            familyCode: clean,
+            accounts: state.accounts.map((account) =>
+              account.id === state.sessionAccountId
+                ? { ...account, familyCode: clean }
+                : account
+            )
+          };
         }),
       updateProfile: (profile) =>
         setState((state) => ({
@@ -334,6 +466,26 @@ export const useAppStore = create<AppStore>()(
             ? { activeConversationId: id }
             : state
         ),
+      deleteConversation: (id) =>
+        setState((state) => {
+          const remaining = state.conversations.filter(
+            (conversation) => conversation.id !== id
+          );
+          const replacement =
+            remaining[0] ?? createConversationRecord();
+          const conversations = remaining.length ? remaining : [replacement];
+          return {
+            conversations,
+            activeConversationId:
+              state.activeConversationId === id
+                ? replacement.id
+                : state.activeConversationId,
+            auditEvents: [
+              auditEvent("settings-updated", "删除一条问药对话记录"),
+              ...state.auditEvents
+            ].slice(0, 100)
+          };
+        }),
       setConversationMedicineContext: (draft, conversationId) =>
         setState((state) => ({
           conversations: state.conversations.map((conversation) =>
@@ -364,6 +516,8 @@ export const useAppStore = create<AppStore>()(
           }),
           role: current.role,
           familyCode: current.familyCode,
+          accounts: current.accounts,
+          sessionAccountId: current.sessionAccountId,
           hydrated: true
         });
       },

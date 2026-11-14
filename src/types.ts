@@ -91,6 +91,17 @@ export interface Conversation {
   medicineContext?: IntakeDraft;
 }
 
+export interface LocalAccount {
+  id: string;
+  username: string;
+  displayName: string;
+  role: UserRole;
+  familyCode: string;
+  passwordHash: string;
+  passwordSalt: string;
+  createdAt: string;
+}
+
 export interface ElderProfile {
   name: string;
   age: number;
@@ -167,6 +178,8 @@ export interface FamilyAlert {
 export interface AppState {
   schemaVersion: number;
   role: UserRole;
+  accounts: LocalAccount[];
+  sessionAccountId?: string;
   familyCode: string;
   profile: ElderProfile;
   emergencyContacts: EmergencyContact[];

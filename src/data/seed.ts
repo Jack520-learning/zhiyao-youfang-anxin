@@ -86,6 +86,7 @@ export function createInitialState(options?: {
   return {
     schemaVersion: 1,
     role: options?.role ?? "elder",
+    accounts: [],
     familyCode: options?.familyCode ?? createFamilyCode(),
     profile,
     emergencyContacts,

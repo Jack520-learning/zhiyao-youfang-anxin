@@ -5,6 +5,7 @@ import {
   ChevronDown,
   CircleHelp,
   ClipboardList,
+  ExternalLink,
   LoaderCircle,
   Leaf,
   MessageCircleHeart,
@@ -17,6 +18,7 @@ import {
   ShieldCheck,
   Sparkles,
   Square,
+  Trash2,
   Volume2
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -36,6 +38,7 @@ import {
 } from "../catalog/chatBridge";
 import { findBestMedicine } from "../catalog/retrieval";
 import { buildLocalGuidance } from "../catalog/guidance";
+import { searchHerbs } from "../catalog/herbs";
 import { speakText } from "../lib/speech";
 import { useQwenSpeechRecognition } from "../lib/qwenSpeech";
 import { nowIso } from "../lib/time";
@@ -55,12 +58,113 @@ const sampleQuestions = [
   "我头晕，是不是药的问题？"
 ];
 
-const identifySuggestions = [
-  "拍药盒，查用法和注意事项",
-  "拍说明书，核对禁忌和风险",
-  "看看这盒药能不能和现在的药一起吃",
-  "识别一种常见中药材与辨识要点"
+type ComposerSkill = "photo" | "catalog" | "herbs" | "multi-drug";
+
+const composerSkills: Array<{
+  id: ComposerSkill;
+  label: string;
+  icon: typeof Camera;
+  placeholder: string;
+  researchPath: string;
+  researchLabel: string;
+}> = [
+  {
+    id: "photo",
+    label: "拍照识药",
+    icon: Camera,
+    placeholder: "拍药盒后继续问：这个药怎么吃？和我现在的药冲突吗？",
+    researchPath: "/add-medication?from=chat",
+    researchLabel: "打开加药核对"
+  },
+  {
+    id: "catalog",
+    label: "药品百科",
+    icon: BookOpenText,
+    placeholder: "输入药名，实时询问用法、禁忌、副作用和同服风险…",
+    researchPath: "/catalog",
+    researchLabel: "深度查药品百科"
+  },
+  {
+    id: "herbs",
+    label: "识中药材",
+    icon: Leaf,
+    placeholder: "输入中药材名，实时询问辨识、用法和搭配风险…",
+    researchPath: "/herbs",
+    researchLabel: "进入中药材图谱"
+  },
+  {
+    id: "multi-drug",
+    label: "多药对账",
+    icon: ClipboardList,
+    placeholder: "描述多种药或保健品，实时核对重复成分和相互作用…",
+    researchPath: "/multi-drug",
+    researchLabel: "打开完整多药对账"
+  }
 ];
+
+function needsMedicationReview(question: string, skill?: ComposerSkill): boolean {
+  if (skill === "photo" || skill === "catalog" || skill === "multi-drug") {
+    return true;
+  }
+  return /(药|胶囊|片|颗粒|剂量|用量|用法|服用|怎么吃|什么时候吃|毫克|mg|同服|一起吃|相互作用|漏服|补服|停药|副作用|不良反应|头晕|恶心|心慌|胸闷|不舒服)/i.test(
+    question
+  );
+}
+
+function herbSkillAnswer(
+  question: string,
+  profile: { age: number; conditions: string[] },
+  currentMedicationNames: string[]
+): AssistantResponse | null {
+  const herb = searchHerbs(question).find((item) =>
+    [item.name, ...item.aliases].some((term) => question.includes(term))
+  );
+  if (!herb) return null;
+  const hasAnticoagulant = currentMedicationNames.some((name) =>
+    /华法林|阿司匹林|氯吡格雷|利伐沙班/.test(name)
+  );
+  const level = hasAnticoagulant ? "medium" : "low";
+  return {
+    message: [
+      `识别到中药材：${herb.name}`,
+      `性味归经：${herb.nature} · ${herb.flavor} · 归${herb.meridians.join("、")}经`,
+      `传统用途：${herb.functions.join("、")}`,
+      "",
+      "安全提醒：",
+      ...herb.safety.map((item) => `· ${item}`),
+      "",
+      hasAnticoagulant
+        ? "结论：您当前有需要关注凝血风险的处方药，不要自行把这类中药材加入日常服用。请先让医生或药师核对。"
+        : "结论：中药材也需要结合体质、炮制方法和正在服用的药物核对，不能仅凭名称自行定量或长期服用。",
+      `老人特别说明：${profile.age >= 65 ? "年龄较大，更应避免自行叠加药材和保健品。" : "使用前仍需核对年龄和基础疾病。"}`
+    ].join("\n"),
+    riskCheck: {
+      id: `herb-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      level,
+      title: hasAnticoagulant
+        ? "中药材与当前抗凝用药需要专业核对"
+        : `${herb.name}使用前需要核对`,
+      summary: herb.traditionalUse,
+      nextStep: hasAnticoagulant
+        ? "不要自行同服。请携带药材实物和全部处方药，让医生或药师评估。"
+        : "不要用单一症状自行确定体质，也不能用中药材替代处方药。",
+      reasons: [
+        `已匹配中药材：${herb.name}`,
+        `当前基础疾病：${profile.conditions.join("、") || "未填写"}`
+      ],
+      sourceIds: ["src-herb-catalog"],
+      involvedMedicationIds: [],
+      medicationSnapshot: currentMedicationNames,
+      createdAt: nowIso()
+    },
+    stages: [
+      { id: "herb-match", label: `识别中药材：${herb.name}`, status: "done" },
+      { id: "herb-safety", label: "核对安全提醒与当前用药", status: "done" },
+      { id: "herb-answer", label: "生成针对性解答", status: "done" }
+    ],
+    mode: "rules"
+  };
+}
 
 function wait(milliseconds: number) {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
@@ -86,6 +190,7 @@ export function ChatPage() {
   const addChatMessage = useAppStore((state) => state.addChatMessage);
   const saveIntakeDraft = useAppStore((state) => state.saveIntakeDraft);
   const createConversation = useAppStore((state) => state.createConversation);
+  const deleteConversation = useAppStore((state) => state.deleteConversation);
   const setActiveConversation = useAppStore(
     (state) => state.setActiveConversation
   );
@@ -103,7 +208,12 @@ export function ChatPage() {
   const [view, setView] = useState<"home" | "conversation">(
     searchParams.get("q") ? "conversation" : "home"
   );
-  const [homeTab, setHomeTab] = useState<"chat" | "identify">("chat");
+  const [composerSkill, setComposerSkill] = useState<ComposerSkill>();
+  const [thinkingLabel, setThinkingLabel] = useState("正在思考并组织回答…");
+  const [conversationToDelete, setConversationToDelete] = useState<{
+    id: string;
+    title: string;
+  }>();
   const [sidebarOpen, setSidebarOpen] = useState(
     () => typeof window === "undefined" || window.innerWidth >= 900
   );
@@ -161,6 +271,11 @@ export function ChatPage() {
     autoScrollRef.current = autoScroll;
     setInput("");
     setSending(true);
+    setThinkingLabel(
+      needsMedicationReview(clean, composerSkill)
+        ? "正在核对用药安全、当前药物和资料来源…"
+        : "正在思考并组织回答…"
+    );
     const targetConversationId =
       useAppStore.getState().activeConversationId;
     const userMessage: ChatMessage = {
@@ -192,6 +307,14 @@ export function ChatPage() {
       activeMedications,
       profile
     );
+    if (composerSkill === "herbs") {
+      localResponse =
+        herbSkillAnswer(
+          contextualQuestion,
+          profile,
+          activeMedications.map((medication) => medication.name)
+        ) ?? localResponse;
+    }
     const catalogResponse = answerFromDrugCatalog(
       contextualQuestion,
       profile,
@@ -267,6 +390,10 @@ export function ChatPage() {
             evidence: localResponse.riskCheck.sourceIds,
             riskLevel: localResponse.riskCheck.level,
             groundingText: localResponse.message,
+            skill: composerSkill,
+            skillLabel: composerSkills.find(
+              (item) => item.id === composerSkill
+            )?.label,
             history: (currentConversation?.messages ?? [])
               .filter((message) => message.id !== userMessage.id)
               .filter(
@@ -592,11 +719,46 @@ export function ChatPage() {
 
   function startNewConversation() {
     speech.stop();
-    createConversation();
+    const current = useAppStore
+      .getState()
+      .conversations.find(
+        (conversation) =>
+          conversation.id === useAppStore.getState().activeConversationId
+      );
+    if (
+      current?.messages.some((message) => message.role === "user") ||
+      current?.medicineContext
+    ) {
+      createConversation();
+    }
     setView("home");
     setInput("");
     setStages([]);
     setPhotoNotice("");
+    setComposerSkill(undefined);
+  }
+
+  function removeConversation(id: string, title: string) {
+    setConversationToDelete({ id, title });
+  }
+
+  function confirmDeleteConversation() {
+    if (!conversationToDelete) return;
+    const { id } = conversationToDelete;
+    const wasActive = id === activeConversationId;
+    deleteConversation(id);
+    setConversationToDelete(undefined);
+    if (wasActive) {
+      const next = useAppStore.getState().conversations[0];
+      setView(
+        next?.messages.some((message) => message.role === "user")
+          ? "conversation"
+          : "home"
+      );
+      setInput("");
+      setStages([]);
+      setPhotoNotice("");
+    }
   }
 
   function openConversation(id: string) {
@@ -609,6 +771,7 @@ export function ChatPage() {
     );
     setInput("");
     setPhotoNotice("");
+    setComposerSkill(undefined);
     if (window.innerWidth < 900) setSidebarOpen(false);
   }
 
@@ -696,25 +859,45 @@ export function ChatPage() {
             </div>
             <div className="ai-conversation-list">
               {orderedConversations.map((conversation) => (
-                <button
-                  type="button"
-                  className={conversation.id === activeConversationId ? "active" : ""}
+                <div
+                  className={`ai-conversation-item ${
+                    conversation.id === activeConversationId ? "active" : ""
+                  }`}
                   key={conversation.id}
-                  onClick={() => openConversation(conversation.id)}
                 >
-                  <MessageSquareText size={17} aria-hidden="true" />
-                  <span>
-                    <strong>{conversation.title}</strong>
-                    <small>
-                      {new Date(conversation.updatedAt).toLocaleString("zh-CN", {
-                        month: "numeric",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit"
-                      })}
-                    </small>
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    className="ai-conversation-open"
+                    onClick={() => openConversation(conversation.id)}
+                  >
+                    <MessageSquareText size={17} aria-hidden="true" />
+                    <span>
+                      <strong>{conversation.title}</strong>
+                      <small>
+                        {new Date(conversation.updatedAt).toLocaleString(
+                          "zh-CN",
+                          {
+                            month: "numeric",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit"
+                          }
+                        )}
+                      </small>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="ai-conversation-delete"
+                    aria-label={`删除对话：${conversation.title}`}
+                    title="删除对话"
+                    onClick={() =>
+                      removeConversation(conversation.id, conversation.title)
+                    }
+                  >
+                    <Trash2 size={16} aria-hidden="true" />
+                  </button>
+                </div>
               ))}
             </div>
             <p className="field-hint">
@@ -737,34 +920,10 @@ export function ChatPage() {
                 <span className="ai-chat-welcome-icon">
                   <Sparkles size={30} aria-hidden="true" />
                 </span>
-                <h1>
-                  {homeTab === "chat"
-                    ? "有什么用药问题，直接问我"
-                    : "拍一拍，帮您看懂药"}
-                </h1>
+                <h1>有什么用药问题，直接问我</h1>
                 <p>
                   药品、中药材、用法、不良反应和同服风险都可以问。高风险用药会明确提示求助边界。
                 </p>
-                <div className="ai-mode-switch" role="tablist" aria-label="问药方式">
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={homeTab === "chat"}
-                    className={homeTab === "chat" ? "active" : ""}
-                    onClick={() => setHomeTab("chat")}
-                  >
-                    问药
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={homeTab === "identify"}
-                    className={homeTab === "identify" ? "active" : ""}
-                    onClick={() => setHomeTab("identify")}
-                  >
-                    识药
-                  </button>
-                </div>
               </section>
               <section className="ai-recommendations" aria-label="为你推荐">
                 <p>为你推荐</p>
@@ -778,31 +937,17 @@ export function ChatPage() {
                     继续上一次用药对话
                   </button>
                 ) : null}
-                {(homeTab === "chat" ? sampleQuestions : identifySuggestions).map(
-                  (question, index) => (
-                    <button
-                      type="button"
-                      className="ai-recommendation"
-                      key={question}
-                      onClick={() => {
-                        if (homeTab === "chat") {
-                          void submitQuestion(question);
-                        } else if (index === 3) {
-                          navigate("/herbs");
-                        } else {
-                          startCameraScan();
-                        }
-                      }}
-                    >
-                      {homeTab === "chat" ? (
-                        <MessageCircleHeart size={20} aria-hidden="true" />
-                      ) : (
-                        <Camera size={20} aria-hidden="true" />
-                      )}
-                      {question}
-                    </button>
-                  )
-                )}
+                {sampleQuestions.slice(0, 2).map((question) => (
+                  <button
+                    type="button"
+                    className="ai-recommendation"
+                    key={question}
+                    onClick={() => void submitQuestion(question)}
+                  >
+                    <MessageCircleHeart size={20} aria-hidden="true" />
+                    {question}
+                  </button>
+                ))}
               </section>
             </>
           ) : (
@@ -852,7 +997,7 @@ export function ChatPage() {
                     <div className="message-bubble">
                       <span style={{ display: "flex", alignItems: "center", gap: 9 }}>
                         <LoaderCircle size={20} className="spin" aria-hidden="true" />
-                        正在帮您核对，请稍等…
+                        {thinkingLabel}
                       </span>
                     </div>
                   </article>
@@ -879,8 +1024,14 @@ export function ChatPage() {
             <label>
               <span className="sr-only">输入您想问的用药问题</span>
               <textarea
+                rows={1}
                 value={input}
-                placeholder="有什么用药问题，直接问我…"
+                placeholder={
+                  composerSkill
+                    ? composerSkills.find((item) => item.id === composerSkill)
+                        ?.placeholder
+                    : "有什么用药问题，直接问我…"
+                }
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
@@ -892,26 +1043,40 @@ export function ChatPage() {
             </label>
             <div className="ai-composer-actions">
               <div className="ai-tool-group">
-                <button className="ai-tool-button" type="button" onClick={startNewConversation}>
+                <button className="ai-tool-button new-chat" type="button" onClick={startNewConversation}>
                   <Plus size={21} aria-hidden="true" />
                   <span>新对话</span>
                 </button>
-                <button className="ai-tool-button photo" type="button" onClick={startCameraScan}>
-                  <Camera size={21} aria-hidden="true" />
-                  <span>{photoBusy ? photoProgress || "识药中" : "拍照识药"}</span>
-                </button>
-                <button className="ai-tool-button" type="button" onClick={() => navigate("/catalog")}>
-                  <BookOpenText size={21} aria-hidden="true" />
-                  <span>药品百科</span>
-                </button>
-                <button className="ai-tool-button" type="button" onClick={() => navigate("/herbs")}>
-                  <Leaf size={21} aria-hidden="true" />
-                  <span>识中药材</span>
-                </button>
-              <button className="ai-tool-button" type="button" onClick={() => navigate("/multi-drug")}>
-                <ClipboardList size={21} aria-hidden="true" />
-                <span>多药对账</span>
-              </button>
+                {composerSkills.map((skill) => {
+                  const Icon = skill.icon;
+                  return (
+                    <button
+                      className={`ai-tool-button ${
+                        composerSkill === skill.id ? "active" : ""
+                      }`}
+                      type="button"
+                      aria-pressed={composerSkill === skill.id}
+                      key={skill.id}
+                      onClick={() => {
+                        if (skill.id === "photo") {
+                          setComposerSkill("photo");
+                          startCameraScan();
+                          return;
+                        }
+                        setComposerSkill((current) =>
+                          current === skill.id ? undefined : skill.id
+                        );
+                      }}
+                    >
+                      <Icon size={21} aria-hidden="true" />
+                      <span>
+                        {skill.id === "photo" && photoBusy
+                          ? photoProgress || "识药中"
+                          : skill.label}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
               <span className="ai-composer-spacer" />
               <div className="ai-send-group">
@@ -958,6 +1123,29 @@ export function ChatPage() {
                 )}
               </div>
             </div>
+            {composerSkill ? (
+              <div className="ai-active-skill">
+                <span>
+                  当前技能：
+                  <strong>
+                    {composerSkills.find((item) => item.id === composerSkill)?.label}
+                  </strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate(
+                      composerSkills.find((item) => item.id === composerSkill)
+                        ?.researchPath || "/chat"
+                    )
+                  }
+                >
+                  {composerSkills.find((item) => item.id === composerSkill)
+                    ?.researchLabel || "深度研究"}
+                  <ExternalLink size={14} aria-hidden="true" />
+                </button>
+              </div>
+            ) : null}
             <div className={`ai-voice-status ${speech.error ? "error" : ""}`} aria-live="polite">
               {speech.error
                 ? speech.error
@@ -965,7 +1153,10 @@ export function ChatPage() {
                   ? `正在听：${speech.interim}`
                   : speech.listening
                     ? "正在聆听，松开后结束"
-                    : "语音、照片、药品名和药品百科都可以直接问"}
+                    : composerSkill
+                      ? composerSkills.find((item) => item.id === composerSkill)
+                          ?.placeholder
+                      : "语音、照片、药品名和药品百科都可以直接问"}
             </div>
           </div>
         </div>
@@ -980,6 +1171,43 @@ export function ChatPage() {
           void scanMedicationImage(imageDataUrl);
         }}
       />
+      {conversationToDelete ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onMouseDown={() => setConversationToDelete(undefined)}
+        >
+          <section
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-conversation-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <h2 id="delete-conversation-title">删除这段对话？</h2>
+            <p>
+              “{conversationToDelete.title}”删除后不能恢复，其他对话和用药档案不会受影响。
+            </p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={confirmDeleteConversation}
+              >
+                <Trash2 size={18} aria-hidden="true" />
+                确认删除
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setConversationToDelete(undefined)}
+              >
+                取消
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }
