@@ -4,7 +4,10 @@ import { findBestMedicine, matchMedicines } from "./retrieval";
 import { findInteractions } from "./interactions";
 import { searchHerbs } from "./herbs";
 import { buildLocalGuidance } from "./guidance";
-import { answerFromDrugCatalog } from "./chatBridge";
+import {
+  answerFromDrugCatalog,
+  currentCatalogCompanionSlugs
+} from "./chatBridge";
 
 describe("combined medicine catalog", () => {
   it("contains the imported structured medicine catalog", () => {
@@ -53,6 +56,19 @@ describe("combined medicine catalog", () => {
       []
     );
     expect(response?.message).toContain("无法核实实时价格");
+  });
+
+  it("uses the current family medication list as companions for a photo-based query", () => {
+    expect(
+      currentCatalogCompanionSlugs(["阿司匹林", "氨氯地平"])
+    ).toEqual(["aspirin", "amlodipine"]);
+    const response = answerFromDrugCatalog(
+      "布洛芬常见不良反应有哪些？",
+      { age: 72, conditions: ["高血压"] },
+      ["阿司匹林肠溶片", "苯磺酸氨氯地平片"],
+      ["aspirin", "amlodipine"]
+    );
+    expect(response?.riskCheck.level).toBe("high");
   });
 });
 

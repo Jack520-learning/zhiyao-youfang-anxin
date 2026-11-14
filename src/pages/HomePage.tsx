@@ -5,6 +5,7 @@ import {
   BookOpenText,
   Camera,
   Check,
+  ClipboardList,
   Clock3,
   MessageCircleHeart,
   Mic,
@@ -553,6 +554,10 @@ function HomeSearch() {
           <button type="button" className="btn btn-large" onClick={() => navigate("/herbs")}>
             <Leaf size={20} aria-hidden="true" />
             识中药材
+          </button>
+          <button type="button" className="btn btn-large" onClick={() => navigate("/multi-drug")}>
+            <ClipboardList size={20} aria-hidden="true" />
+            多药对账
           </button>
         </div>
       ) : null}

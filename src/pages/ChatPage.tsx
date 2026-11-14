@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ChevronDown,
   CircleHelp,
+  ClipboardList,
   LoaderCircle,
   Leaf,
   MessageCircleHeart,
@@ -208,7 +209,11 @@ export function ChatPage() {
     }
 
     let response: AssistantResponse = localResponse;
-    if (localResponse.riskCheck.level === "low") {
+    if (
+      localResponse.riskCheck.level === "low" ||
+      localResponse.riskCheck.level === "medium" ||
+      localResponse.riskCheck.level === "unknown"
+    ) {
       try {
         const aiResponse = await fetch("/api/assistant", {
           method: "POST",
@@ -217,7 +222,9 @@ export function ChatPage() {
             query: clean,
             profile,
             medications,
-            evidence: localResponse.riskCheck.sourceIds
+            evidence: localResponse.riskCheck.sourceIds,
+            riskLevel: localResponse.riskCheck.level,
+            groundingText: localResponse.message
           })
         });
         if (aiResponse.ok) {
@@ -776,6 +783,10 @@ export function ChatPage() {
                   <Leaf size={21} aria-hidden="true" />
                   <span>识中药材</span>
                 </button>
+              <button className="ai-tool-button" type="button" onClick={() => navigate("/multi-drug")}>
+                <ClipboardList size={21} aria-hidden="true" />
+                <span>多药对账</span>
+              </button>
               </div>
               <span className="ai-composer-spacer" />
               <div className="ai-send-group">

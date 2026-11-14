@@ -1,7 +1,7 @@
 {
   "name": "zhiyao-youfang-anxin",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.1.0",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -14,6 +14,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "start": "node --env-file-if-exists=.env server/index.mjs --serve",
+    "check:secrets": "node scripts/check-secrets.mjs",
     "prepare:ocr": "node scripts/prepare-ocr.mjs",
     "test": "vitest run",
     "test:watch": "vitest",

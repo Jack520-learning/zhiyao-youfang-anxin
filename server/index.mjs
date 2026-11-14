@@ -345,7 +345,9 @@ async function callAiAssistant(payload) {
       dosage: medication.dosage,
       relation: medication.relation
     })),
-    evidence: payload.evidence || []
+    evidence: payload.evidence || [],
+    riskLevel: payload.riskLevel || "unknown",
+    groundingText: String(payload.groundingText || "").slice(0, 5000)
   };
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
@@ -356,11 +358,12 @@ async function callAiAssistant(payload) {
     body: JSON.stringify({
       model: getTextModel(),
       temperature: 0.1,
+      max_tokens: 1200,
       messages: [
         {
           role: "system",
           content:
-            "你是老人安全用药信息助手。只根据提供的当前药物和证据回答；不诊断、不开处方、不判断停药、不建议调整剂量或替代医生。先给结论，再给下一步。资料不足时明确说资料不足。高危问题时不要给具体用药动作，只建议联系医生或药师。不得忽略当前全部药物。用简短、温和、老人能理解的中文回答。"
+            "你是基于通义千问的老人安全用药信息助手。groundingText 是本地安全规则已经确定的结论和依据，只能在不改变其风险等级、剂量边界、禁忌和下一步的前提下改写表达。不得补充 groundingText 之外的药物事实，不诊断、不开处方、不判断停药、不建议调整剂量或替代医生。高风险或紧急状态只能强调求助，不得增加具体用药动作。资料不足时保留“资料不足”。先给结论，再说明原因和下一步，用简短、温和、老人能理解的中文回答。"
         },
         {
           role: "user",

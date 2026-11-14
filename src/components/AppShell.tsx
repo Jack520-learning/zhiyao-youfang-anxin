@@ -56,7 +56,8 @@ function belongsToDiscovery(pathname: string): boolean {
   return (
     pathname === "/chat" ||
     pathname.startsWith("/catalog") ||
-    pathname.startsWith("/herbs")
+    pathname.startsWith("/herbs") ||
+    pathname.startsWith("/multi-drug")
   );
 }
 

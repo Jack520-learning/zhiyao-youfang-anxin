@@ -10,6 +10,7 @@ import { HerbDetailPage } from "./pages/HerbDetailPage";
 import { HerbsPage } from "./pages/HerbsPage";
 import { MedicationDetailPage } from "./pages/MedicationDetailPage";
 import { MedicationsPage } from "./pages/MedicationsPage";
+import { MultiDrugPage } from "./pages/MultiDrugPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { ReminderPage } from "./pages/ReminderPage";
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="catalog/:slug" element={<CatalogDetailPage />} />
         <Route path="herbs" element={<HerbsPage />} />
         <Route path="herbs/:id" element={<HerbDetailPage />} />
+        <Route path="multi-drug" element={<MultiDrugPage />} />
         <Route path="medications" element={<MedicationsPage />} />
         <Route path="medications/:id" element={<MedicationDetailPage />} />
         <Route path="add-medication" element={<AddMedicationPage />} />

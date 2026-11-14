@@ -1,7 +1,10 @@
 node_modules
 dist
-.env
-.env.local
+.env*
+!.env.example
+*.pem
+*.key
+secrets/
 data/runtime
 data/vapid.json
 public/ocr
