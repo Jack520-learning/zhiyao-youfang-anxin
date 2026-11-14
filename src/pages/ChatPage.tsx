@@ -8,7 +8,10 @@ import {
   LoaderCircle,
   Leaf,
   MessageCircleHeart,
+  MessageSquareText,
   Mic,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Send,
   ShieldCheck,
@@ -33,7 +36,8 @@ import {
 } from "../catalog/chatBridge";
 import { findBestMedicine } from "../catalog/retrieval";
 import { buildLocalGuidance } from "../catalog/guidance";
-import { speakText, useSpeechRecognition } from "../lib/speech";
+import { speakText } from "../lib/speech";
+import { useQwenSpeechRecognition } from "../lib/qwenSpeech";
 import { nowIso } from "../lib/time";
 import { useAppStore } from "../store/useAppStore";
 import type {
@@ -66,7 +70,14 @@ export function ChatPage() {
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const messages = useAppStore((state) => state.chatMessages);
+  const conversations = useAppStore((state) => state.conversations);
+  const activeConversationId = useAppStore(
+    (state) => state.activeConversationId
+  );
+  const activeConversation = conversations.find(
+    (conversation) => conversation.id === activeConversationId
+  );
+  const messages = activeConversation?.messages ?? [];
   const medications = useAppStore((state) => state.medications);
   const profile = useAppStore((state) => state.profile);
   const preferences = useAppStore((state) => state.preferences);
@@ -74,7 +85,13 @@ export function ChatPage() {
   const addFamilyAlert = useAppStore((state) => state.addFamilyAlert);
   const addChatMessage = useAppStore((state) => state.addChatMessage);
   const saveIntakeDraft = useAppStore((state) => state.saveIntakeDraft);
-  const intakeDraft = useAppStore((state) => state.intakeDraft);
+  const createConversation = useAppStore((state) => state.createConversation);
+  const setActiveConversation = useAppStore(
+    (state) => state.setActiveConversation
+  );
+  const setConversationMedicineContext = useAppStore(
+    (state) => state.setConversationMedicineContext
+  );
   const [input, setInput] = useState(searchParams.get("q") ?? "");
   const [sending, setSending] = useState(false);
   const [stages, setStages] = useState<AssistantStage[]>([]);
@@ -87,11 +104,14 @@ export function ChatPage() {
     searchParams.get("q") ? "conversation" : "home"
   );
   const [homeTab, setHomeTab] = useState<"chat" | "identify">("chat");
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => typeof window === "undefined" || window.innerWidth >= 900
+  );
   const messagesRef = useRef<HTMLDivElement>(null);
   const initialQueryHandled = useRef(false);
   const autoScrollRef = useRef(false);
 
-  const speech = useSpeechRecognition((transcript) => {
+  const speech = useQwenSpeechRecognition((transcript) => {
     setInput(transcript);
   });
 
@@ -117,6 +137,7 @@ export function ChatPage() {
       if (sessionStorage.getItem(signature)) return;
       sessionStorage.setItem(signature, "1");
       initialQueryHandled.current = true;
+      createConversation();
       void submitQuestion(initialQuery, false);
     }
   }, [searchParams, location.key]);
@@ -124,26 +145,47 @@ export function ChatPage() {
   async function submitQuestion(question = input, autoScroll = true) {
     const clean = question.trim();
     if (!clean || sending) return;
+    const liveConversation = useAppStore
+      .getState()
+      .conversations.find(
+        (conversation) =>
+          conversation.id === useAppStore.getState().activeConversationId
+      );
+    if (
+      view === "home" &&
+      liveConversation?.messages.some((message) => message.role === "user")
+    ) {
+      createConversation();
+    }
     setView("conversation");
     autoScrollRef.current = autoScroll;
     setInput("");
     setSending(true);
+    const targetConversationId =
+      useAppStore.getState().activeConversationId;
     const userMessage: ChatMessage = {
       id: createId("chat"),
       role: "user",
       content: clean,
       createdAt: nowIso()
     };
-    addChatMessage(userMessage);
+    addChatMessage(userMessage, targetConversationId);
 
     const activeMedications = medications.filter(
       (medication) => medication.status === "active"
     );
+    const stateAfterMessage = useAppStore.getState();
+    const currentConversation = stateAfterMessage.conversations.find(
+      (conversation) =>
+        conversation.id === stateAfterMessage.activeConversationId
+    );
+    const currentConversationDraft =
+      currentConversation?.medicineContext ?? stateAfterMessage.intakeDraft;
     const contextualQuestion =
-      intakeDraft &&
+      currentConversationDraft &&
       /(这个药|这种药|它|这盒药|图片里)/.test(clean) &&
-      intakeDraft.name
-        ? `${intakeDraft.name} ${clean}`
+      currentConversationDraft.name
+        ? `${currentConversationDraft.name} ${clean}`
         : clean;
     let localResponse = answerWithRules(
       contextualQuestion,
@@ -224,7 +266,18 @@ export function ChatPage() {
             medications,
             evidence: localResponse.riskCheck.sourceIds,
             riskLevel: localResponse.riskCheck.level,
-            groundingText: localResponse.message
+            groundingText: localResponse.message,
+            history: (currentConversation?.messages ?? [])
+              .filter((message) => message.id !== userMessage.id)
+              .filter(
+                (message) =>
+                  message.role === "user" || message.role === "assistant"
+              )
+              .slice(-10)
+              .map((message) => ({
+                role: message.role,
+                content: message.content.slice(0, 1000)
+              }))
           })
         });
         if (aiResponse.ok) {
@@ -250,7 +303,7 @@ export function ChatPage() {
       content: response.message,
       createdAt: nowIso(),
       riskCheck: response.riskCheck
-    });
+    }, targetConversationId);
     speakText(
       `${response.message}。${response.riskCheck.nextStep}`,
       profile.voiceEnabled && preferences.soundEnabled
@@ -268,13 +321,15 @@ export function ChatPage() {
     setPhotoBusy(true);
     setPhotoProgress("正在读取照片");
     autoScrollRef.current = true;
+    const targetConversationId =
+      useAppStore.getState().activeConversationId;
     addChatMessage({
       id: createId("chat"),
       role: "user",
       content: "我拍了一张药盒照片，请帮我识别风险、用法和价格。",
       createdAt: nowIso(),
       imageDataUrls: [imageDataUrl]
-    });
+    }, targetConversationId);
 
     try {
       let draft;
@@ -375,6 +430,7 @@ export function ChatPage() {
         };
       }
       saveIntakeDraft(draft);
+      setConversationMedicineContext(draft, targetConversationId);
       const createdAt = nowIso();
       const candidate = {
         id: createId("med"),
@@ -493,7 +549,7 @@ export function ChatPage() {
         content,
         createdAt: nowIso(),
         riskCheck
-      });
+      }, targetConversationId);
       setStages(
         riskCheck.level === "unknown"
           ? [
@@ -518,7 +574,7 @@ export function ChatPage() {
         content:
           "这张照片暂时没有识别成功。请重新拍清楚药名、规格和用法，或改用“拍照加药”手动核对。",
         createdAt: nowIso()
-      });
+      }, targetConversationId);
       setPhotoNotice("照片识别未完成，请重新拍摄。");
     } finally {
       setPhotoBusy(false);
@@ -536,14 +592,32 @@ export function ChatPage() {
 
   function startNewConversation() {
     speech.stop();
+    createConversation();
     setView("home");
     setInput("");
     setStages([]);
     setPhotoNotice("");
   }
 
+  function openConversation(id: string) {
+    const selected = conversations.find((conversation) => conversation.id === id);
+    setActiveConversation(id);
+    setView(
+      selected?.messages.some((message) => message.role === "user")
+        ? "conversation"
+        : "home"
+    );
+    setInput("");
+    setPhotoNotice("");
+    if (window.innerWidth < 900) setSidebarOpen(false);
+  }
+
   const recentMessages = messages.slice(-5);
   const olderMessages = messages.slice(0, -5);
+  const orderedConversations = [...conversations].sort(
+    (left, right) =>
+      new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+  );
 
   function renderMessage(message: ChatMessage) {
     return (
@@ -577,14 +651,25 @@ export function ChatPage() {
     <div className="page chat-page">
       <section className="chat-unified-shell">
         <header className="ai-chat-header">
-          <div className="ai-chat-brand">
-            <span className="ai-chat-mark">
-              <Sparkles size={21} aria-hidden="true" />
-            </span>
-            <span>
-              <strong>智药有方</strong>
-              <small>识药问药 · 家庭用药 AI</small>
-            </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button
+              type="button"
+              className="icon-btn ai-sidebar-toggle"
+              aria-label={sidebarOpen ? "收起对话记录" : "展开对话记录"}
+              aria-expanded={sidebarOpen}
+              onClick={() => setSidebarOpen((value) => !value)}
+            >
+              {sidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
+            </button>
+            <div className="ai-chat-brand">
+              <span className="ai-chat-mark">
+                <Sparkles size={21} aria-hidden="true" />
+              </span>
+              <span>
+                <strong>智药有方</strong>
+                <small>识药问药 · 家庭用药 AI</small>
+              </span>
+            </div>
           </div>
           <div className="ai-chat-header-actions">
             <span className="chip">
@@ -598,6 +683,46 @@ export function ChatPage() {
           </div>
         </header>
 
+        <div className={`ai-chat-content ${sidebarOpen ? "sidebar-open" : ""}`}>
+          <aside className="ai-conversation-sidebar" aria-label="历史对话记录">
+            <div className="ai-sidebar-heading">
+              <div>
+                <strong>对话记录</strong>
+                <small>{conversations.length} 个对话</small>
+              </div>
+              <button className="icon-btn" type="button" aria-label="新建对话" onClick={startNewConversation}>
+                <Plus size={20} />
+              </button>
+            </div>
+            <div className="ai-conversation-list">
+              {orderedConversations.map((conversation) => (
+                <button
+                  type="button"
+                  className={conversation.id === activeConversationId ? "active" : ""}
+                  key={conversation.id}
+                  onClick={() => openConversation(conversation.id)}
+                >
+                  <MessageSquareText size={17} aria-hidden="true" />
+                  <span>
+                    <strong>{conversation.title}</strong>
+                    <small>
+                      {new Date(conversation.updatedAt).toLocaleString("zh-CN", {
+                        month: "numeric",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit"
+                      })}
+                    </small>
+                  </span>
+                </button>
+              ))}
+            </div>
+            <p className="field-hint">
+              每条标题根据第一条问题生成。点击记录会恢复对应对话和图片上下文。
+            </p>
+          </aside>
+
+          <div className="ai-chat-main">
         {searchParams.get("concern") === "1" ? (
           <div className="notice warm chat-unified-notice">
             <ShieldCheck size={20} aria-hidden="true" />
@@ -794,16 +919,22 @@ export function ChatPage() {
                 type="button"
                 className={`ai-mic-button ${speech.listening ? "listening" : ""}`}
                 aria-label="按住说话，松开结束"
-                disabled={!speech.supported}
+                disabled={!speech.supported || speech.processing}
                 onContextMenu={(event) => event.preventDefault()}
                 onPointerDown={(event) => {
                   if (event.button !== 0 || speech.listening) return;
+                  event.preventDefault();
+                  event.currentTarget.setPointerCapture(event.pointerId);
                   speech.start();
                 }}
                 onPointerUp={speech.stop}
                 onPointerCancel={speech.stop}
               >
-                <Mic size={23} aria-hidden="true" />
+                {speech.processing ? (
+                  <LoaderCircle size={21} className="spin" aria-hidden="true" />
+                ) : (
+                  <Mic size={23} aria-hidden="true" />
+                )}
                 </button>
                 {speech.listening ? (
                   <button
@@ -836,6 +967,8 @@ export function ChatPage() {
                     ? "正在聆听，松开后结束"
                     : "语音、照片、药品名和药品百科都可以直接问"}
             </div>
+          </div>
+        </div>
           </div>
         </div>
       </section>

@@ -14,6 +14,7 @@ import type {
   AuditEvent,
   ChatMessage,
   CloudSnapshot,
+  Conversation,
   ConsentSettings,
   DoseEvent,
   DoseStatus,
@@ -40,6 +41,25 @@ function auditEvent(
     createdAt: nowIso(),
     metadata
   };
+}
+
+function createConversationRecord(title = "新对话"): Conversation {
+  const createdAt = nowIso();
+  return {
+    id: createId("conversation"),
+    title,
+    createdAt,
+    updatedAt: createdAt,
+    messages: []
+  };
+}
+
+function titleFromQuestion(content: string): string {
+  const clean = content
+    .replace(/^(请问|请帮我|帮我|想问一下|我想问|我想知道)[，,\s]*/u, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return clean.length > 20 ? `${clean.slice(0, 20)}…` : clean || "新的用药咨询";
 }
 
 const indexedDbStorage: StateStorage = {
@@ -74,8 +94,14 @@ interface AppActions {
     status: DoseStatus,
     doseId: string
   ) => void;
-  addChatMessage: (message: ChatMessage) => void;
+  addChatMessage: (message: ChatMessage, conversationId?: string) => void;
   replaceChatMessage: (id: string, message: ChatMessage) => void;
+  createConversation: () => string;
+  setActiveConversation: (id: string) => void;
+  setConversationMedicineContext: (
+    draft?: IntakeDraft,
+    conversationId?: string
+  ) => void;
   addAuditEvent: (
     type: AuditEvent["type"],
     summary: string,
@@ -241,21 +267,81 @@ export const useAppStore = create<AppStore>()(
             ].slice(0, 100)
           };
         }),
-      addChatMessage: (message) =>
-        setState((state) => ({
-          chatMessages: [...state.chatMessages, message].slice(-100),
-          riskChecks: message.riskCheck
-            ? [message.riskCheck, ...state.riskChecks].slice(0, 50)
-            : state.riskChecks
-        })),
+      addChatMessage: (message, requestedConversationId) =>
+        setState((state) => {
+          const activeId =
+            requestedConversationId ||
+            state.activeConversationId ||
+            state.conversations[0]?.id;
+          const existing =
+            state.conversations.find((item) => item.id === activeId) ??
+            createConversationRecord();
+          const shouldRename =
+            message.role === "user" &&
+            (existing.title === "新对话" ||
+              existing.title === "新的用药咨询" ||
+              existing.messages.length === 0);
+          const updated: Conversation = {
+            ...existing,
+            title: shouldRename
+              ? titleFromQuestion(message.content)
+              : existing.title,
+            updatedAt: message.createdAt,
+            messages: [...existing.messages, message].slice(-120)
+          };
+          const conversations = [
+            updated,
+            ...state.conversations.filter((item) => item.id !== updated.id)
+          ];
+          return {
+            conversations,
+            activeConversationId: requestedConversationId
+              ? state.activeConversationId
+              : updated.id,
+            riskChecks: message.riskCheck
+              ? [message.riskCheck, ...state.riskChecks].slice(0, 50)
+              : state.riskChecks
+          };
+        }),
       replaceChatMessage: (id, message) =>
         setState((state) => ({
-          chatMessages: state.chatMessages.map((item) =>
-            item.id === id ? message : item
+          conversations: state.conversations.map((conversation) =>
+            conversation.id === state.activeConversationId
+              ? {
+                  ...conversation,
+                  updatedAt: nowIso(),
+                  messages: conversation.messages.map((item) =>
+                    item.id === id ? message : item
+                  )
+                }
+              : conversation
           ),
           riskChecks: message.riskCheck
             ? [message.riskCheck, ...state.riskChecks].slice(0, 50)
             : state.riskChecks
+        })),
+      createConversation: () => {
+        const conversation = createConversationRecord();
+        setState((state) => ({
+          conversations: [conversation, ...state.conversations],
+          activeConversationId: conversation.id
+        }));
+        return conversation.id;
+      },
+      setActiveConversation: (id) =>
+        setState((state) =>
+          state.conversations.some((item) => item.id === id)
+            ? { activeConversationId: id }
+            : state
+        ),
+      setConversationMedicineContext: (draft, conversationId) =>
+        setState((state) => ({
+          conversations: state.conversations.map((conversation) =>
+            conversation.id ===
+            (conversationId || state.activeConversationId)
+              ? { ...conversation, medicineContext: draft }
+              : conversation
+          )
         })),
       addAuditEvent: (type, summary, metadata) =>
         setState((state) => ({
@@ -383,9 +469,40 @@ export const useAppStore = create<AppStore>()(
       version: 1,
       merge: (persisted, current) => {
         const saved = persisted as Partial<AppStore>;
+        const legacyMessages = (
+          saved as unknown as { chatMessages?: ChatMessage[] }
+        ).chatMessages;
+        const legacyFirstQuestion = legacyMessages?.find(
+          (message) => message.role === "user"
+        )?.content;
+        const migratedConversation = createConversationRecord(
+          legacyFirstQuestion
+            ? titleFromQuestion(legacyFirstQuestion)
+            : "新的用药咨询"
+        );
+        migratedConversation.messages = legacyMessages ?? [];
+        const conversations =
+          saved.conversations?.length
+            ? saved.conversations.map((conversation) => ({
+                ...conversation,
+                messages: Array.isArray(conversation.messages)
+                  ? conversation.messages
+                  : []
+              }))
+            : legacyMessages?.length
+              ? [migratedConversation]
+              : current.conversations;
+        const activeConversationId = conversations.some(
+          (conversation) =>
+            conversation.id === saved.activeConversationId
+        )
+          ? saved.activeConversationId!
+          : conversations[0].id;
         return {
           ...current,
           ...saved,
+          conversations,
+          activeConversationId,
           preferences: {
             ...current.preferences,
             ...saved.preferences,

@@ -7,7 +7,10 @@ import {
   Eye,
   KeyRound,
   LockKeyhole,
+  Phone,
+  Plus,
   RotateCcw,
+  Save,
   ShieldCheck,
   Trash2,
   Type,
@@ -17,9 +20,15 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { deleteCloudFamily, subscribeToPush } from "../lib/cloud";
+import {
+  deleteCloudFamily,
+  subscribeToPush,
+  syncCloudSnapshot,
+  updateFamilyEmergencyContacts
+} from "../lib/cloud";
 import { speakText } from "../lib/speech";
 import { useAppStore } from "../store/useAppStore";
+import type { EmergencyContact } from "../types";
 
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -33,6 +42,9 @@ export function ProfilePage() {
   const updateProfile = useAppStore((state) => state.updateProfile);
   const updateConsent = useAppStore((state) => state.updateConsent);
   const updatePreferences = useAppStore((state) => state.updatePreferences);
+  const updateEmergencyContacts = useAppStore(
+    (state) => state.updateEmergencyContacts
+  );
   const setFamilyCode = useAppStore((state) => state.setFamilyCode);
   const resetDemo = useAppStore((state) => state.resetDemo);
   const clearAllData = useAppStore((state) => state.clearAllData);
@@ -44,6 +56,8 @@ export function ProfilePage() {
     "idle" | "loading" | "granted" | "denied"
   >("idle");
   const [editingHealth, setEditingHealth] = useState(false);
+  const [editingContacts, setEditingContacts] = useState(false);
+  const [contactDraft, setContactDraft] = useState<EmergencyContact[]>(contacts);
   const [healthDraft, setHealthDraft] = useState({
     name: profile.name,
     age: profile.age,
@@ -150,6 +164,193 @@ export function ProfilePage() {
     setEditingHealth(false);
     setToast("健康资料已经保存");
   }
+
+  function startEditingContacts() {
+    setContactDraft(contacts.map((contact) => ({ ...contact })));
+    setEditingContacts(true);
+  }
+
+  async function saveContacts() {
+    const cleaned = contactDraft
+      .map((contact) => ({
+        ...contact,
+        name: contact.name.trim(),
+        relation: contact.relation.trim(),
+        phone: contact.phone.trim()
+      }))
+      .filter((contact) => contact.name && contact.phone);
+    if (!cleaned.length) {
+      setToast("请至少填写一位紧急联系人和电话号码");
+      return;
+    }
+    if (
+      cleaned.some(
+        (contact) => !/^[+\d][\d+\-\s]{5,19}$/.test(contact.phone)
+      )
+    ) {
+      setToast("电话号码格式不正确，请填写 6 到 20 位数字");
+      return;
+    }
+    updateEmergencyContacts(cleaned);
+    try {
+      if (role === "family") {
+        await updateFamilyEmergencyContacts(familyCode, cleaned);
+      } else {
+        await syncCloudSnapshot(useAppStore.getState().getCloudSnapshot());
+      }
+    } catch {
+      setToast("联系人已保存在本机，但家庭端同步暂时失败，请检查连接");
+      setEditingContacts(false);
+      return;
+    }
+    setEditingContacts(false);
+    setToast("紧急联系人已更新并同步");
+  }
+
+  const emergencyContactEditor = (
+    <>
+      <div className="section-heading">
+        <div>
+          <h2>紧急联系人</h2>
+          <p>这里的修改会保存到家庭档案，并同步给已连接家属端。</p>
+        </div>
+        <Phone size={22} color="var(--primary)" aria-hidden="true" />
+      </div>
+      {editingContacts ? (
+        <div className="emergency-contact-editor">
+          {contactDraft.map((contact, index) => (
+            <div className="emergency-contact-row" key={contact.id}>
+              <input
+                className="input"
+                value={contact.name}
+                placeholder="姓名"
+                aria-label={`联系人 ${index + 1} 姓名`}
+                onChange={(event) =>
+                  setContactDraft((current) =>
+                    current.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? { ...item, name: event.target.value }
+                        : item
+                    )
+                  )
+                }
+              />
+              <input
+                className="input"
+                value={contact.relation}
+                placeholder="关系"
+                aria-label={`联系人 ${index + 1} 关系`}
+                onChange={(event) =>
+                  setContactDraft((current) =>
+                    current.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? { ...item, relation: event.target.value }
+                        : item
+                    )
+                  )
+                }
+              />
+              <input
+                className="input"
+                type="tel"
+                value={contact.phone}
+                placeholder="电话号码"
+                aria-label={`联系人 ${index + 1} 电话`}
+                onChange={(event) =>
+                  setContactDraft((current) =>
+                    current.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? { ...item, phone: event.target.value }
+                        : item
+                    )
+                  )
+                }
+              />
+              <select
+                className="select"
+                value={contact.kind}
+                aria-label={`联系人 ${index + 1} 类型`}
+                onChange={(event) =>
+                  setContactDraft((current) =>
+                    current.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? {
+                            ...item,
+                            kind: event.target.value as EmergencyContact["kind"]
+                          }
+                        : item
+                    )
+                  )
+                }
+              >
+                <option value="family">家属</option>
+                <option value="caregiver">照护者</option>
+                <option value="emergency">紧急联系人</option>
+              </select>
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label={`删除联系人 ${contact.name || index + 1}`}
+                onClick={() =>
+                  setContactDraft((current) =>
+                    current.filter((_, itemIndex) => itemIndex !== index)
+                  )
+                }
+              >
+                <Trash2 size={19} aria-hidden="true" />
+              </button>
+            </div>
+          ))}
+          <button
+            className="btn"
+            type="button"
+            onClick={() =>
+              setContactDraft((current) => [
+                ...current,
+                {
+                  id: `contact-${Date.now()}`,
+                  name: "",
+                  relation: "",
+                  phone: "",
+                  kind: "family"
+                }
+              ])
+            }
+          >
+            <Plus size={18} aria-hidden="true" />
+            添加联系人
+          </button>
+          <div className="header-actions">
+            <button className="btn btn-primary" type="button" onClick={saveContacts}>
+              <Save size={18} aria-hidden="true" />
+              保存并同步
+            </button>
+            <button className="btn" type="button" onClick={() => setEditingContacts(false)}>
+              取消
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="emergency-contact-list">
+            {contacts.map((contact) => (
+              <a className="emergency-contact-item" href={`tel:${contact.phone}`} key={contact.id}>
+                <span>
+                  <strong>{contact.name}</strong>
+                  <small>{contact.relation} · {contact.kind === "caregiver" ? "照护者" : contact.kind === "emergency" ? "紧急联系人" : "家属"}</small>
+                </span>
+                <span>{contact.phone}</span>
+                <Phone size={18} aria-hidden="true" />
+              </a>
+            ))}
+          </div>
+          <button className="btn" type="button" onClick={startEditingContacts}>
+            编辑紧急联系人
+          </button>
+        </>
+      )}
+    </>
+  );
 
   if (role === "elder") {
     return (
@@ -330,6 +531,8 @@ export function ProfilePage() {
               <Copy size={19} aria-hidden="true" />
               复制连接码
             </button>
+            <hr style={{ margin: "18px 0", border: 0, borderTop: "1px solid var(--line)" }} />
+            {emergencyContactEditor}
           </details>
 
           <details className="card card-pad elder-detail-panel">
@@ -579,6 +782,10 @@ export function ProfilePage() {
           </div>
         </section>
       </div>
+
+      <section className="card card-pad" style={{ marginTop: 16 }}>
+        {emergencyContactEditor}
+      </section>
 
       <div className="settings-grid" style={{ marginTop: 16 }}>
         <section className="card card-pad">

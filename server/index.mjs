@@ -238,6 +238,14 @@ function getVisionModel() {
   );
 }
 
+function getAsrModel() {
+  return (
+    process.env.QWEN_ASR_MODEL ||
+    process.env.AI_ASR_MODEL ||
+    "qwen3-asr-flash"
+  );
+}
+
 function isAiConfigured() {
   return Boolean(getAiKey() && getTextModel());
 }
@@ -332,6 +340,59 @@ async function callVisionIdentification(imageDataUrl, mode) {
   };
 }
 
+async function callQwenTranscription(audioBase64, mimeType) {
+  const baseUrl = getAiBaseUrl();
+  const model = getAsrModel();
+  const audioDataUrl = `data:${mimeType};base64,${audioBase64}`;
+
+  const chatResponse = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${getAiKey()}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_audio",
+              input_audio: {
+                data: audioDataUrl
+              }
+            }
+          ]
+        }
+      ]
+    })
+  });
+  if (!chatResponse.ok) {
+    const errorPayload = await chatResponse.json().catch(() => null);
+    const providerMessage =
+      typeof errorPayload?.error?.message === "string"
+        ? errorPayload.error.message.replace(/\s+/g, " ").slice(0, 160)
+        : "";
+    throw new Error(
+      `千问语音识别失败（${chatResponse.status}）${
+        providerMessage ? `：${providerMessage}` : ""
+      }`
+    );
+  }
+  const chatPayload = await chatResponse.json();
+  const content = chatPayload.choices?.[0]?.message?.content;
+  const text =
+    typeof content === "string"
+      ? content.trim()
+      : typeof content?.text === "string"
+        ? content.text.trim()
+        : "";
+  if (!text) throw new Error("千问没有返回语音文字");
+  return { text, model };
+}
+
 async function callAiAssistant(payload) {
   const baseUrl = getAiBaseUrl();
   const context = {
@@ -347,7 +408,21 @@ async function callAiAssistant(payload) {
     })),
     evidence: payload.evidence || [],
     riskLevel: payload.riskLevel || "unknown",
-    groundingText: String(payload.groundingText || "").slice(0, 5000)
+    groundingText: String(payload.groundingText || "").slice(0, 5000),
+    conversationHistory: Array.isArray(payload.history)
+      ? payload.history
+          .filter(
+            (item) =>
+              item &&
+              (item.role === "user" || item.role === "assistant") &&
+              typeof item.content === "string"
+          )
+          .slice(-10)
+          .map((item) => ({
+            role: item.role,
+            content: item.content.slice(0, 1000)
+          }))
+      : []
   };
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
@@ -553,8 +628,41 @@ const server = createServer(async (request, response) => {
     }
 
     if (url.pathname.startsWith("/api/family/")) {
-      const familyCode = sanitizeFamilyCode(url.pathname.split("/").pop());
+      const pathParts = url.pathname.split("/").filter(Boolean);
+      const isContactsUpdate =
+        request.method === "PUT" && pathParts.at(-1) === "contacts";
+      const familyCode = sanitizeFamilyCode(
+        isContactsUpdate ? pathParts.at(-2) : pathParts.at(-1)
+      );
       const family = database.families[familyCode];
+      if (isContactsUpdate) {
+        if (!family?.snapshot) return json(response, 404, { error: "未找到家庭" });
+        const body = await readJson(request, 512 * 1024);
+        if (!Array.isArray(body.contacts)) {
+          return json(response, 400, { error: "联系人格式不正确" });
+        }
+        family.snapshot.emergencyContacts = body.contacts
+          .filter((item) => item && typeof item === "object")
+          .slice(0, 10)
+          .map((item, index) => ({
+            id: String(item.id || `contact-${Date.now()}-${index}`).slice(0, 80),
+            name: String(item.name || "").slice(0, 30),
+            relation: String(item.relation || "联系人").slice(0, 30),
+            phone: String(item.phone || "").slice(0, 30),
+            kind: ["family", "caregiver", "emergency"].includes(item.kind)
+              ? item.kind
+              : "family"
+          }))
+          .filter((item) => item.name && item.phone);
+        family.snapshot.updatedAt = new Date().toISOString();
+        family.revision = (family.revision || 0) + 1;
+        await saveDatabase();
+        return json(response, 200, {
+          ok: true,
+          revision: family.revision,
+          contacts: family.snapshot.emergencyContacts
+        });
+      }
       if (request.method === "GET") {
         if (!family?.snapshot) return json(response, 404, { error: "未找到家庭" });
         return json(response, 200, family.snapshot);
@@ -576,6 +684,32 @@ const server = createServer(async (request, response) => {
       const answer = await callAiAssistant(body);
       if (!answer) return json(response, 502, { error: "模型没有返回内容" });
       return json(response, 200, { message: answer, mode: "llm" });
+    }
+
+    if (url.pathname === "/api/transcribe" && request.method === "POST") {
+      if (!hasAiKey()) {
+        return json(response, 503, {
+          error: "千问语音识别尚未配置，请改用文字输入。"
+        });
+      }
+      const body = await readJson(request, 18 * 1024 * 1024);
+      const match = String(body.audioDataUrl || "").match(
+        /^data:(audio\/[^;,]+)[^,]*;base64,(.+)$/s
+      );
+      if (!match) {
+        return json(response, 400, { error: "没有收到有效语音。" });
+      }
+      try {
+        const result = await callQwenTranscription(match[2], match[1]);
+        return json(response, 200, { ...result, mode: "llm" });
+      } catch (error) {
+        return json(response, 502, {
+          error:
+            error instanceof Error
+              ? error.message
+              : "千问语音识别暂时不可用，请改用文字输入。"
+        });
+      }
     }
 
     if (url.pathname === "/api/vision-identify" && request.method === "POST") {

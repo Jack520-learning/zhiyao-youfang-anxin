@@ -1,4 +1,4 @@
-import type { CloudSnapshot } from "../types";
+import type { CloudSnapshot, EmergencyContact } from "../types";
 
 export async function sendConcernAlert(input: {
   familyCode: string;
@@ -45,6 +45,21 @@ export async function deleteCloudFamily(familyCode: string): Promise<void> {
   if (!response.ok && response.status !== 404) {
     throw new Error(`云端删除失败：${response.status}`);
   }
+}
+
+export async function updateFamilyEmergencyContacts(
+  familyCode: string,
+  contacts: EmergencyContact[]
+): Promise<void> {
+  const response = await fetch(
+    `/api/family/${encodeURIComponent(familyCode.toUpperCase())}/contacts`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contacts })
+    }
+  );
+  if (!response.ok) throw new Error(`联系人同步失败：${response.status}`);
 }
 
 function urlBase64ToUint8Array(base64String: string): ArrayBuffer {

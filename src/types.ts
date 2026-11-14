@@ -82,6 +82,15 @@ export interface ChatMessage {
   pending?: boolean;
 }
 
+export interface Conversation {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: ChatMessage[];
+  medicineContext?: IntakeDraft;
+}
+
 export interface ElderProfile {
   name: string;
   age: number;
@@ -165,7 +174,8 @@ export interface AppState {
   medications: Medication[];
   doseEvents: DoseEvent[];
   riskChecks: RiskCheck[];
-  chatMessages: ChatMessage[];
+  conversations: Conversation[];
+  activeConversationId: string;
   intakeDraft?: IntakeDraft;
   auditEvents: AuditEvent[];
   familyAlerts: FamilyAlert[];

@@ -10,6 +10,7 @@ import {
   MessageCircleHeart,
   Mic,
   Leaf,
+  LoaderCircle,
   Pill,
   Search,
   ShieldAlert,
@@ -20,7 +21,7 @@ import { useNavigate } from "react-router-dom";
 import { RiskBadge } from "../components/RiskBadge";
 import { formatChineseDate, formatTime, getNextDose, getTodayDoses, humanizeRelation } from "../lib/time";
 import { speakText } from "../lib/speech";
-import { useSpeechRecognition } from "../lib/speech";
+import { useQwenSpeechRecognition } from "../lib/qwenSpeech";
 import { sendConcernAlert } from "../lib/cloud";
 import { createId } from "../lib/ids";
 import { matchMedicines } from "../catalog/retrieval";
@@ -455,7 +456,7 @@ function HomeSearch() {
   const medications = useAppStore((state) => state.medications);
   const [query, setQuery] = useState("");
   const composingRef = useRef(false);
-  const speech = useSpeechRecognition((transcript) => setQuery(transcript));
+  const speech = useQwenSpeechRecognition((transcript) => setQuery(transcript));
   const results = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     if (!keyword) return [];
@@ -527,7 +528,7 @@ function HomeSearch() {
           type="button"
           className={`search-voice ${speech.listening ? "listening" : ""}`}
           aria-label="按住用语音搜索"
-          disabled={!speech.supported}
+          disabled={!speech.supported || speech.processing}
           onContextMenu={(event) => event.preventDefault()}
           onPointerDown={(event) => {
             if (event.button !== 0 || speech.listening) return;
@@ -538,8 +539,16 @@ function HomeSearch() {
           onPointerUp={speech.stop}
           onPointerCancel={speech.stop}
         >
-          <Mic size={21} aria-hidden="true" />
-          {speech.listening ? "松开结束" : "按住说"}
+          {speech.processing ? (
+            <LoaderCircle size={19} className="spin" aria-hidden="true" />
+          ) : (
+            <Mic size={21} aria-hidden="true" />
+          )}
+          {speech.processing
+            ? "千问转写中"
+            : speech.listening
+              ? "松开结束"
+              : "按住说"}
         </button>
         <button className="btn btn-primary" type="submit" disabled={!query.trim()}>
           搜索

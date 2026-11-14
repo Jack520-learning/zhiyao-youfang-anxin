@@ -49,6 +49,7 @@ export function createInitialState(options?: {
   role?: AppState["role"];
   familyCode?: string;
 }): AppState {
+  const initialConversationId = "conversation-welcome";
   const profile: ElderProfile = {
     name: "林阿姨",
     age: 72,
@@ -119,15 +120,24 @@ export function createInitialState(options?: {
     ],
     doseEvents: [],
     riskChecks: [],
-    chatMessages: [
+    conversations: [
       {
-        id: "welcome-message",
-        role: "assistant",
-        content:
-          "您好，我是智药有方。您可以按住说话、拍药盒，或打开药品百科和识中药材。涉及高风险用药时，我会先核对来源并提示联系医生。",
-        createdAt
+        id: initialConversationId,
+        title: "新的用药咨询",
+        createdAt,
+        updatedAt: createdAt,
+        messages: [
+          {
+            id: "welcome-message",
+            role: "assistant",
+            content:
+              "您好，我是智药有方。您可以按住说话、拍药盒，或打开药品百科和识中药材。涉及高风险用药时，我会先核对来源并提示联系医生。",
+            createdAt
+          }
+        ]
       }
     ],
+    activeConversationId: initialConversationId,
     auditEvents: [auditEvent],
     familyAlerts: [],
     preferences: {

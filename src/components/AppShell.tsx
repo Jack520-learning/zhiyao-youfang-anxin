@@ -78,6 +78,8 @@ export function AppShell() {
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
+    document.body.dataset.fixedView =
+      location.pathname === "/chat" ? "chat" : "";
   }, [location.pathname]);
 
   if (!hydrated) {

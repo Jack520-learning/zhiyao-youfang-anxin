@@ -2,6 +2,8 @@ import {
   ArrowLeft,
   CircleHelp,
   Leaf,
+  LoaderCircle,
+  Send,
   ShieldAlert,
   ShieldCheck
 } from "lucide-react";
@@ -31,7 +33,10 @@ export function HerbDetailPage() {
   const navigate = useNavigate();
   const herb = id ? getHerb(id) : undefined;
   const medications = useAppStore((state) => state.medications);
+  const profile = useAppStore((state) => state.profile);
   const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [asking, setAsking] = useState(false);
   const hasHighRiskMedication = medications.some(
     (item) =>
       /\u534e\u6cd5\u6797|\u963f\u53f8\u5339\u6797|\u6c2f\u5421\u683c\u96f7|\u80f0\u5c9b\u7d20/.test(
@@ -51,6 +56,43 @@ export function HerbDetailPage() {
         </div>
       </div>
     );
+  }
+
+  async function askHerbQuestion() {
+    const clean = question.trim();
+    if (!clean || asking || !herb) return;
+    setAsking(true);
+    const localAnswer = answerHerbQuestion(
+      herb.name,
+      clean,
+      hasHighRiskMedication
+    );
+    setAnswer(localAnswer);
+    try {
+      const response = await fetch("/api/assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: `${herb.name}（中药）：${clean}`,
+          profile,
+          medications,
+          riskLevel: hasHighRiskMedication ? "medium" : "unknown",
+          groundingText: `药材资料：${herb.name}，${herb.nature}，${herb.flavor}，归${herb.meridians.join("、")}经。传统功用：${herb.functions.join("、")}。安全提醒：${herb.safety.join("；")}。本地安全回答：${localAnswer}`,
+          history: []
+        })
+      });
+      const payload = (await response.json()) as {
+        message?: string;
+        error?: string;
+      };
+      if (response.ok && payload.message) {
+        setAnswer(payload.message);
+      }
+    } catch {
+      // The deterministic answer remains available.
+    } finally {
+      setAsking(false);
+    }
   }
 
   return (
@@ -122,11 +164,34 @@ export function HerbDetailPage() {
               className="textarea"
               value={question}
               placeholder="例如：能和我的西药一起吃吗？"
-              onChange={(event) => setQuestion(event.target.value)}
+              onChange={(event) => {
+                setQuestion(event.target.value);
+                setAnswer("");
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  void askHerbQuestion();
+                }
+              }}
             />
-            {question.trim() ? (
+            <button
+              className="btn btn-primary"
+              type="button"
+              disabled={!question.trim() || asking}
+              onClick={() => void askHerbQuestion()}
+              style={{ width: "100%", marginTop: 10 }}
+            >
+              {asking ? (
+                <LoaderCircle size={19} className="spin" aria-hidden="true" />
+              ) : (
+                <Send size={19} aria-hidden="true" />
+              )}
+              {asking ? "千问正在回答" : "发送问题"}
+            </button>
+            {answer ? (
               <div className="catalog-answer" aria-live="polite">
-                {answerHerbQuestion(herb.name, question, hasHighRiskMedication)}
+                {answer}
               </div>
             ) : null}
           </section>
