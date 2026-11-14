@@ -2600,3 +2600,123 @@ img {
     grid-template-columns: 1fr;
   }
 }
+
+.chat-page {
+  height: calc(100dvh - 108px);
+  min-height: 610px;
+}
+
+.chat-unified-shell {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(208, 138, 46, 0.08), transparent 22rem),
+    var(--surface);
+  box-shadow: 0 24px 64px rgba(27, 58, 47, 0.1);
+}
+
+.chat-unified-shell > .discovery-nav {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 20px 24px 0;
+}
+
+.chat-unified-shell > .page-header {
+  flex: 0 0 auto;
+  align-items: flex-start;
+  margin: 0;
+  padding: 14px 24px 10px;
+}
+
+.chat-unified-shell > .page-header .page-title {
+  font-size: clamp(26px, 3vw, 36px);
+}
+
+.chat-unified-shell > .page-header .page-description {
+  max-width: 760px;
+  margin-top: 6px;
+  line-height: 1.55;
+}
+
+.chat-unified-shell .chat-single {
+  display: flex;
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0 24px 18px;
+}
+
+.chat-unified-shell .chat-top-tools {
+  flex: 0 0 auto;
+}
+
+.chat-unified-shell .chat-panel {
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  flex: 1;
+  border: 0;
+  border-radius: 22px 22px 0 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.chat-unified-shell .chat-messages {
+  min-height: 0;
+  padding: 16px 4px;
+}
+
+.chat-unified-shell .chat-suggestions {
+  padding: 10px 4px 0;
+}
+
+.chat-unified-shell .chat-voice-status {
+  padding: 0 4px;
+}
+
+.chat-unified-shell .chat-composer {
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--bg);
+}
+
+.chat-unified-notice {
+  flex: 0 0 auto;
+  margin: 0 24px 10px;
+}
+
+@media (max-width: 840px) {
+  .chat-page {
+    height: calc(100dvh - 194px);
+    min-height: 560px;
+  }
+
+  .chat-unified-shell {
+    border-radius: 24px;
+  }
+
+  .chat-unified-shell > .discovery-nav {
+    padding: 14px 14px 0;
+  }
+
+  .chat-unified-shell > .page-header {
+    padding: 12px 14px 8px;
+  }
+
+  .chat-unified-shell .chat-single {
+    padding: 0 14px 14px;
+  }
+
+  .chat-unified-notice {
+    margin: 0 14px 8px;
+  }
+}

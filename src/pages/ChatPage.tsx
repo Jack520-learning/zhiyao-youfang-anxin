@@ -537,8 +537,9 @@ export function ChatPage() {
 
   return (
     <div className="page chat-page">
-      <DiscoveryNav />
-      <header className="page-header">
+      <section className="chat-unified-shell">
+        <DiscoveryNav />
+        <header className="page-header">
         <div>
           <p className="eyebrow">问药 · 先给结论，再讲原因</p>
           <h1 className="page-title">哪里不明白，直接说</h1>
@@ -556,16 +557,16 @@ export function ChatPage() {
             {mode === "llm" ? "大模型 + 本地安全规则" : "本地安全规则演示"}
           </span>
         </div>
-      </header>
+        </header>
 
-      {searchParams.get("concern") === "1" ? (
-        <div className="notice warm" style={{ marginBottom: 16 }}>
+        {searchParams.get("concern") === "1" ? (
+          <div className="notice warm chat-unified-notice">
           <ShieldCheck size={20} aria-hidden="true" />
           已记录您不舒服，并尝试把求助摘要发送给已授权家属。如果症状紧急，请直接拨打 120。
-        </div>
-      ) : null}
+          </div>
+        ) : null}
 
-      <div className="chat-single">
+        <div className="chat-single">
         <div className="chat-top-tools">
           <button
             type="button"
@@ -605,8 +606,8 @@ export function ChatPage() {
             )}
           </details>
         </div>
-        {photoNotice ? (
-          <div className="notice" style={{ marginBottom: 12 }}>
+          {photoNotice ? (
+            <div className="notice chat-unified-notice">
             <Camera size={20} aria-hidden="true" />
             <span>
               {photoNotice}{" "}
@@ -618,9 +619,9 @@ export function ChatPage() {
                 去核对并加入用药
               </button>
             </span>
-          </div>
-        ) : null}
-        <section className="card chat-panel">
+            </div>
+          ) : null}
+          <section className="card chat-panel">
           <div className="chat-messages" aria-live="polite" ref={messagesRef}>
             {olderMessages.length ? (
               <details className="chat-history">
@@ -735,9 +736,10 @@ export function ChatPage() {
               </button>
             )}
           </div>
-        </section>
+          </section>
 
-      </div>
+        </div>
+      </section>
       <CameraCaptureModal
         open={cameraOpen}
         onClose={() => setCameraOpen(false)}
