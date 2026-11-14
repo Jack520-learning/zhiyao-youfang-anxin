@@ -212,12 +212,38 @@ async function checkReminders() {
   if (changed) await saveDatabase();
 }
 
+function getAiKey() {
+  return process.env.AI_API_KEY || process.env.DASHSCOPE_API_KEY || "";
+}
+
+function getAiBaseUrl() {
+  return (
+    process.env.AI_BASE_URL ||
+    (process.env.DASHSCOPE_API_KEY
+      ? "https://dashscope.aliyuncs.com/compatible-mode/v1"
+      : "https://api.openai.com/v1")
+  ).replace(/\/$/, "");
+}
+
+function getTextModel() {
+  return process.env.AI_MODEL || process.env.QWEN_TEXT_MODEL || "";
+}
+
+function getVisionModel() {
+  return (
+    process.env.AI_VISION_MODEL ||
+    process.env.QWEN_VISION_MODEL ||
+    getTextModel() ||
+    "gpt-4.1-mini"
+  );
+}
+
 function isAiConfigured() {
-  return Boolean(process.env.AI_API_KEY && process.env.AI_MODEL);
+  return Boolean(getAiKey() && getTextModel());
 }
 
 function hasAiKey() {
-  return Boolean(process.env.AI_API_KEY);
+  return Boolean(getAiKey());
 }
 
 function parseModelJson(content) {
@@ -238,17 +264,13 @@ function parseModelJson(content) {
 }
 
 async function callVisionIdentification(imageDataUrl, mode) {
-  const baseUrl = (process.env.AI_BASE_URL || "https://api.openai.com/v1").replace(
-    /\/$/,
-    ""
-  );
-  const model =
-    process.env.AI_VISION_MODEL || process.env.AI_MODEL || "gpt-4.1-mini";
+  const baseUrl = getAiBaseUrl();
+  const model = getVisionModel();
   const subject = mode === "herb" ? "中药材、中草药或饮片" : "药品包装";
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${process.env.AI_API_KEY}`,
+      Authorization: `Bearer ${getAiKey()}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
@@ -311,10 +333,7 @@ async function callVisionIdentification(imageDataUrl, mode) {
 }
 
 async function callAiAssistant(payload) {
-  const baseUrl = (process.env.AI_BASE_URL || "https://api.openai.com/v1").replace(
-    /\/$/,
-    ""
-  );
+  const baseUrl = getAiBaseUrl();
   const context = {
     age: payload.profile?.age,
     conditions: payload.profile?.conditions || [],
@@ -331,11 +350,11 @@ async function callAiAssistant(payload) {
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${process.env.AI_API_KEY}`,
+      Authorization: `Bearer ${getAiKey()}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: process.env.AI_MODEL,
+      model: getTextModel(),
       temperature: 0.1,
       messages: [
         {

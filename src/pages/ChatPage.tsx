@@ -23,6 +23,7 @@ import { answerWithRules, checkNewMedication } from "../lib/riskEngine";
 import { sendConcernAlert } from "../lib/cloud";
 import { createManualDraft, recognizeMedicineImage } from "../lib/ocr";
 import { answerFromDrugCatalog } from "../catalog/chatBridge";
+import { findBestMedicine } from "../catalog/retrieval";
 import { speakText, useSpeechRecognition } from "../lib/speech";
 import { nowIso } from "../lib/time";
 import { useAppStore } from "../store/useAppStore";
@@ -57,6 +58,7 @@ export function ChatPage() {
   const addFamilyAlert = useAppStore((state) => state.addFamilyAlert);
   const addChatMessage = useAppStore((state) => state.addChatMessage);
   const saveIntakeDraft = useAppStore((state) => state.saveIntakeDraft);
+  const intakeDraft = useAppStore((state) => state.intakeDraft);
   const [input, setInput] = useState(searchParams.get("q") ?? "");
   const [sending, setSending] = useState(false);
   const [stages, setStages] = useState<AssistantStage[]>([]);
@@ -116,13 +118,19 @@ export function ChatPage() {
     const activeMedications = medications.filter(
       (medication) => medication.status === "active"
     );
+    const contextualQuestion =
+      intakeDraft &&
+      /(这个药|这种药|它|这盒药|图片里)/.test(clean) &&
+      intakeDraft.name
+        ? `${intakeDraft.name} ${clean}`
+        : clean;
     let localResponse = answerWithRules(
-      clean,
+      contextualQuestion,
       activeMedications,
       profile
     );
     const catalogResponse = answerFromDrugCatalog(
-      clean,
+      contextualQuestion,
       profile,
       activeMedications.map((medication) => medication.name)
     );
@@ -236,17 +244,79 @@ export function ChatPage() {
       id: createId("chat"),
       role: "user",
       content: "我拍了一张药盒照片，请帮我识别风险、用法和价格。",
-      createdAt: nowIso()
+      createdAt: nowIso(),
+      imageDataUrls: [imageDataUrl]
     });
 
     try {
       let draft;
+      const visionPromise = fetch("/api/vision-identify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageDataUrl, mode: "medicine" })
+      })
+        .then(async (response) => {
+          if (!response.ok) return null;
+          return (await response.json()) as {
+            candidates?: Array<{
+              name: string;
+              confidence?: number;
+              visibleFeatures?: string[];
+            }>;
+            summary?: string;
+            cautions?: string[];
+          };
+        })
+        .catch(() => null);
       try {
         draft = await recognizeMedicineImage(imageDataUrl, (_value, label) => {
           setPhotoProgress(label || "正在识别药盒");
         });
       } catch {
         draft = createManualDraft(imageDataUrl);
+      }
+      const vision = await visionPromise;
+      const visionName = vision?.candidates?.[0]?.name?.trim();
+      if (
+        visionName &&
+        (!draft.name ||
+          draft.name.length < 3 ||
+          draft.lowConfidenceFields.includes("name"))
+      ) {
+        draft = {
+          ...draft,
+          name: visionName,
+          confidence: Math.max(
+            draft.confidence,
+            Math.min(0.9, vision?.candidates?.[0]?.confidence ?? 0.6)
+          ),
+          lowConfidenceFields: draft.lowConfidenceFields.filter(
+            (field) => field !== "name"
+          )
+        };
+      }
+      const catalogMatch = draft.name
+        ? findBestMedicine(draft.name)?.medicine
+        : undefined;
+      if (catalogMatch) {
+        draft = {
+          ...draft,
+          name: draft.name || catalogMatch.displayName,
+          genericName: draft.genericName || catalogMatch.activeIngredient,
+          ingredientsText:
+            draft.ingredientsText || catalogMatch.activeIngredient,
+          dosage: draft.dosage,
+          frequency: draft.frequency || "每日 1 次",
+          relation:
+            draft.relation ||
+            (/餐后|饭后|随餐/.test(catalogMatch.timing)
+              ? "饭后"
+              : "按说明书"),
+          instructions:
+            draft.instructions ||
+            `${catalogMatch.howToTake} ${catalogMatch.keyWarnings[0]}`,
+          confidence: Math.max(draft.confidence, 0.8)
+        };
       }
 
       const compactText = `${draft.name}${draft.rawText}`.replace(/\s+/g, "");
@@ -330,6 +400,8 @@ export function ChatPage() {
         draft.frequency ? `次数：${draft.frequency}` : "次数：需要人工补充",
         draft.relation ? `服用时间：${draft.relation}` : "服用时间：需要人工补充",
         `参考价格：${priceText}`,
+        vision?.summary ? `图片摘要：${vision.summary}` : "",
+        ...(vision?.cautions || []).map((item) => `需核实：${item}`),
         learned ? `已复用您上次确认的“${learned.name}”资料。` : "",
         riskCheck.summary,
         riskCheck.nextStep
@@ -384,6 +456,17 @@ export function ChatPage() {
           {message.role === "assistant" ? "智药有方" : "您"}
         </div>
         <div className="message-bubble">{message.content}</div>
+        {message.imageDataUrls?.length ? (
+          <div className="message-image-grid">
+            {message.imageDataUrls.map((image, index) => (
+              <img
+                key={`${message.id}-${index}`}
+                src={image}
+                alt={`用户上传的药品照片 ${index + 1}`}
+              />
+            ))}
+          </div>
+        ) : null}
         {message.riskCheck ? (
           <MessageRisk
             riskCheck={message.riskCheck}

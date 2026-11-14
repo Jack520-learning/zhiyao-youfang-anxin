@@ -77,6 +77,7 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   createdAt: string;
+  imageDataUrls?: string[];
   riskCheck?: RiskCheck;
   pending?: boolean;
 }
