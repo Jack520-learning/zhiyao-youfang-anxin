@@ -22,8 +22,13 @@ import { createId } from "../lib/ids";
 import { answerWithRules, checkNewMedication } from "../lib/riskEngine";
 import { sendConcernAlert } from "../lib/cloud";
 import { createManualDraft, recognizeMedicineImage } from "../lib/ocr";
-import { answerFromDrugCatalog } from "../catalog/chatBridge";
+import {
+  answerFromDrugCatalog,
+  buildAutomaticMedicineReport,
+  currentCatalogCompanionSlugs
+} from "../catalog/chatBridge";
 import { findBestMedicine } from "../catalog/retrieval";
+import { buildLocalGuidance } from "../catalog/guidance";
 import { speakText, useSpeechRecognition } from "../lib/speech";
 import { nowIso } from "../lib/time";
 import { useAppStore } from "../store/useAppStore";
@@ -295,9 +300,11 @@ export function ChatPage() {
           )
         };
       }
-      const catalogMatch = draft.name
-        ? findBestMedicine(draft.name)?.medicine
-        : undefined;
+      const bestCatalogMatch = draft.name ? findBestMedicine(draft.name) : null;
+      const catalogMatch =
+        bestCatalogMatch && bestCatalogMatch.score >= 0.6
+          ? bestCatalogMatch.medicine
+          : undefined;
       if (catalogMatch) {
         draft = {
           ...draft,
@@ -373,6 +380,42 @@ export function ChatPage() {
         createdAt,
         updatedAt: createdAt
       };
+      const activeMedications = medications.filter(
+        (medication) => medication.status === "active"
+      );
+      const catalogResponse = catalogMatch
+        ? answerFromDrugCatalog(
+            `${catalogMatch.displayName} 请给出使用方法、危害、注意事项和当前同服风险`,
+            profile,
+            activeMedications.map((medication) => medication.name),
+            currentCatalogCompanionSlugs(
+              activeMedications.map(
+                (medication) =>
+                  medication.genericName || medication.name
+              )
+            )
+          )
+        : null;
+      const catalogGuidance = catalogMatch
+        ? buildLocalGuidance({
+            medicineSlug: catalogMatch.slug,
+            companionSlugs: currentCatalogCompanionSlugs(
+              activeMedications.map(
+                (medication) =>
+                  medication.genericName || medication.name
+              )
+            ),
+            healthContext: [
+              ...(profile.age >= 65 ? (["older"] as const) : []),
+              ...(profile.conditions.some((item) => /肾/.test(item))
+                ? (["kidney"] as const)
+                : []),
+              ...(profile.conditions.some((item) => /肝/.test(item))
+                ? (["liver"] as const)
+                : [])
+            ]
+          })
+        : null;
       const unknownCheck = checkNewMedication(candidate, medications, profile);
       const preliminaryCheck = checkNewMedication(
         {
@@ -382,32 +425,45 @@ export function ChatPage() {
         medications,
         profile
       );
-      const riskCheck = ["high", "medium", "emergency"].includes(
-        preliminaryCheck.level
-      )
-        ? {
-            ...preliminaryCheck,
-            title: `初步发现：${preliminaryCheck.title}`,
-            summary: `${preliminaryCheck.summary} 目前基于尚未人工确认的识别字段。`
-          }
-        : unknownCheck;
+      const riskCheck =
+        catalogResponse?.riskCheck ??
+        (["high", "medium", "emergency"].includes(preliminaryCheck.level)
+          ? {
+              ...preliminaryCheck,
+              title: `初步发现：${preliminaryCheck.title}`,
+              summary: `${preliminaryCheck.summary} 目前基于图像提取的识别字段。`
+            }
+          : unknownCheck);
       const priceText =
         draft.price || "暂无可靠价格数据，请以药房价格或购买记录为准";
-      const content = [
-        `识别结果：${draft.name || "药名暂未识别"}`,
-        `识别可信度：${Math.round(draft.confidence * 100)}%`,
-        draft.dosage ? `剂量：${draft.dosage}` : "剂量：需要人工补充",
-        draft.frequency ? `次数：${draft.frequency}` : "次数：需要人工补充",
-        draft.relation ? `服用时间：${draft.relation}` : "服用时间：需要人工补充",
-        `参考价格：${priceText}`,
-        vision?.summary ? `图片摘要：${vision.summary}` : "",
-        ...(vision?.cautions || []).map((item) => `需核实：${item}`),
-        learned ? `已复用您上次确认的“${learned.name}”资料。` : "",
-        riskCheck.summary,
-        riskCheck.nextStep
-      ]
-        .filter(Boolean)
-        .join("\n");
+      const content = catalogMatch && catalogGuidance
+        ? [
+            buildAutomaticMedicineReport(catalogMatch, catalogGuidance),
+            "",
+            `图片参考价格：${priceText}`,
+            vision?.summary ? `AI 图片摘要：${vision.summary}` : "",
+            ...(vision?.cautions || []).map((item) => `AI 提示：${item}`),
+            learned ? `已复用您上次确认的“${learned.name}”资料。` : ""
+          ]
+            .filter(Boolean)
+            .join("\n")
+        : [
+            `识别结果：${draft.name || "药名暂未识别"}`,
+            `识别可信度：${Math.round(draft.confidence * 100)}%`,
+            draft.ingredientsText
+              ? `主要成分：${draft.ingredientsText}`
+              : "",
+            draft.dosage ? `图片中剂量：${draft.dosage}` : "",
+            draft.frequency ? `图片中次数：${draft.frequency}` : "",
+            draft.relation ? `图片中服用时间：${draft.relation}` : "",
+            `参考价格：${priceText}`,
+            vision?.summary ? `AI 图片摘要：${vision.summary}` : "",
+            ...(vision?.cautions || []).map((item) => `AI 提示：${item}`),
+            riskCheck.summary,
+            riskCheck.nextStep
+          ]
+            .filter(Boolean)
+            .join("\n");
       addChatMessage({
         id: createId("chat"),
         role: "assistant",
@@ -428,7 +484,9 @@ export function ChatPage() {
             ]
       );
       setPhotoNotice(
-        `${draft.name || "药品"}识别完成，已自动分析风险。加入当前用药前请核对字段。`
+        catalogMatch
+          ? `AI 已识别“${catalogMatch.displayName}”，并自动结合使用说明、危害、注意事项和当前用药给出完整参考。`
+          : `${draft.name || "药品"}已完成图像分析；名称不够确定时建议补拍说明书正面。`
       );
     } catch {
       addChatMessage({
