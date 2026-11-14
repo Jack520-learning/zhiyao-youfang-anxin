@@ -89,7 +89,7 @@ export function ProfilePage() {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `安心药伴-演示档案-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.download = `智药有方-演示档案-${new Date().toISOString().slice(0, 10)}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
     addAuditEvent("data-exported", "导出本地演示档案");

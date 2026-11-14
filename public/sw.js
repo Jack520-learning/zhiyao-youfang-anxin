@@ -40,8 +40,8 @@ self.addEventListener("fetch", (event) => {
 self.addEventListener("push", (event) => {
   const payload = event.data?.json?.() || {};
   event.waitUntil(
-    self.registration.showNotification(payload.title || "安心药伴提醒", {
-      body: payload.body || "请打开安心药伴查看用药安排。",
+    self.registration.showNotification(payload.title || "智药有方提醒", {
+      body: payload.body || "请打开智药有方查看用药安排。",
       icon: "/icon.svg",
       badge: "/icon.svg",
       tag: payload.tag || "medicine-reminder",

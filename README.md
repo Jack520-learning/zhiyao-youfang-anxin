@@ -59,6 +59,8 @@
 
 ## 快速运行
 
+在 macOS 上可双击 `一键启动智药有方-安心药伴.command`；Windows 可双击同名 `.cmd` 文件。
+
 ```bash
 npm install
 cp .env.example .env

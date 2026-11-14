@@ -381,7 +381,7 @@ export function ChatPage() {
     return (
       <article className={`message ${message.role}`} key={message.id}>
         <div className="message-role">
-          {message.role === "assistant" ? "安心药伴" : "您"}
+          {message.role === "assistant" ? "智药有方" : "您"}
         </div>
         <div className="message-bubble">{message.content}</div>
         {message.riskCheck ? (
@@ -492,7 +492,7 @@ export function ChatPage() {
             {recentMessages.map(renderMessage)}
             {sending ? (
               <article className="message assistant">
-                <div className="message-role">安心药伴</div>
+                <div className="message-role">智药有方</div>
                 <div className="message-bubble">
                   <span style={{ display: "flex", alignItems: "center", gap: 9 }}>
                     <LoaderCircle size={20} className="spin" aria-hidden="true" />
