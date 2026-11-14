@@ -1,95 +1,87 @@
-import { GripHorizontal, Minus, ShieldAlert } from "lucide-react";
+import { ShieldAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 export function FloatingSos({ onOpen }: { onOpen: () => void }) {
   const [position, setPosition] = useState(() => ({
-    x: Math.max(16, window.innerWidth - 248),
-    y: Math.max(120, Math.round(window.innerHeight * 0.42))
+    x: Math.max(16, window.innerWidth - 126),
+    y: Math.max(110, Math.round(window.innerHeight * 0.44))
   }));
-  const [minimized, setMinimized] = useState(false);
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
     startY: number;
     originX: number;
     originY: number;
+    moved: boolean;
   } | null>(null);
 
   useEffect(() => {
     function keepInsideViewport() {
       setPosition((current) => ({
-        x: Math.min(Math.max(12, current.x), Math.max(12, window.innerWidth - 230)),
-        y: Math.min(Math.max(12, current.y), Math.max(12, window.innerHeight - 150))
+        x: Math.min(Math.max(12, current.x), Math.max(12, window.innerWidth - 96)),
+        y: Math.min(Math.max(12, current.y), Math.max(12, window.innerHeight - 70))
       }));
     }
     window.addEventListener("resize", keepInsideViewport);
     return () => window.removeEventListener("resize", keepInsideViewport);
   }, []);
 
-  function startDrag(event: React.PointerEvent<HTMLDivElement>) {
-    event.preventDefault();
+  function startDrag(event: React.PointerEvent<HTMLButtonElement>) {
     event.currentTarget.setPointerCapture(event.pointerId);
     dragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
       originX: position.x,
-      originY: position.y
+      originY: position.y,
+      moved: false
     };
   }
 
-  function moveDrag(event: React.PointerEvent<HTMLDivElement>) {
+  function moveDrag(event: React.PointerEvent<HTMLButtonElement>) {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = event.clientY - drag.startY;
+    if (Math.abs(deltaX) + Math.abs(deltaY) > 5) drag.moved = true;
     setPosition({
       x: Math.min(
-        Math.max(12, drag.originX + event.clientX - drag.startX),
-        Math.max(12, window.innerWidth - 230)
+        Math.max(12, drag.originX + deltaX),
+        Math.max(12, window.innerWidth - 96)
       ),
       y: Math.min(
-        Math.max(12, drag.originY + event.clientY - drag.startY),
-        Math.max(12, window.innerHeight - 150)
+        Math.max(12, drag.originY + deltaY),
+        Math.max(12, window.innerHeight - 70)
       )
     });
   }
 
   function stopDrag() {
+    const drag = dragRef.current;
     dragRef.current = null;
+    if (drag && !drag.moved) onOpen();
   }
 
   return (
-    <aside
-      className={`sos-floating ${minimized ? "minimized" : ""}`}
+    <button
+      type="button"
+      className="sos-floating-button"
       style={{ left: position.x, top: position.y }}
-      aria-label="可拖动的紧急求助悬浮窗"
+      aria-label="SOS 紧急求助，可拖动"
+      title="SOS 求助（可拖动）"
+      onClick={(event) => {
+        if (event.detail === 0) onOpen();
+      }}
+      onPointerDown={startDrag}
+      onPointerMove={moveDrag}
+      onPointerUp={stopDrag}
+      onPointerCancel={() => {
+        dragRef.current = null;
+      }}
+      onContextMenu={(event) => event.preventDefault()}
     >
-      <div
-        className="sos-floating-handle"
-        onPointerDown={startDrag}
-        onPointerMove={moveDrag}
-        onPointerUp={stopDrag}
-        onPointerCancel={stopDrag}
-      >
-        <GripHorizontal size={18} aria-hidden="true" />
-        <span>SOS 求助</span>
-        <button
-          type="button"
-          aria-label={minimized ? "展开求助悬浮窗" : "收起求助悬浮窗"}
-          onClick={() => setMinimized((value) => !value)}
-        >
-          <Minus size={16} aria-hidden="true" />
-        </button>
-      </div>
-      {!minimized ? (
-        <div className="sos-floating-body">
-          <ShieldAlert size={27} aria-hidden="true" />
-          <p>身体不舒服时，先打开求助面板</p>
-          <button type="button" onClick={onOpen}>
-            立即打开求助
-          </button>
-          <small>拖动上方把手可移动</small>
-        </div>
-      ) : null}
-    </aside>
+      <ShieldAlert size={19} aria-hidden="true" />
+      <span>SOS</span>
+    </button>
   );
 }

@@ -12,7 +12,6 @@ import { useAppStore } from "../store/useAppStore";
 import type { UserRole } from "../types";
 
 export function AuthGate() {
-  const familyCode = useAppStore((state) => state.familyCode);
   const loginAccount = useAppStore((state) => state.loginAccount);
   const registerAccount = useAppStore((state) => state.registerAccount);
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -54,9 +53,9 @@ export function AuthGate() {
           <Pill size={38} aria-hidden="true" />
         </span>
         <p className="eyebrow">智药有方 · 安心药伴</p>
-        <h1>每次回来，都记得您的用药档案</h1>
+        <h1>智药有方，安心用药</h1>
         <p>
-          账号用于区分老人和家属身份。登录后继续查看上次对话、用药提醒和家庭摘要。
+          帮老人看懂药、按时服药，遇到用药风险及时提醒家人。登录后继续使用上次保存的用药档案。
         </p>
         <div className="auth-trust-list">
           <span>
@@ -193,9 +192,24 @@ export function AuthGate() {
                   />
                 </label>
               ) : (
-                <p className="auth-hint">
-                  注册老人账号后，家庭连接码会自动生成，可在“我的”中查看。
-                </p>
+                <label className="auth-field">
+                  <span>设置家庭连接码</span>
+                  <input
+                    value={familyCodeInput}
+                    onChange={(event) =>
+                      setFamilyCodeInput(
+                        event.target.value
+                          .toUpperCase()
+                          .replace(/[^A-Z0-9]/g, "")
+                          .slice(0, 8)
+                      )
+                    }
+                    placeholder="自己设置 6 到 8 位字母或数字"
+                    minLength={6}
+                    maxLength={8}
+                    required
+                  />
+                </label>
               )}
             </>
           ) : null}
@@ -211,8 +225,7 @@ export function AuthGate() {
           </button>
         </form>
         <p className="auth-footnote">
-          本地演示账号采用加盐密码摘要；正式医疗部署需接入服务端身份认证。
-          {familyCode ? ` 当前设备家庭码：${familyCode}` : ""}
+          本地演示账号采用加盐密码摘要。家庭连接码用于连接老人与家属，请只告诉可信任的家人。
         </p>
       </section>
     </main>

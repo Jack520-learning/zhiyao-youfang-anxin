@@ -1,4 +1,5 @@
 import {
+  ArrowLeftRight,
   BellRing,
   Camera,
   CircleUserRound,
@@ -6,7 +7,6 @@ import {
   CloudOff,
   FileHeart,
   House,
-  LockKeyhole,
   MessageCircleHeart,
   Pill,
   RefreshCw,
@@ -18,6 +18,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useCloudSync, type SyncStatus } from "../hooks/useCloudSync";
 import { useAppStore } from "../store/useAppStore";
+import { AccountSwitcher } from "./AccountSwitcher";
 import { AuthGate } from "./AuthGate";
 import { FloatingSos } from "./FloatingSos";
 import { SosModal } from "./SosModal";
@@ -74,6 +75,7 @@ export function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const [sosOpen, setSosOpen] = useState(false);
+  const [accountSwitcherOpen, setAccountSwitcherOpen] = useState(false);
 
   document.body.dataset.theme = preferences.highContrast
     ? "high-contrast"
@@ -167,14 +169,19 @@ export function AppShell() {
                 aria-hidden="true"
               />
             </div>
-            <div className="role-switch" aria-label="当前登录账号">
+            <button
+              className="role-switch"
+              type="button"
+              onClick={() => setAccountSwitcherOpen(true)}
+              aria-label="切换登录账号"
+            >
               <span>
                 <strong>{roleName}</strong>
                 <br />
-                {account?.displayName || "本地账号"} · 切换需退出
+                {account?.displayName || "本地账号"} · 点击切换
               </span>
-              <LockKeyhole size={20} aria-hidden="true" />
-            </div>
+              <ArrowLeftRight size={20} aria-hidden="true" />
+            </button>
           </div>
         </aside>
 
@@ -192,8 +199,8 @@ export function AppShell() {
             <button
               type="button"
               className="icon-btn"
-              aria-label="查看当前账号"
-              onClick={() => navigate("/profile")}
+              aria-label="切换登录账号"
+              onClick={() => setAccountSwitcherOpen(true)}
             >
               {role === "elder" ? <UserRound size={21} /> : <UsersRound size={21} />}
             </button>
@@ -235,6 +242,10 @@ export function AppShell() {
       </nav>
 
       <SosModal open={sosOpen} onClose={() => setSosOpen(false)} />
+      <AccountSwitcher
+        open={accountSwitcherOpen}
+        onClose={() => setAccountSwitcherOpen(false)}
+      />
       <ReminderOverlay />
     </div>
   );

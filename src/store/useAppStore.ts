@@ -88,6 +88,7 @@ interface AppActions {
     username: string,
     password: string
   ) => Promise<{ ok: boolean; error?: string }>;
+  switchAccount: (accountId: string) => { ok: boolean; error?: string };
   logoutAccount: () => void;
   setRole: (role: UserRole) => void;
   setFamilyCode: (familyCode: string) => void;
@@ -170,10 +171,13 @@ export const useAppStore = create<AppStore>()(
           .toUpperCase()
           .replace(/[^A-Z0-9]/g, "")
           .slice(0, 8);
-        if (role === "family" && cleanFamilyCode.length < 6) {
+        if (cleanFamilyCode.length < 6) {
           return {
             ok: false,
-            error: "家属注册需要老人端提供的家庭连接码"
+            error:
+              role === "elder"
+                ? "请设置 6 到 8 位家庭连接码"
+                : "请输入老人端提供的 6 到 8 位家庭连接码"
           };
         }
         const passwordRecord = await createPasswordRecord(password);
@@ -225,6 +229,27 @@ export const useAppStore = create<AppStore>()(
             auditEvent(
               "settings-updated",
               `登录${account.role === "elder" ? "老人端" : "家属端"}账号`
+            ),
+            ...current.auditEvents
+          ].slice(0, 100)
+        }));
+        return { ok: true };
+      },
+      switchAccount: (accountId) => {
+        const account = getState().accounts.find(
+          (item) => item.id === accountId
+        );
+        if (!account) return { ok: false, error: "账号不存在" };
+        setState((current) => ({
+          sessionAccountId: account.id,
+          role: account.role,
+          familyCode: account.familyCode,
+          auditEvents: [
+            auditEvent(
+              "settings-updated",
+              `切换为${account.displayName}的${
+                account.role === "elder" ? "老人端" : "家属端"
+              }`
             ),
             ...current.auditEvents
           ].slice(0, 100)
