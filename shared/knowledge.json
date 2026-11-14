@@ -1,0 +1,155 @@
+{
+  "version": "demo-2026-11-14",
+  "reviewStatus": "unreviewed-demo",
+  "sources": [
+    {
+      "id": "src-warfarin-aspirin",
+      "title": "抗凝药与抗血小板药同用风险提示",
+      "type": "risk-rule",
+      "excerpt": "华法林与阿司匹林同用可能增加出血风险，是否联合使用应由开具处方的医生评估。",
+      "reviewed": false
+    },
+    {
+      "id": "src-duplicate-ingredient",
+      "title": "重复成分核对规则",
+      "type": "risk-rule",
+      "excerpt": "成分或有效成分相同的药品、OTC 与保健品不应直接叠加，需要先核对剂量和用途。",
+      "reviewed": false
+    },
+    {
+      "id": "src-warfarin-missed",
+      "title": "高危药物漏服安全边界",
+      "type": "risk-rule",
+      "excerpt": "华法林等影响凝血的药物在漏服时不应自行加倍补服，应按处方、说明书或医生意见处理。",
+      "reviewed": false
+    },
+    {
+      "id": "src-insulin-missed",
+      "title": "胰岛素漏用安全边界",
+      "type": "risk-rule",
+      "excerpt": "胰岛素漏用后的处理与剂型、血糖和进餐情况有关，不应由通用规则自动决定补用剂量。",
+      "reviewed": false
+    },
+    {
+      "id": "src-no-evidence",
+      "title": "资料不足处理原则",
+      "type": "safety-policy",
+      "excerpt": "当药名、成分、来源或当前用药不完整时，不生成具体剂量、停药或补服建议。",
+      "reviewed": true
+    },
+    {
+      "id": "src-user-profile",
+      "title": "您已确认的用药档案",
+      "type": "professional-note",
+      "excerpt": "用药名称、单次剂量、服用频次、时间和饭前饭后要求来自当前老人已确认的用药档案。",
+      "reviewed": true
+    },
+    {
+      "id": "src-drug-catalog",
+      "title": "智药有方结构化药品演示资料",
+      "type": "professional-note",
+      "excerpt": "来自参考项目的 29 种结构化药品条目、特殊人群提示与确定性相互作用规则，目前尚未完成药师逐条复核。",
+      "reviewed": false
+    },
+    {
+      "id": "src-emergency",
+      "title": "紧急身体状态优先原则",
+      "type": "safety-policy",
+      "excerpt": "出现胸痛、呼吸困难、意识异常、口角歪斜或严重过敏表现时，应优先联系急救服务，而不是继续等待药物分析。",
+      "reviewed": true
+    }
+  ],
+  "articles": [
+    {
+      "id": "warfarin-aspirin",
+      "terms": ["华法林", "阿司匹林", "一起吃", "相互作用", "出血"],
+      "title": "华法林与阿司匹林需要医生评估",
+      "plainText": "华法林和阿司匹林同用可能增加出血风险。是否联合使用应由开具处方的医生评估，不要自行开始同用、停药或调整剂量。",
+      "riskLevel": "high",
+      "sourceIds": ["src-warfarin-aspirin"]
+    },
+    {
+      "id": "duplicate-ingredient",
+      "terms": ["重复", "成分", "一样", "同一种", "保健品", "OTC"],
+      "title": "先核对是不是重复成分",
+      "plainText": "当前资料里发现可能存在重复成分。重复服用前需要先核对通用名、有效成分和单次剂量；在核对清楚前，先不要叠加服用。",
+      "riskLevel": "medium",
+      "sourceIds": ["src-duplicate-ingredient"]
+    },
+    {
+      "id": "warfarin-missed",
+      "terms": ["华法林", "漏服", "忘了", "补服", "补吃"],
+      "title": "华法林漏服不要自行加倍",
+      "plainText": "这次用药还没有确认完成。华法林属于需要谨慎处理的高危药物，不要自行加倍补服或停药，请按处方或说明书处理，并尽快联系开药医生或药师。",
+      "riskLevel": "high",
+      "sourceIds": ["src-warfarin-missed"]
+    },
+    {
+      "id": "insulin-missed",
+      "terms": ["胰岛素", "漏用", "漏打", "忘了", "补打"],
+      "title": "胰岛素漏用不能套用通用补用方案",
+      "plainText": "胰岛素漏用后的处理与剂型、进餐和当前血糖有关，系统不能替您决定补用剂量。请按医生给出的方案处理，出现明显不适时立即求助。",
+      "riskLevel": "high",
+      "sourceIds": ["src-insulin-missed"]
+    },
+    {
+      "id": "medicine-usage",
+      "terms": ["怎么吃", "什么时候吃", "饭前", "饭后", "用法", "剂量"],
+      "title": "按已确认的处方或说明书服用",
+      "plainText": "我先带您核对当前药物和已经确认的说明书信息。具体饭前饭后和剂量需要以处方或说明书为准；如果两处信息不一致，请先联系开药医生或药师。",
+      "riskLevel": "unknown",
+      "sourceIds": ["src-no-evidence"]
+    },
+    {
+      "id": "emergency-symptoms",
+      "terms": ["胸痛", "喘不上气", "呼吸困难", "意识不清", "口角歪", "脸歪", "严重过敏", "快晕倒"],
+      "title": "先处理紧急身体状态",
+      "plainText": "您描述的情况可能需要立即获得急救帮助。请马上叫身边的人帮忙，并拨打 120；不要等待药物分析结果。",
+      "riskLevel": "emergency",
+      "sourceIds": ["src-emergency"]
+    }
+  ],
+  "interactionRules": [
+    {
+      "id": "rule-warfarin-aspirin",
+      "terms": ["华法林", "阿司匹林"],
+      "riskLevel": "high",
+      "title": "发现需要医生核对的出血风险",
+      "summary": "当前用药中同时出现华法林和阿司匹林。两种药都可能影响出血风险，系统不会自行判断是否继续同服。",
+      "nextStep": "先不要自行停药或调整剂量，尽快联系开药医生或药师核对。",
+      "sourceIds": ["src-warfarin-aspirin"]
+    },
+    {
+      "id": "rule-warfarin-insulin",
+      "terms": ["华法林", "胰岛素"],
+      "riskLevel": "high",
+      "title": "发现两种高危药物",
+      "summary": "当前用药涉及华法林和胰岛素，任何剂量或用药计划变化都应先由医生确认。",
+      "nextStep": "系统只提供核对提示，不提供剂量或停药建议。",
+      "sourceIds": ["src-no-evidence"]
+    }
+  ],
+  "highRiskMedications": [
+    {
+      "name": "华法林",
+      "aliases": ["华法林钠", "warfarin"],
+      "sourceIds": ["src-warfarin-missed"]
+    },
+    {
+      "name": "胰岛素",
+      "aliases": ["insulin"],
+      "sourceIds": ["src-insulin-missed"]
+    }
+  ],
+  "emergencyKeywords": [
+    "胸痛",
+    "喘不上气",
+    "呼吸困难",
+    "意识不清",
+    "叫不醒",
+    "口角歪",
+    "脸歪",
+    "严重过敏",
+    "快晕倒"
+  ]
+}

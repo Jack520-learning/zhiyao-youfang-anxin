@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+  <rect width="1200" height="720" fill="#f8f5ec"/>
+  <rect x="42" y="42" width="1116" height="636" rx="28" fill="#fffdf7" stroke="#35322a" stroke-width="5"/>
+  <text x="90" y="128" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="52" font-weight="700" fill="#1f382f">演示药盒标签</text>
+  <text x="90" y="236" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="82" font-weight="700" fill="#101a16">华法林钠片</text>
+  <text x="90" y="324" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="50" fill="#263d35">规格 2.5mg</text>
+  <text x="90" y="406" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="50" fill="#263d35">每日一次 每次一片</text>
+  <text x="90" y="488" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="50" fill="#263d35">饭后服用</text>
+  <text x="90" y="548" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="42" fill="#263d35">包装参考价 28.50 元</text>
+  <rect x="90" y="590" width="1020" height="72" rx="12" fill="#fff4d8"/>
+  <text x="120" y="637" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="30" fill="#7a4b00">仅用于比赛演示，不用于真实医疗决策</text>
+</svg>

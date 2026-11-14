@@ -1,0 +1,560 @@
+import {
+  ArrowLeft,
+  Camera,
+  Check,
+  FileImage,
+  ImagePlus,
+  LoaderCircle,
+  Save,
+  ShieldAlert,
+  Sparkles
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { RiskBadge } from "../components/RiskBadge";
+import { SourcesBlock } from "../components/SourcesBlock";
+import { CameraCaptureModal } from "../components/CameraCaptureModal";
+import { createManualDraft, recognizeMedicineImage } from "../lib/ocr";
+import { fileToCompressedDataUrl } from "../lib/image";
+import { createId } from "../lib/ids";
+import { checkNewMedication } from "../lib/riskEngine";
+import {
+  frequencyOptions,
+  resizeTimes,
+  validateDosageText,
+  validateTimes
+} from "../lib/dosage";
+import { dateKey, nowIso } from "../lib/time";
+import { useAppStore } from "../store/useAppStore";
+import type { IntakeDraft, Medication, RiskCheck } from "../types";
+
+type Phase = "upload" | "recognizing" | "review" | "result";
+
+function splitIngredients(value: string): string[] {
+  return value
+    .split(/[、,，/\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function AddMedicationPage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const manualMode = searchParams.get("mode") === "manual";
+  const origin = searchParams.get("from");
+  const backPath = origin === "chat" ? "/chat" : origin === "today" ? "/" : "/medications";
+  const backLabel = origin === "chat" ? "返回问药识药" : origin === "today" ? "返回今日" : "返回用药清单";
+  const existingDraft = useAppStore((state) => state.intakeDraft);
+  const profile = useAppStore((state) => state.profile);
+  const medications = useAppStore((state) => state.medications);
+  const saveIntakeDraft = useAppStore((state) => state.saveIntakeDraft);
+  const addMedication = useAppStore((state) => state.addMedication);
+  const [phase, setPhase] = useState<Phase>(() =>
+    manualMode || existingDraft?.imageDataUrl ? "review" : "upload"
+  );
+  const [draft, setDraft] = useState<IntakeDraft | undefined>(() =>
+    manualMode ? createManualDraft() : existingDraft
+  );
+  const [progress, setProgress] = useState(0);
+  const [progressLabel, setProgressLabel] = useState("");
+  const [error, setError] = useState("");
+  const [riskCheck, setRiskCheck] = useState<RiskCheck>();
+  const [candidateMedication, setCandidateMedication] = useState<Medication>();
+  const [cameraOpen, setCameraOpen] = useState(false);
+
+  const canConfirm = useMemo(() => {
+    if (!draft) return false;
+    return Boolean(
+      draft.name.trim() &&
+        draft.dosage.trim() &&
+        draft.frequency.trim() &&
+        draft.relation.trim() &&
+        draft.times.length &&
+        validateDosageText(draft.dosage).valid &&
+        validateTimes(draft.times).valid &&
+        !draft.lowConfidenceFields.some((field) =>
+          ["name", "dosage", "frequency", "relation"].includes(field)
+        )
+    );
+  }, [draft]);
+
+  useEffect(() => {
+    if (!draft || phase !== "review") return;
+    const timer = window.setTimeout(() => saveIntakeDraft(draft), 250);
+    return () => window.clearTimeout(timer);
+  }, [draft, phase, saveIntakeDraft]);
+
+  async function processImage(dataUrl: string) {
+    setPhase("recognizing");
+    setProgress(0.03);
+    setProgressLabel("正在保存原图");
+    setError("");
+    try {
+      const recognized = await recognizeMedicineImage(dataUrl, (value, label) => {
+        setProgress(value);
+        setProgressLabel(label);
+      });
+      setDraft(recognized);
+      saveIntakeDraft(recognized);
+      setPhase("review");
+    } catch (recognitionError) {
+      console.error(recognitionError);
+      const manual = createManualDraft(dataUrl);
+      setDraft(manual);
+      saveIntakeDraft(manual);
+      setError(
+        "本地识别暂时没有完成。原图已经保存，请直接核对并填写药名、剂量和用法。"
+      );
+      setPhase("review");
+    }
+  }
+
+  async function onFileChange(file: File | undefined) {
+    if (!file) return;
+    try {
+      const dataUrl = await fileToCompressedDataUrl(file);
+      await processImage(dataUrl);
+    } catch {
+      setError("图片读取失败，请重新拍照或换一张清楚的照片。");
+      setPhase("upload");
+    }
+  }
+
+  async function useDemoLabel() {
+    try {
+      const response = await fetch("/demo-label.svg");
+      const blob = await response.blob();
+      const file = new File([blob], "demo-label.svg", { type: "image/svg+xml" });
+      const dataUrl = await fileToCompressedDataUrl(file, 1800, 0.92);
+      await processImage(dataUrl);
+    } catch {
+      setError("演示药盒载入失败，可以直接手动填写。");
+      const draft = createManualDraft();
+      setDraft(draft);
+      setPhase("review");
+    }
+  }
+
+  function updateField<K extends keyof IntakeDraft>(field: K, value: IntakeDraft[K]) {
+    setDraft((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        [field]: value,
+        lowConfidenceFields: current.lowConfidenceFields.filter(
+          (item) => item !== String(field)
+        )
+      };
+    });
+  }
+
+  function confirmRecognition() {
+    if (!draft || !canConfirm) return;
+    const createdAt = nowIso();
+    const candidate: Medication = {
+      id: createId("med"),
+      name: draft.name.trim(),
+      genericName: draft.genericName.trim(),
+      ingredients: splitIngredients(draft.ingredientsText || draft.genericName || draft.name),
+      dosage: draft.dosage.trim(),
+      frequency: draft.frequency.trim(),
+      times: draft.times.length ? draft.times : ["08:00"],
+      relation: draft.relation.trim(),
+      instructions: draft.instructions.trim(),
+      price: draft.price?.trim(),
+      startDate: dateKey(),
+      status: "pending",
+      reminderEnabled: true,
+      source: {
+        type: draft.imageDataUrl ? "medicine-label" : "professional-note",
+        title: draft.imageDataUrl ? "用户拍摄并确认的药盒/说明书" : "用户手动录入",
+        capturedAt: createdAt,
+        imageDataUrl: draft.imageDataUrl,
+        confirmed: true
+      },
+      confidence: Math.max(draft.confidence, 0.8),
+      createdAt,
+      updatedAt: createdAt
+    };
+    setCandidateMedication(candidate);
+    setRiskCheck(checkNewMedication(candidate, medications, profile));
+    setDraft((current) =>
+      current
+        ? {
+            ...current,
+            rawText: `${current.rawText}\n\n人工确认时间：${createdAt}`
+          }
+        : current
+    );
+    setPhase("result");
+  }
+
+  function saveToMedicationList(destination: "detail" | "chat" = "detail") {
+    if (!draft || !riskCheck || !candidateMedication) return;
+    const createdAt = nowIso();
+    const medication: Medication = {
+      ...candidateMedication,
+      id: candidateMedication.id,
+      name: draft.name.trim(),
+      genericName: draft.genericName.trim(),
+      ingredients: splitIngredients(draft.ingredientsText || draft.genericName || draft.name),
+      dosage: draft.dosage.trim(),
+      frequency: draft.frequency.trim(),
+      times: draft.times.length ? draft.times : ["08:00"],
+      relation: draft.relation.trim(),
+      instructions: draft.instructions.trim(),
+      price: draft.price?.trim(),
+      startDate: dateKey(),
+      status:
+        riskCheck.level === "high" || riskCheck.level === "emergency"
+          ? "pending"
+          : "active",
+      reminderEnabled: true,
+      source: {
+        type: draft.imageDataUrl ? "medicine-label" : "professional-note",
+        title: draft.imageDataUrl ? "用户拍摄并确认的药盒/说明书" : "用户手动录入",
+        capturedAt: createdAt,
+        imageDataUrl: draft.imageDataUrl,
+        confirmed: true
+      },
+      confidence: Math.max(draft.confidence, 0.8),
+      createdAt,
+      updatedAt: createdAt
+    };
+    addMedication(medication, riskCheck);
+    if (destination === "chat") {
+      navigate(
+        `/chat?q=${encodeURIComponent(
+          `${draft.name}怎么吃，和现在的药一起用要注意什么`
+        )}`
+      );
+    } else {
+      navigate(`/medications/${medication.id}`);
+    }
+  }
+
+  return (
+    <div className="page">
+      <button type="button" className="btn btn-ghost" onClick={() => navigate(backPath)}>
+        <ArrowLeft size={19} aria-hidden="true" />
+        {backLabel}
+      </button>
+      <header className="page-header" style={{ marginTop: 16 }}>
+        <div>
+          <p className="eyebrow">拍照加药 · 先核对再入档</p>
+          <h1 className="page-title">
+            {phase === "upload"
+              ? "把药盒拍给我看"
+              : phase === "recognizing"
+                ? "正在识别，请稍等"
+                : phase === "review"
+                  ? "请您核对这几项"
+                  : "这次安全核查结果"}
+          </h1>
+          <p className="page-description">
+            {phase === "upload"
+              ? "拍药盒、说明书或处方单都可以。看不清的地方，我会请您重新确认。"
+              : phase === "recognizing"
+                ? "图片已经保存在本机。识别完成后，原图和字段都会保留。"
+                : phase === "review"
+                  ? "低置信或空白的字段会标出来。确认前不会加入当前用药。"
+                  : "系统已经对当前用药、过敏史和演示规则完成交叉核对。"}
+          </p>
+        </div>
+      </header>
+
+      {phase === "upload" ? (
+        <section className="upload-zone">
+          <div className="upload-content">
+            <span className="upload-icon">
+              <ImagePlus size={38} aria-hidden="true" />
+            </span>
+            <h2>拍清楚药名和剂量</h2>
+            <p>
+              照片只用于本地识别和您的家庭档案。无法识别时，可以进入手动填写。
+            </p>
+            <div className="header-actions" style={{ justifyContent: "center" }}>
+              <button
+                type="button"
+                className="btn btn-primary btn-large"
+                onClick={() => setCameraOpen(true)}
+              >
+                <Camera size={21} aria-hidden="true" />
+                打开相机拍照
+              </button>
+              <label className="btn btn-large upload-label">
+                <FileImage size={21} aria-hidden="true" />
+                从相册选图
+                <input
+                  type="file"
+                  accept="image/*"
+                  aria-label="从相册选择药盒图片"
+                  onChange={(event) => onFileChange(event.target.files?.[0])}
+                />
+              </label>
+              <button type="button" className="btn btn-large" onClick={useDemoLabel}>
+                <Sparkles size={21} aria-hidden="true" />
+                使用演示药盒
+              </button>
+              <button
+                type="button"
+                className="btn btn-large"
+                onClick={() => {
+                  setDraft(createManualDraft());
+                  setError("");
+                  setPhase("review");
+                }}
+              >
+                手动输入药名
+              </button>
+            </div>
+            <span className="field-hint">
+              演示药盒会触发“华法林 + 阿司匹林”高危提示，适合完整讲解安全边界。
+            </span>
+          </div>
+        </section>
+      ) : null}
+
+      {phase === "recognizing" ? (
+        <section className="card card-pad" style={{ display: "grid", gap: 20 }}>
+          <div className="notice">
+            <LoaderCircle size={22} className="spin" aria-hidden="true" />
+            本地识别引擎正在处理图片，不依赖外部 OCR 服务。
+          </div>
+          <div>
+            <div className="section-heading">
+              <h2>{progressLabel || "准备识别"}</h2>
+              <span>{Math.round(progress * 100)}%</span>
+            </div>
+            <div className="confidence-bar">
+              <span style={{ width: `${Math.max(5, progress * 100)}%` }} />
+            </div>
+          </div>
+          {draft?.imageDataUrl ? (
+            <img className="preview-image" src={draft.imageDataUrl} alt="已保存的药盒原图" />
+          ) : null}
+        </section>
+      ) : null}
+
+      {phase === "review" && draft ? (
+        <div className="intake-layout">
+          <aside className="card card-pad progress-panel">
+            {draft.imageDataUrl ? (
+              <img className="preview-image" src={draft.imageDataUrl} alt="药盒或说明书原图" />
+            ) : (
+              <div className="upload-icon" style={{ margin: "0 auto" }}>
+                <FileImage size={34} aria-hidden="true" />
+              </div>
+            )}
+            <div className="section-heading" style={{ marginTop: 18 }}>
+              <div>
+                <h2 style={{ fontSize: 18 }}>识别可信度</h2>
+                <p>仍需人工确认</p>
+              </div>
+              <strong>{Math.round(draft.confidence * 100)}%</strong>
+            </div>
+            <div className="confidence-bar">
+              <span style={{ width: `${Math.max(5, draft.confidence * 100)}%` }} />
+            </div>
+            <p className="field-hint" style={{ marginTop: 12 }}>
+              原图和修改记录会保存在本地。刷新或重新打开后可以从这里继续。
+            </p>
+          </aside>
+          <section className="card card-pad">
+            {error ? (
+              <div className="notice warm" style={{ marginBottom: 18 }}>
+                <ShieldAlert size={21} aria-hidden="true" />
+                {error}
+              </div>
+            ) : null}
+            <div className="form-grid">
+              <label className={`field full ${draft.lowConfidenceFields.includes("name") ? "low-confidence" : ""}`}>
+                <span className="field-label">药名 *</span>
+                <input className="input" value={draft.name} onChange={(event) => updateField("name", event.target.value)} />
+                {draft.lowConfidenceFields.includes("name") ? (
+                  <span className="field-hint">这一项需要您核对，可能没有看清。</span>
+                ) : null}
+              </label>
+              <label className="field">
+                <span className="field-label">通用名</span>
+                <input className="input" value={draft.genericName} onChange={(event) => updateField("genericName", event.target.value)} />
+              </label>
+              <label className="field">
+                <span className="field-label">有效成分</span>
+                <input
+                  className="input"
+                  value={draft.ingredientsText}
+                  placeholder="例如：华法林"
+                  onChange={(event) => updateField("ingredientsText", event.target.value)}
+                />
+              </label>
+              <label className="field">
+                <span className="field-label">参考价格</span>
+                <input
+                  className="input"
+                  value={draft.price ?? ""}
+                  placeholder="例如：¥28.50，没有可靠价格可留空"
+                  onChange={(event) => updateField("price", event.target.value)}
+                />
+                <span className="field-hint">价格仅来自包装、购买记录或可靠数据源，不自动猜测。</span>
+              </label>
+              <label className={`field ${draft.lowConfidenceFields.includes("dosage") ? "low-confidence" : ""}`}>
+                <span className="field-label">剂量 *</span>
+                <input className="input" value={draft.dosage} placeholder="例如：2.5mg，每次 1 片" onChange={(event) => updateField("dosage", event.target.value)} />
+              </label>
+              <label className={`field ${draft.lowConfidenceFields.includes("frequency") ? "low-confidence" : ""}`}>
+                <span className="field-label">频次 *</span>
+                <select
+                  className="select"
+                  value={
+                    frequencyOptions.some((item) => item.value === draft.frequency)
+                      ? draft.frequency
+                      : "每日 1 次"
+                  }
+                  onChange={(event) => {
+                    const option = frequencyOptions.find(
+                      (item) => item.value === event.target.value
+                    );
+                    updateField("frequency", event.target.value);
+                    updateField(
+                      "times",
+                      resizeTimes(draft.times, option?.count ?? 1)
+                    );
+                  }}
+                >
+                  {frequencyOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={`field ${draft.lowConfidenceFields.includes("relation") ? "low-confidence" : ""}`}>
+                <span className="field-label">饭前还是饭后 *</span>
+                <select className="select" value={draft.relation} onChange={(event) => updateField("relation", event.target.value)}>
+                  <option value="">请选择</option>
+                  <option value="饭前">饭前</option>
+                  <option value="饭后">饭后</option>
+                  <option value="随餐">随餐</option>
+                  <option value="睡前">睡前</option>
+                  <option value="按需">按需</option>
+                </select>
+              </label>
+              <div className="field full">
+                <span className="field-label">每天用药时间</span>
+                <div className="time-slot-grid">
+                  {draft.times.map((time, index) => (
+                    <label className="time-slot" key={`${index}-${time}`}>
+                      <span>第 {index + 1} 次</span>
+                      <input
+                        className="input"
+                        type="time"
+                        value={time}
+                        onChange={(event) => {
+                          const nextTimes = [...draft.times];
+                          nextTimes[index] = event.target.value;
+                          updateField("times", nextTimes);
+                        }}
+                      />
+                    </label>
+                  ))}
+                </div>
+                <span className="field-hint">
+                  修改每日次数后，会同步增减对应的时间选择框。
+                </span>
+              </div>
+              <label className="field full">
+                <span className="field-label">识别到的说明文字</span>
+                <textarea className="textarea" value={draft.instructions} onChange={(event) => updateField("instructions", event.target.value)} />
+              </label>
+            </div>
+            <div className="header-actions" style={{ marginTop: 20 }}>
+              <button
+                type="button"
+                className="btn btn-primary btn-large"
+                disabled={!canConfirm}
+                onClick={confirmRecognition}
+              >
+                <Check size={21} aria-hidden="true" />
+                我已核对，开始安全核查
+              </button>
+              <button type="button" className="btn btn-large" onClick={() => setPhase("upload")}>
+                重新拍照
+              </button>
+            </div>
+            {!validateDosageText(draft.dosage).valid ? (
+              <p className="field-error" role="alert">
+                {validateDosageText(draft.dosage).message}
+              </p>
+            ) : null}
+            {!validateTimes(draft.times).valid ? (
+              <p className="field-error" role="alert">
+                {validateTimes(draft.times).message}
+              </p>
+            ) : null}
+          </section>
+        </div>
+      ) : null}
+
+      {phase === "result" && riskCheck ? (
+        <div className="intake-layout">
+          <aside className="card card-pad progress-panel">
+            <RiskBadge level={riskCheck.level} />
+            <h2 style={{ marginTop: 18, fontSize: 26, lineHeight: 1.35 }}>
+              {riskCheck.title}
+            </h2>
+            <p style={{ marginTop: 12, color: "var(--muted)", lineHeight: 1.7 }}>
+              {riskCheck.summary}
+            </p>
+            <div className="notice warm" style={{ marginTop: 18 }}>
+              <ShieldAlert size={21} aria-hidden="true" />
+              {riskCheck.nextStep}
+            </div>
+          </aside>
+          <section className="card card-pad">
+            <div className="section-heading">
+              <div>
+                <h2>为什么这样判断</h2>
+                <p>依据与核查范围都可追溯。</p>
+              </div>
+            </div>
+            <div className="source-list">
+              {riskCheck.reasons.map((reason) => (
+                <div className="source-item" key={reason}>
+                  <strong>{reason}</strong>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 18 }}>
+              <SourcesBlock sourceIds={riskCheck.sourceIds} />
+            </div>
+            <div className="notice" style={{ marginTop: 18 }}>
+              <FileImage size={21} aria-hidden="true" />
+              本次核查使用当前 {medications.filter((medication) => medication.status === "active").length} 种在用药物，并保留药物清单快照。
+            </div>
+            <div className="header-actions" style={{ marginTop: 22 }}>
+              <button className="btn btn-primary btn-large" type="button" onClick={() => saveToMedicationList("detail")}>
+                <Save size={21} aria-hidden="true" />
+                {riskCheck.level === "high" || riskCheck.level === "emergency"
+                  ? "只保存到待核对清单"
+                  : "确认加入当前用药"}
+              </button>
+              <button className="btn btn-large" type="button" onClick={() => saveToMedicationList("chat")}>
+                <Sparkles size={20} aria-hidden="true" />
+                让 AI 解释这盒药
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+      <CameraCaptureModal
+        open={cameraOpen}
+        onClose={() => setCameraOpen(false)}
+        onCapture={(imageDataUrl) => {
+          setCameraOpen(false);
+          void processImage(imageDataUrl);
+        }}
+      />
+    </div>
+  );
+}

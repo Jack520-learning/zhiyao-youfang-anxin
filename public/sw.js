@@ -1,0 +1,67 @@
+const CACHE_NAME = "zhiyao-anxin-v1";
+const APP_SHELL = ["/", "/manifest.webmanifest", "/icon.svg"];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+        )
+      )
+  );
+  self.clients.claim();
+});
+
+self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin || url.pathname.startsWith("/api/")) return;
+
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        return response;
+      })
+      .catch(() => caches.match(event.request).then((cached) => cached || caches.match("/")))
+  );
+});
+
+self.addEventListener("push", (event) => {
+  const payload = event.data?.json?.() || {};
+  event.waitUntil(
+    self.registration.showNotification(payload.title || "安心药伴提醒", {
+      body: payload.body || "请打开安心药伴查看用药安排。",
+      icon: "/icon.svg",
+      badge: "/icon.svg",
+      tag: payload.tag || "medicine-reminder",
+      renotify: true,
+      data: { url: payload.url || "/" }
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || "/";
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      const existing = windows.find((client) => new URL(client.url).origin === self.location.origin);
+      if (existing) {
+        existing.navigate(url);
+        return existing.focus();
+      }
+      return clients.openWindow(url);
+    })
+  );
+});

@@ -1,0 +1,20 @@
+{
+  "name": "智药有方 · 安心药伴",
+  "short_name": "智药有方",
+  "description": "识药、问药、用药安全与家属协同的一体化 AI Web 助手",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f7f4",
+  "theme_color": "#0f6b55",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
