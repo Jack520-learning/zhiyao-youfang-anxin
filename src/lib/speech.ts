@@ -385,3 +385,16 @@ export function getVoiceModeLabel(mode: VoiceMode): string {
 export function currentPreferredVoiceMode(): VoiceMode {
   return preferredVoiceMode;
 }
+
+export async function deleteCustomVoiceRemote(voiceId: string): Promise<void> {
+  const response = await fetch(
+    `/api/voice-clone/${encodeURIComponent(voiceId)}`,
+    { method: "DELETE" }
+  );
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(payload?.error || "专属音色删除失败");
+  }
+}

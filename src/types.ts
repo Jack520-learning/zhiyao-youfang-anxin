@@ -169,6 +169,11 @@ export interface AppPreferences {
   voiceMode: "warm" | "clear" | "male" | "calm" | "custom";
   customVoiceId?: string;
   customVoiceName?: string;
+  customVoices: Array<{
+    id: string;
+    name: string;
+    createdAt: string;
+  }>;
   highContrast: boolean;
   fontScale: "standard" | "large" | "extra-large";
 }

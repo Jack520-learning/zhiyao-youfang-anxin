@@ -457,7 +457,7 @@ const systemVoices = {
   warm: "longanhuan_v3.1",
   clear: "longxiaoxia_v3.1",
   male: "longanyang_v3.1",
-  calm: "longlaotie_v3.1"
+  calm: "longcheng_v3.1"
 };
 
 function getTtsBaseUrl() {
@@ -560,6 +560,30 @@ async function createCustomVoice(audioDataUrl) {
     throw new Error(`专属音色仍在部署或创建失败：${status}`);
   }
   return { voiceId, status, model: CUSTOM_TTS_MODEL };
+}
+
+async function deleteCustomVoice(voiceId) {
+  const response = await fetch(
+    `${getTtsBaseUrl()}/services/audio/tts/customization`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${getAiKey()}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "voice-enrollment",
+        input: { action: "delete_voice", voice_id: voiceId }
+      })
+    }
+  );
+  if (!response.ok) {
+    const payload = await response.text();
+    throw new Error(
+      `专属音色删除失败（${response.status}）：${payload.slice(0, 180)}`
+    );
+  }
+  return response.json();
 }
 
 async function callAiAssistant(payload) {
@@ -1041,6 +1065,30 @@ const server = createServer(async (request, response) => {
         return json(response, 502, {
           error:
             error instanceof Error ? error.message : "专属音色创建失败"
+        });
+      }
+    }
+
+    if (
+      url.pathname.startsWith("/api/voice-clone/") &&
+      request.method === "DELETE"
+    ) {
+      if (!hasAiKey()) {
+        return json(response, 503, { error: "千问音色复刻尚未配置" });
+      }
+      const voiceId = decodeURIComponent(
+        url.pathname.slice("/api/voice-clone/".length)
+      );
+      if (!voiceId.startsWith("qwen-audio-")) {
+        return json(response, 400, { error: "音色标识格式不正确" });
+      }
+      try {
+        await deleteCustomVoice(voiceId);
+        return json(response, 200, { ok: true });
+      } catch (error) {
+        return json(response, 502, {
+          error:
+            error instanceof Error ? error.message : "专属音色删除失败"
         });
       }
     }

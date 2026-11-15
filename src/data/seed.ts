@@ -79,6 +79,7 @@ export function createInitialState(options?: {
       voiceMode: "warm",
       customVoiceId: undefined,
       customVoiceName: undefined,
+      customVoices: [],
       highContrast: false,
       fontScale: "large"
     },

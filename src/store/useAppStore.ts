@@ -791,6 +791,18 @@ export const useAppStore = create<AppStore>()(
             ...saved.preferences,
             voiceMode:
               saved.preferences?.voiceMode ?? current.preferences.voiceMode,
+            customVoices:
+              saved.preferences?.customVoices ??
+              (saved.preferences?.customVoiceId
+                ? [
+                    {
+                      id: saved.preferences.customVoiceId,
+                      name:
+                        saved.preferences.customVoiceName || "我的专属音色",
+                      createdAt: nowIso()
+                    }
+                  ]
+                : current.preferences.customVoices),
             fontScale:
               saved.preferences?.fontScale ?? current.preferences.fontScale
           },

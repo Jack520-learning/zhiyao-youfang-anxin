@@ -1,5 +1,12 @@
-import { CircleStop, LoaderCircle, Mic, ShieldCheck } from "lucide-react";
+import {
+  CircleStop,
+  LoaderCircle,
+  Mic,
+  ShieldCheck,
+  Trash2
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { stopSpeaking } from "../lib/speech";
 
 const READING_TEXT =
   "今天天气很好，我正在使用智药有方核对今天的用药。请按照医生和说明书的安排服药。";
@@ -60,22 +67,39 @@ async function audioBlobToWavDataUrl(blob: Blob): Promise<string> {
 }
 
 export function VoiceCloneRecorder({
-  onCreated
+  onCreated,
+  customVoices,
+  selectedVoiceId,
+  onSelect,
+  onDelete
 }: {
   onCreated: (voiceId: string, name: string) => void;
+  customVoices: Array<{ id: string; name: string; createdAt: string }>;
+  selectedVoiceId?: string;
+  onSelect: (voiceId: string, name: string) => void;
+  onDelete: (voiceId: string) => Promise<void>;
 }) {
   const [recording, setRecording] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState("");
+  const [deletingId, setDeletingId] = useState("");
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | undefined>(undefined);
   const elapsedRef = useRef(0);
+  const startedAtRef = useRef(0);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const voiceFramesRef = useRef(0);
+  const checkedFramesRef = useRef(0);
 
   function release() {
     if (timerRef.current) window.clearInterval(timerRef.current);
+    void audioContextRef.current?.close();
+    audioContextRef.current = null;
+    analyserRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
   }
@@ -84,6 +108,8 @@ export function VoiceCloneRecorder({
 
   async function start() {
     setError("");
+    stopSpeaking();
+    await new Promise((resolve) => window.setTimeout(resolve, 250));
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
       setError("当前浏览器不支持录音，请使用 Chrome 或 Safari");
       return;
@@ -97,6 +123,15 @@ export function VoiceCloneRecorder({
         }
       });
       streamRef.current = stream;
+      const audioContext = new AudioContext();
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+      audioContextRef.current = audioContext;
+      analyserRef.current = analyser;
+      voiceFramesRef.current = 0;
+      checkedFramesRef.current = 0;
       const types = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
       const mimeType = types.find((type) => MediaRecorder.isTypeSupported(type));
       const recorder = new MediaRecorder(
@@ -108,19 +143,37 @@ export function VoiceCloneRecorder({
         if (event.data.size) chunksRef.current.push(event.data);
       };
       recorder.onstop = () => {
+        release();
         void upload(new Blob(chunksRef.current, { type: recorder.mimeType }));
       };
       recorderRef.current = recorder;
       recorder.start(250);
       elapsedRef.current = 0;
+      startedAtRef.current = performance.now();
       setSeconds(0);
       setRecording(true);
       timerRef.current = window.setInterval(() => {
-        elapsedRef.current += 1;
-        setSeconds(elapsedRef.current);
+        const analyserNode = analyserRef.current;
+        if (analyserNode) {
+          const values = new Uint8Array(analyserNode.fftSize);
+          analyserNode.getByteTimeDomainData(values);
+          const rms = Math.sqrt(
+            values.reduce((sum, value) => {
+              const centered = (value - 128) / 128;
+              return sum + centered * centered;
+            }, 0) / values.length
+          );
+          checkedFramesRef.current += 1;
+          if (rms > 0.012) voiceFramesRef.current += 1;
+        }
+        elapsedRef.current =
+          (performance.now() - startedAtRef.current) / 1000;
+        setSeconds(Math.min(20, Math.floor(elapsedRef.current)));
         if (elapsedRef.current >= 20) stop();
-      }, 1000);
+      }, 250);
     } catch {
+      release();
+      setRecording(false);
       setError("无法使用麦克风，请检查浏览器麦克风权限");
     }
   }
@@ -131,6 +184,8 @@ export function VoiceCloneRecorder({
     }
     setRecording(false);
     if (timerRef.current) window.clearInterval(timerRef.current);
+    elapsedRef.current = (performance.now() - startedAtRef.current) / 1000;
+    setSeconds(Math.min(20, Math.floor(elapsedRef.current)));
     if (elapsedRef.current < 5) {
       recorderRef.current.onstop = null;
       recorderRef.current.stop();
@@ -138,8 +193,17 @@ export function VoiceCloneRecorder({
       setError("录音太短，请连续朗读至少 5 秒，推荐 10 到 20 秒");
       return;
     }
+    if (
+      checkedFramesRef.current > 0 &&
+      voiceFramesRef.current / checkedFramesRef.current < 0.18
+    ) {
+      recorderRef.current.onstop = null;
+      recorderRef.current.stop();
+      release();
+      setError("没有检测到持续清晰的人声，请在安静环境中靠近麦克风重新录制");
+      return;
+    }
     recorderRef.current?.stop();
-    release();
   }
 
   async function upload(blob: Blob) {
@@ -181,6 +245,46 @@ export function VoiceCloneRecorder({
         <ShieldCheck size={20} color="var(--primary)" aria-hidden="true" />
       </div>
       <blockquote>{READING_TEXT}</blockquote>
+      {customVoices.length ? (
+        <div className="custom-voice-library">
+          <h4>已创建的专属音色</h4>
+          {customVoices.map((voice) => (
+            <div className="custom-voice-row" key={voice.id}>
+              <button
+                type="button"
+                className={
+                  selectedVoiceId === voice.id ? "custom-voice-pick active" : "custom-voice-pick"
+                }
+                onClick={() => onSelect(voice.id, voice.name)}
+              >
+                <Mic size={17} aria-hidden="true" />
+                <span>{voice.name}</span>
+                {selectedVoiceId === voice.id ? <small>使用中</small> : null}
+              </button>
+              <button
+                type="button"
+                className="custom-voice-delete"
+                aria-label={`删除音色 ${voice.name}`}
+                disabled={deletingId === voice.id}
+                onClick={async () => {
+                  setDeletingId(voice.id);
+                  try {
+                    await onDelete(voice.id);
+                  } finally {
+                    setDeletingId("");
+                  }
+                }}
+              >
+                {deletingId === voice.id ? (
+                  <LoaderCircle size={17} className="spin" aria-hidden="true" />
+                ) : (
+                  <Trash2 size={17} aria-hidden="true" />
+                )}
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
       <div className="voice-record-actions">
         <button
           type="button"

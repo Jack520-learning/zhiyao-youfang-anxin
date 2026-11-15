@@ -32,6 +32,7 @@ import {
 } from "../lib/cloud";
 import {
   getSpeechPlaybackState,
+  deleteCustomVoiceRemote,
   pauseSpeaking,
   resumeSpeaking,
   stopSpeaking,
@@ -84,16 +85,6 @@ export function ProfilePage() {
   const [cancelBusy, setCancelBusy] = useState(false);
   const [speechPlayback, setSpeechPlayback] =
     useState<SpeechPlaybackState>("idle");
-  const voicePresets: Array<{ value: VoiceMode; label: string }> =
-    preferences.customVoiceId
-      ? [
-          ...voiceOptions,
-          {
-            value: "custom",
-            label: preferences.customVoiceName || "我的专属音色"
-          }
-        ]
-      : voiceOptions;
   const [notificationState, setNotificationState] = useState<
     "idle" | "loading" | "granted" | "denied"
   >("idle");
@@ -228,6 +219,49 @@ export function ProfilePage() {
       return;
     }
     setSpeechPlayback("speaking");
+  }
+
+  function addCustomVoice(voiceId: string, voiceName: string) {
+    const customVoices = [
+      ...preferences.customVoices.filter((voice) => voice.id !== voiceId),
+      { id: voiceId, name: voiceName, createdAt: new Date().toISOString() }
+    ];
+    updatePreferences({
+      customVoices,
+      customVoiceId: voiceId,
+      customVoiceName: voiceName,
+      voiceMode: "custom"
+    });
+    setToast("专属音色已创建并启用");
+  }
+
+  async function deleteCustomVoice(voiceId: string) {
+    if (!window.confirm("确定删除这个专属音色吗？删除后需要重新录制。")) {
+      return;
+    }
+    try {
+      await deleteCustomVoiceRemote(voiceId);
+      const customVoices = preferences.customVoices.filter(
+        (voice) => voice.id !== voiceId
+      );
+      const wasSelected =
+        preferences.voiceMode === "custom" &&
+        preferences.customVoiceId === voiceId;
+      const next = customVoices[0];
+      if (wasSelected) stopSpeaking();
+      updatePreferences({
+        customVoices,
+        customVoiceId: wasSelected ? next?.id : preferences.customVoiceId,
+        customVoiceName: wasSelected ? next?.name : preferences.customVoiceName,
+        voiceMode: wasSelected ? (next ? "custom" : "warm") : preferences.voiceMode
+      });
+      setSpeechPlayback("idle");
+      setToast("专属音色已删除");
+    } catch (deleteError) {
+      setToast(
+        deleteError instanceof Error ? deleteError.message : "专属音色删除失败"
+      );
+    }
   }
 
   function changeFamilyCode() {
@@ -553,7 +587,7 @@ export function ProfilePage() {
                   role="group"
                   aria-label="朗读音色"
                 >
-                  {voicePresets.map((option) => (
+                  {voiceOptions.map((option) => (
                     <button
                       type="button"
                       className={
@@ -588,14 +622,19 @@ export function ProfilePage() {
                       : "试听当前音色"}
                 </button>
                 <VoiceCloneRecorder
-                  onCreated={(voiceId, voiceName) => {
+                  onCreated={addCustomVoice}
+                  customVoices={preferences.customVoices}
+                  selectedVoiceId={preferences.customVoiceId}
+                  onSelect={(voiceId, voiceName) => {
+                    stopSpeaking();
                     updatePreferences({
                       customVoiceId: voiceId,
                       customVoiceName: voiceName,
                       voiceMode: "custom"
                     });
-                    setToast("专属音色已创建并启用");
+                    setSpeechPlayback("idle");
                   }}
+                  onDelete={deleteCustomVoice}
                 />
               </div>
             ) : null}
@@ -1103,7 +1142,7 @@ export function ProfilePage() {
                 role="group"
                 aria-label="朗读音色"
               >
-                {voicePresets.map((option) => (
+                {voiceOptions.map((option) => (
                   <button
                     type="button"
                     className={
@@ -1138,14 +1177,19 @@ export function ProfilePage() {
                     : "试听当前音色"}
               </button>
               <VoiceCloneRecorder
-                onCreated={(voiceId, voiceName) => {
+                onCreated={addCustomVoice}
+                customVoices={preferences.customVoices}
+                selectedVoiceId={preferences.customVoiceId}
+                onSelect={(voiceId, voiceName) => {
+                  stopSpeaking();
                   updatePreferences({
                     customVoiceId: voiceId,
                     customVoiceName: voiceName,
                     voiceMode: "custom"
                   });
-                  setToast("专属音色已创建并启用");
+                  setSpeechPlayback("idle");
                 }}
+                onDelete={deleteCustomVoice}
               />
             </div>
           ) : null}

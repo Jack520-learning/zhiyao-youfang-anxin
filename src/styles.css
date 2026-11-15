@@ -2237,6 +2237,70 @@ img {
   font-size: calc(12px * var(--font-scale));
 }
 
+.custom-voice-library {
+  display: grid;
+  gap: 7px;
+}
+
+.custom-voice-library h4 {
+  color: var(--muted);
+  font-size: calc(12px * var(--font-scale));
+}
+
+.custom-voice-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  gap: 6px;
+}
+
+.custom-voice-pick {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0 11px;
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+}
+
+.custom-voice-pick.active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.custom-voice-pick span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-voice-pick small {
+  color: var(--primary);
+  font-size: calc(10px * var(--font-scale));
+}
+
+.custom-voice-delete {
+  display: grid;
+  width: 38px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.custom-voice-delete:hover {
+  border-color: var(--red);
+  background: var(--red-soft);
+  color: var(--red);
+}
+
 .family-voice-settings {
   border-top: 0;
   padding-top: 0;
