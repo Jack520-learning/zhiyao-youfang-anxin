@@ -1916,18 +1916,18 @@ img {
   position: fixed;
   z-index: 65;
   display: inline-flex;
-  min-width: 64px;
-  min-height: 50px;
+  min-width: 104px;
+  min-height: 52px;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 7px;
   border: 0;
   border-radius: 999px;
-  padding: 0 12px;
+  padding: 0 18px;
   background: var(--red);
   color: #fff;
   box-shadow: 0 12px 30px rgba(159, 53, 45, 0.28);
-  font-size: calc(12px * var(--font-scale));
+  font-size: calc(13px * var(--font-scale));
   font-weight: 800;
   touch-action: none;
   user-select: none;
@@ -3553,6 +3553,28 @@ img {
   line-height: 1.55;
 }
 
+.ai-search-field {
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  padding: 0 8px;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    background 150ms ease;
+}
+
+.ai-search-field:hover {
+  border-color: #bdcbc3;
+}
+
+.ai-search-field:focus-within {
+  border-color: var(--primary);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px rgba(15, 107, 85, 0.12);
+}
+
 .ai-composer-actions,
 .ai-tool-group,
 .ai-send-group {
@@ -3583,10 +3605,10 @@ img {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  border: 0;
+  border: 1px solid var(--line);
   border-radius: 13px;
   padding: 0 4px;
-  background: transparent;
+  background: var(--surface);
   color: var(--muted);
   font-size: calc(12px * var(--font-scale));
   font-weight: 650;
@@ -3599,6 +3621,7 @@ img {
 }
 
 .ai-tool-button:hover {
+  border-color: #b7c7be;
   background: var(--surface-soft);
   color: var(--ink);
 }
@@ -3608,6 +3631,7 @@ img {
 }
 
 .ai-tool-button.active {
+  border-color: var(--primary);
   background: var(--primary);
   color: #fff;
 }

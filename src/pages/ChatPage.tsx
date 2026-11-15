@@ -1023,7 +1023,7 @@ export function ChatPage() {
 
         <div className="ai-composer-wrap">
           <div className="ai-composer">
-            <label>
+            <label className="ai-search-field">
               <span className="sr-only">输入您想问的用药问题</span>
               <textarea
                 rows={1}
