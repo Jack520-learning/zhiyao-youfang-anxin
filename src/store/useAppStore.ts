@@ -9,7 +9,17 @@ import { createInitialState } from "../data/seed";
 import { createPasswordRecord, verifyPassword } from "../lib/auth";
 import { createId } from "../lib/ids";
 import { nowIso } from "../lib/time";
+import {
+  captureWorkspace,
+  createBlankWorkspace,
+  getLinkedFamilyCodes,
+  normalizeFamilyCode,
+  saveActiveWorkspace,
+  workspaceKey,
+  workspacePatch
+} from "../lib/workspaces";
 import type {
+  AccountWorkspace,
   AppPreferences,
   AppState,
   AuditEvent,
@@ -72,6 +82,25 @@ function pruneHandledAlerts(alerts: FamilyAlert[]): FamilyAlert[] {
   );
 }
 
+function normalizeAccount(account: LocalAccount): LocalAccount {
+  return {
+    ...account,
+    linkedFamilyCodes: getLinkedFamilyCodes(account)
+  };
+}
+
+function removeAccountWorkspaces(
+  workspaces: Record<string, AccountWorkspace>,
+  accountIds: Iterable<string>
+): Record<string, AccountWorkspace> {
+  const removed = new Set(accountIds);
+  return Object.fromEntries(
+    Object.entries(workspaces).filter(
+      ([key]) => !removed.has(key.split("::")[0] || "")
+    )
+  );
+}
+
 const indexedDbStorage: StateStorage = {
   getItem: async (name) => (await get<string>(name)) ?? null,
   setItem: async (name, value) => {
@@ -92,11 +121,21 @@ interface AppActions {
     role: UserRole;
     familyCode?: string;
   }) => Promise<{ ok: boolean; error?: string }>;
+  createLinkedAccount: (input: {
+    username: string;
+    password: string;
+    displayName: string;
+    role: UserRole;
+    familyCode?: string;
+  }) => Promise<{ ok: boolean; error?: string; accountId?: string }>;
   loginAccount: (
     username: string,
     password: string
   ) => Promise<{ ok: boolean; error?: string }>;
   switchAccount: (accountId: string) => { ok: boolean; error?: string };
+  activateFamilyCode: (
+    familyCode: string
+  ) => { ok: boolean; error?: string };
   logoutAccount: () => void;
   verifyCurrentPassword: (password: string) => Promise<boolean>;
   cancelCurrentAccount: () => void;
@@ -178,11 +217,9 @@ export const useAppStore = create<AppStore>()(
         ) {
           return { ok: false, error: "这个账号已经注册，请直接登录" };
         }
-        const cleanFamilyCode = String(familyCode || state.familyCode)
-          .trim()
-          .toUpperCase()
-          .replace(/[^A-Z0-9]/g, "")
-          .slice(0, 8);
+        const cleanFamilyCode = normalizeFamilyCode(
+          familyCode || state.familyCode
+        );
         if (cleanFamilyCode.length < 6) {
           return {
             ok: false,
@@ -193,38 +230,178 @@ export const useAppStore = create<AppStore>()(
           };
         }
         const passwordRecord = await createPasswordRecord(password);
+        const cleanDisplayName = displayName.trim() || normalizedUsername;
         const account: LocalAccount = {
           id: createId("account"),
           username: normalizedUsername,
-          displayName: displayName.trim() || normalizedUsername,
+          displayName: cleanDisplayName,
           role,
           familyCode: cleanFamilyCode,
+          linkedFamilyCodes: [cleanFamilyCode],
           ...passwordRecord,
           createdAt: nowIso()
         };
+        const latest = getState();
+        const blankWorkspace = createBlankWorkspace(cleanFamilyCode);
+        if (role === "elder") {
+          blankWorkspace.profile = {
+            ...blankWorkspace.profile,
+            name: cleanDisplayName,
+            healthProfileCompleted: false,
+            healthProfilePromptSeen: false
+          };
+        }
+        const workspaces = {
+          ...saveActiveWorkspace(latest),
+          [workspaceKey(account.id, cleanFamilyCode)]: blankWorkspace
+        };
+        const registrationAudit = auditEvent(
+          "settings-updated",
+          `注册并登录${role === "elder" ? "老人端" : "家属端"}账号`
+        );
         setState((current) => ({
-          accounts: [...current.accounts, account],
+          ...workspacePatch(blankWorkspace),
+          accounts: [...current.accounts.map(normalizeAccount), account],
+          workspaces,
           sessionAccountId: account.id,
           role,
-          familyCode: account.familyCode,
-          profile:
-            role === "elder" && account.displayName
-              ? {
-                  ...current.profile,
-                  name: account.displayName,
-                  healthProfileCompleted: false,
-                  healthProfilePromptSeen: false
-                }
-              : current.profile,
           auditEvents: [
-            auditEvent(
-              "settings-updated",
-              `注册并登录${role === "elder" ? "老人端" : "家属端"}账号`
-            ),
-            ...current.auditEvents
+            registrationAudit,
+            ...blankWorkspace.auditEvents
           ].slice(0, 100)
         }));
         return { ok: true };
+      },
+      createLinkedAccount: async ({
+        username,
+        password,
+        displayName,
+        role,
+        familyCode
+      }) => {
+        const normalizedUsername = username.trim().toLowerCase();
+        if (!/^[a-zA-Z0-9_\u4e00-\u9fa5]{3,24}$/u.test(normalizedUsername)) {
+          return {
+            ok: false,
+            error: "账号需为 3 到 24 位中文、字母、数字或下划线"
+          };
+        }
+        if (password.length < 6) {
+          return { ok: false, error: "密码至少需要 6 位" };
+        }
+        const state = getState();
+        const currentAccount = state.accounts
+          .map(normalizeAccount)
+          .find((account) => account.id === state.sessionAccountId);
+        if (!currentAccount) {
+          return { ok: false, error: "请先登录当前账号" };
+        }
+        if (
+          state.accounts.some(
+            (account) => account.username === normalizedUsername
+          )
+        ) {
+          return { ok: false, error: "这个账号已经注册，请换一个账号" };
+        }
+        if (role === "elder" && currentAccount.role !== "family") {
+          return {
+            ok: false,
+            error: "只有家属账号可以新建老人档案"
+          };
+        }
+        const targetFamilyCode =
+          role === "family"
+            ? currentAccount.familyCode
+            : normalizeFamilyCode(familyCode || "");
+        if (targetFamilyCode.length < 6) {
+          return {
+            ok: false,
+            error: "新老人档案需要设置 6 到 8 位家庭连接码"
+          };
+        }
+        if (
+          role === "elder" &&
+          state.accounts.some(
+            (account) =>
+              getLinkedFamilyCodes(account).includes(targetFamilyCode) &&
+              account.role === "elder"
+          )
+        ) {
+          return {
+            ok: false,
+            error: "这个连接码已经对应其他老人，请换一个连接码"
+          };
+        }
+        const passwordRecord = await createPasswordRecord(password);
+        const cleanDisplayName = displayName.trim() || normalizedUsername;
+        const originalCurrentLinks = getLinkedFamilyCodes(currentAccount);
+        const currentLinks = Array.from(
+          new Set([
+            ...originalCurrentLinks,
+            targetFamilyCode
+          ])
+        );
+        const account: LocalAccount = {
+          id: createId("account"),
+          username: normalizedUsername,
+          displayName: cleanDisplayName,
+          role,
+          familyCode: targetFamilyCode,
+          linkedFamilyCodes:
+            role === "family" ? currentLinks : [targetFamilyCode],
+          ...passwordRecord,
+          createdAt: nowIso()
+        };
+        const accounts = state.accounts
+          .map(normalizeAccount)
+          .map((item) => {
+            if (item.id === currentAccount.id) {
+              return { ...item, linkedFamilyCodes: currentLinks };
+            }
+            const belongsToCurrentFamily =
+              item.role === "family" &&
+              getLinkedFamilyCodes(item).some((code) =>
+                originalCurrentLinks.includes(code)
+              );
+            if (role === "elder" && belongsToCurrentFamily) {
+              return {
+                ...item,
+                linkedFamilyCodes: Array.from(
+                  new Set([
+                    ...getLinkedFamilyCodes(item),
+                    ...currentLinks
+                  ])
+                )
+              };
+            }
+            return item;
+          })
+          .concat(account);
+        let workspaces = state.workspaces;
+        if (role === "elder") {
+          const blankWorkspace = createBlankWorkspace(targetFamilyCode);
+          blankWorkspace.profile = {
+            ...blankWorkspace.profile,
+            name: cleanDisplayName
+          };
+          workspaces = {
+            ...workspaces,
+            [workspaceKey(account.id, targetFamilyCode)]: blankWorkspace
+          };
+        }
+        setState({
+          accounts,
+          workspaces,
+          auditEvents: [
+            auditEvent(
+              "settings-updated",
+              `新增${role === "elder" ? "老人档案" : "家属账号"}：${cleanDisplayName}`,
+              { familyCode: targetFamilyCode }
+            ),
+            ...state.auditEvents
+          ].slice(0, 100)
+        });
+        return { ok: true, accountId: account.id };
       },
       loginAccount: async (username, password) => {
         const normalizedUsername = username.trim().toLowerCase();
@@ -238,29 +415,53 @@ export const useAppStore = create<AppStore>()(
           account.passwordSalt
         );
         if (!valid) return { ok: false, error: "账号或密码不正确" };
-        setState((current) => ({
+        const accounts = getState().accounts.map(normalizeAccount);
+        if (!accounts.find((item) => item.id === account.id)) {
+          return { ok: false, error: "账号或密码不正确" };
+        }
+        const current = getState();
+        const workspaces = saveActiveWorkspace(current);
+        const targetKey = workspaceKey(account.id, account.familyCode);
+        const targetWorkspace =
+          workspaces[targetKey] ?? createBlankWorkspace(account.familyCode);
+        setState({
+          ...workspacePatch(targetWorkspace),
+          accounts,
+          workspaces: {
+            ...workspaces,
+            [targetKey]: targetWorkspace
+          },
           sessionAccountId: account.id,
           role: account.role,
-          familyCode: account.familyCode,
           auditEvents: [
             auditEvent(
               "settings-updated",
               `登录${account.role === "elder" ? "老人端" : "家属端"}账号`
             ),
-            ...current.auditEvents
+            ...targetWorkspace.auditEvents
           ].slice(0, 100)
-        }));
+        });
         return { ok: true };
       },
       switchAccount: (accountId) => {
-        const account = getState().accounts.find(
-          (item) => item.id === accountId
-        );
+        const state = getState();
+        const account = state.accounts
+          .map(normalizeAccount)
+          .find((item) => item.id === accountId);
         if (!account) return { ok: false, error: "账号不存在" };
-        setState((current) => ({
+        const workspaces = saveActiveWorkspace(state);
+        const targetKey = workspaceKey(account.id, account.familyCode);
+        const targetWorkspace =
+          workspaces[targetKey] ?? createBlankWorkspace(account.familyCode);
+        setState({
+          ...workspacePatch(targetWorkspace),
+          accounts: state.accounts.map(normalizeAccount),
+          workspaces: {
+            ...workspaces,
+            [targetKey]: targetWorkspace
+          },
           sessionAccountId: account.id,
           role: account.role,
-          familyCode: account.familyCode,
           auditEvents: [
             auditEvent(
               "settings-updated",
@@ -268,13 +469,50 @@ export const useAppStore = create<AppStore>()(
                 account.role === "elder" ? "老人端" : "家属端"
               }`
             ),
-            ...current.auditEvents
+            ...targetWorkspace.auditEvents
           ].slice(0, 100)
-        }));
+        });
+        return { ok: true };
+      },
+      activateFamilyCode: (familyCode) => {
+        const clean = normalizeFamilyCode(familyCode);
+        const state = getState();
+        const account = state.accounts
+          .map(normalizeAccount)
+          .find((item) => item.id === state.sessionAccountId);
+        if (!account || account.role !== "family") {
+          return { ok: false, error: "只有家属账号可以切换老人档案" };
+        }
+        if (!getLinkedFamilyCodes(account).includes(clean)) {
+          return { ok: false, error: "当前账号没有关联这个家庭连接码" };
+        }
+        const workspaces = saveActiveWorkspace(state);
+        const targetKey = workspaceKey(account.id, clean);
+        const targetWorkspace =
+          workspaces[targetKey] ?? createBlankWorkspace(clean);
+        setState({
+          ...workspacePatch(targetWorkspace),
+          accounts: state.accounts.map((item) =>
+            normalizeAccount(
+              item.id === account.id ? { ...item, familyCode: clean } : item
+            )
+          ),
+          workspaces: {
+            ...workspaces,
+            [targetKey]: targetWorkspace
+          },
+          sessionAccountId: account.id,
+          role: "family",
+          auditEvents: [
+            auditEvent("settings-updated", `切换正在查看的老人档案：${clean}`),
+            ...targetWorkspace.auditEvents
+          ].slice(0, 100)
+        });
         return { ok: true };
       },
       logoutAccount: () =>
         setState((state) => ({
+          workspaces: saveActiveWorkspace(state),
           sessionAccountId: undefined,
           auditEvents: [
             auditEvent("settings-updated", "退出当前账号，数据已保留"),
@@ -302,9 +540,13 @@ export const useAppStore = create<AppStore>()(
           const accounts = state.accounts.filter(
             (item) => item.id !== account.id
           );
+          const workspaces = removeAccountWorkspaces(state.workspaces, [
+            account.id
+          ]);
           if (account.role === "family") {
             return {
               accounts,
+              workspaces,
               sessionAccountId: undefined,
               auditEvents: [
                 auditEvent("data-deleted", "注销家属账号，老人档案继续保留"),
@@ -315,6 +557,7 @@ export const useAppStore = create<AppStore>()(
           return {
             ...createInitialState({ role: "elder" }),
             accounts,
+            workspaces,
             sessionAccountId: undefined,
             hydrated: true,
             auditEvents: [
@@ -330,18 +573,26 @@ export const useAppStore = create<AppStore>()(
           const account = state.accounts.find(
             (item) => item.id === state.sessionAccountId
           );
+          const cleanFamilyCode = normalizeFamilyCode(familyCode);
+          const removedAccounts = state.accounts.filter((item) =>
+            getLinkedFamilyCodes(item).includes(cleanFamilyCode)
+          );
           const accounts = state.accounts.filter(
-            (item) => item.familyCode !== familyCode
+            (item) => !getLinkedFamilyCodes(item).includes(cleanFamilyCode)
           );
           return {
             ...createInitialState({ role: "elder" }),
             accounts,
+            workspaces: removeAccountWorkspaces(
+              state.workspaces,
+              removedAccounts.map((item) => item.id)
+            ),
             sessionAccountId: undefined,
             hydrated: true,
             auditEvents: [
               auditEvent(
                 "data-deleted",
-                `注销账号并删除家庭 ${familyCode}`,
+                `注销账号并删除家庭 ${cleanFamilyCode}`,
                 { account: account?.username || "family" }
               )
             ]
@@ -366,18 +617,35 @@ export const useAppStore = create<AppStore>()(
         }),
       setFamilyCode: (familyCode) =>
         setState((state) => {
-          const clean = familyCode
-            .trim()
-            .toUpperCase()
-            .replace(/[^A-Z0-9]/g, "")
-            .slice(0, 8);
+          const clean = normalizeFamilyCode(familyCode);
+          const account = state.accounts
+            .map(normalizeAccount)
+            .find((item) => item.id === state.sessionAccountId);
+          if (!account) return state;
+          const workspaces = saveActiveWorkspace(state);
+          const targetKey = workspaceKey(account.id, clean);
+          const targetWorkspace =
+            workspaces[targetKey] ?? createBlankWorkspace(clean);
           return {
-            familyCode: clean,
-            accounts: state.accounts.map((account) =>
-              account.id === state.sessionAccountId
-                ? { ...account, familyCode: clean }
-                : account
-            )
+            ...workspacePatch(targetWorkspace),
+            accounts: state.accounts.map((item) =>
+              item.id === account.id
+                ? normalizeAccount({
+                    ...item,
+                    familyCode: clean,
+                    linkedFamilyCodes: Array.from(
+                      new Set([
+                        ...getLinkedFamilyCodes(account),
+                        clean
+                      ])
+                    )
+                  })
+                : normalizeAccount(item)
+            ),
+            workspaces: {
+              ...workspaces,
+              [targetKey]: targetWorkspace
+            }
           };
         }),
       updateProfile: (profile) =>
@@ -634,14 +902,25 @@ export const useAppStore = create<AppStore>()(
         }),
       resetDemo: () => {
         const current = getState();
+        const replacement = createInitialState({
+          role: current.role,
+          familyCode: current.familyCode
+        });
+        const resetWorkspace = captureWorkspace(replacement);
         setState({
-          ...createInitialState({
-            role: current.role,
-            familyCode: current.familyCode
-          }),
+          ...replacement,
           role: current.role,
           familyCode: current.familyCode,
           accounts: current.accounts,
+          workspaces: current.sessionAccountId
+            ? {
+                ...current.workspaces,
+                [workspaceKey(
+                  current.sessionAccountId,
+                  current.familyCode
+                )]: resetWorkspace
+              }
+            : current.workspaces,
           sessionAccountId: current.sessionAccountId,
           hydrated: true
         });
@@ -725,7 +1004,11 @@ export const useAppStore = create<AppStore>()(
         };
       },
       mergeFamilySummary: (snapshot) =>
-        setState((state) => ({
+        setState((state) => {
+          const familyAlerts = pruneHandledAlerts(
+            snapshot.familyAlerts ?? state.familyAlerts
+          );
+          const next = {
           profile: {
             ...state.profile,
             name: snapshot.elderName,
@@ -738,13 +1021,25 @@ export const useAppStore = create<AppStore>()(
           doseEvents: snapshot.doseEvents,
           riskChecks: snapshot.riskChecks,
           emergencyContacts: snapshot.emergencyContacts,
-          familyAlerts: pruneHandledAlerts(
-            snapshot.familyAlerts ?? state.familyAlerts
-          ),
+          familyAlerts,
           consent: snapshot.consent,
           lastSyncedAt: snapshot.updatedAt,
           hydrated: true
-        }))
+          };
+          const mergedState = { ...state, ...next };
+          return {
+            ...next,
+            workspaces: state.sessionAccountId
+              ? {
+                  ...state.workspaces,
+                  [workspaceKey(
+                    state.sessionAccountId,
+                    snapshot.familyCode
+                  )]: captureWorkspace(mergedState)
+                }
+              : state.workspaces
+          };
+        })
     }),
     {
       name: STORAGE_NAME,
@@ -786,6 +1081,8 @@ export const useAppStore = create<AppStore>()(
           ...saved,
           conversations,
           activeConversationId,
+          accounts: (saved.accounts ?? current.accounts).map(normalizeAccount),
+          workspaces: saved.workspaces ?? current.workspaces,
           preferences: {
             ...current.preferences,
             ...saved.preferences,

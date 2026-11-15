@@ -40,6 +40,7 @@ export function createInitialState(options?: {
     schemaVersion: 1,
     role: options?.role ?? "elder",
     accounts: [],
+    workspaces: {},
     familyCode: options?.familyCode ?? createFamilyCode(),
     profile,
     emergencyContacts,

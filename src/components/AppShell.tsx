@@ -233,7 +233,7 @@ export function AppShell() {
       </div>
 
       <FloatingSos onOpen={() => setSosOpen(true)} />
-      <HealthProfilePrompt />
+      <HealthProfilePrompt key={sessionAccountId || "signed-out"} />
       <SpeechPlaybackDock />
 
       <nav className="mobile-nav" aria-label={`${roleName}底部导航`}>

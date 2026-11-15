@@ -97,6 +97,7 @@ export interface LocalAccount {
   displayName: string;
   role: UserRole;
   familyCode: string;
+  linkedFamilyCodes: string[];
   passwordHash: string;
   passwordSalt: string;
   createdAt: string;
@@ -188,10 +189,30 @@ export interface FamilyAlert {
   handledBy?: string;
 }
 
+export interface AccountWorkspace {
+  familyCode: string;
+  profile: ElderProfile;
+  emergencyContacts: EmergencyContact[];
+  consent: ConsentSettings;
+  medications: Medication[];
+  doseEvents: DoseEvent[];
+  riskChecks: RiskCheck[];
+  conversations: Conversation[];
+  activeConversationId: string;
+  intakeDraft?: IntakeDraft;
+  auditEvents: AuditEvent[];
+  familyAlerts: FamilyAlert[];
+  preferences: AppPreferences;
+  lastLocalSaveAt?: string;
+  lastSyncedAt?: string;
+  cloudRevision?: number;
+}
+
 export interface AppState {
   schemaVersion: number;
   role: UserRole;
   accounts: LocalAccount[];
+  workspaces: Record<string, AccountWorkspace>;
   sessionAccountId?: string;
   familyCode: string;
   profile: ElderProfile;

@@ -42,6 +42,7 @@ import {
   type VoiceMode
 } from "../lib/speech";
 import { VoiceCloneRecorder } from "../components/VoiceCloneRecorder";
+import { LinkedAccountManager } from "../components/LinkedAccountManager";
 import { useAppStore } from "../store/useAppStore";
 import type { EmergencyContact } from "../types";
 
@@ -106,6 +107,10 @@ export function ProfilePage() {
     const timer = window.setTimeout(() => setToast(""), 2600);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  useEffect(() => {
+    setCodeInput(familyCode);
+  }, [familyCode]);
 
   useEffect(() => {
     if (!preferences.soundEnabled) {
@@ -519,6 +524,7 @@ export function ProfilePage() {
         </header>
 
         <div className="elder-settings-stack">
+          <LinkedAccountManager />
           <section className="card card-pad">
             <div className="elder-setting-row" style={{ padding: 0 }}>
               <span className="quick-action-icon">
@@ -1007,6 +1013,8 @@ export function ProfilePage() {
           演示环境
         </span>
       </header>
+
+      <LinkedAccountManager />
 
       <div className="settings-grid">
         <section className="card card-pad">

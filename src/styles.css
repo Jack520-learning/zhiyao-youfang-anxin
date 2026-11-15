@@ -1738,6 +1738,158 @@ img {
   letter-spacing: 0.12em;
 }
 
+.linked-account-manager > summary {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  color: var(--ink);
+  font-size: calc(20px * var(--font-scale));
+  font-weight: 760;
+}
+
+.linked-account-manager > summary span {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 650;
+}
+
+.linked-account-manager[open] > summary {
+  margin-bottom: 12px;
+}
+
+.linked-account-section {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.linked-account-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.linked-account-section-head h3 {
+  font-size: calc(16px * var(--font-scale));
+}
+
+.linked-account-section-head p {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: calc(12px * var(--font-scale));
+}
+
+.linked-account-section-head > span {
+  flex: 0 0 auto;
+  color: var(--primary);
+  font-size: calc(12px * var(--font-scale));
+  font-weight: 750;
+}
+
+.linked-elder-list,
+.linked-family-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.linked-elder-list button,
+.linked-family-list > div {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  padding: 10px 13px;
+  background: var(--surface);
+  color: var(--muted);
+  text-align: left;
+}
+
+.linked-elder-list button.active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.linked-elder-list strong,
+.linked-family-list strong,
+.linked-elder-list small,
+.linked-family-list small {
+  display: block;
+}
+
+.linked-elder-list strong,
+.linked-family-list strong {
+  color: var(--ink);
+  font-size: calc(15px * var(--font-scale));
+}
+
+.linked-elder-list small,
+.linked-family-list small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: calc(11px * var(--font-scale));
+}
+
+.linked-family-list b {
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: calc(10px * var(--font-scale));
+}
+
+.linked-account-empty {
+  color: var(--muted);
+  font-size: calc(13px * var(--font-scale));
+}
+
+.linked-account-success {
+  margin-top: 14px;
+}
+
+.linked-account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 14px;
+}
+
+.linked-account-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  background: var(--surface-soft);
+}
+
+.linked-account-form-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.linked-account-form-head h3 {
+  font-size: calc(18px * var(--font-scale));
+}
+
+.linked-account-form-head p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: calc(12px * var(--font-scale));
+  line-height: 1.5;
+}
+
 .emergency-contact-editor,
 .emergency-contact-list {
   display: grid;
@@ -2846,13 +2998,57 @@ img {
 }
 
 .account-switcher {
-  width: min(520px, calc(100vw - 28px));
+  width: min(860px, calc(100vw - 28px));
+}
+
+.account-switch-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.account-switch-column {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 13px;
+  background: var(--surface-soft);
+}
+
+.account-switch-column h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: calc(16px * var(--font-scale));
+}
+
+.account-switch-column h3 span {
+  display: grid;
+  min-width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--primary);
+  font-size: calc(11px * var(--font-scale));
+}
+
+.account-switch-empty {
+  margin: 0;
+  border: 1px dashed var(--line);
+  border-radius: 13px;
+  padding: 20px 12px;
+  color: var(--muted);
+  font-size: calc(12px * var(--font-scale));
+  text-align: center;
 }
 
 .account-switch-list {
   display: grid;
   gap: 9px;
-  margin-top: 18px;
+  margin-top: 10px;
 }
 
 .account-switch-list button {
@@ -3236,6 +3432,19 @@ img {
 
   .empty-medication-feature-grid article {
     min-height: 0;
+  }
+
+  .account-switch-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .linked-account-section-head {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .linked-account-actions .btn {
+    width: 100%;
   }
 
   .emergency-card-head {
