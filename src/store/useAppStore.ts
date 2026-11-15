@@ -789,7 +789,8 @@ export const useAppStore = create<AppStore>()(
           preferences: {
             ...current.preferences,
             ...saved.preferences,
-            voiceMode: "warm",
+            voiceMode:
+              saved.preferences?.voiceMode ?? current.preferences.voiceMode,
             fontScale:
               saved.preferences?.fontScale ?? current.preferences.fontScale
           },

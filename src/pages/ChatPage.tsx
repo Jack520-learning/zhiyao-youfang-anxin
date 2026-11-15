@@ -217,9 +217,7 @@ export function ChatPage() {
     id: string;
     title: string;
   }>();
-  const [sidebarOpen, setSidebarOpen] = useState(
-    () => typeof window === "undefined" || window.innerWidth >= 900
-  );
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const messagesRef = useRef<HTMLDivElement>(null);
   const initialQueryHandled = useRef(false);
   const autoScrollRef = useRef(false);
@@ -1264,7 +1262,7 @@ function MessageRisk({
 }: {
   riskCheck: RiskCheck;
   soundEnabled: boolean;
-  voiceMode: "warm" | "clear";
+  voiceMode: "warm" | "clear" | "male" | "calm";
 }) {
   return (
     <div className="message-risk">

@@ -161,7 +161,7 @@ export function useSpeechRecognition(
   };
 }
 
-export type VoiceMode = "warm" | "clear";
+export type VoiceMode = "warm" | "clear" | "male" | "calm";
 export type SpeechPlaybackState = "idle" | "speaking" | "paused";
 
 let preferredVoiceMode: VoiceMode = "warm";
@@ -182,6 +182,14 @@ function scoreVoice(voice: SpeechSynthesisVoice, mode: VoiceMode): number {
     "女"
   ];
   const clearTerms = [
+    "siri",
+    "google 普通话",
+    "mandarin",
+    "普通话",
+    "xiaoxiao",
+    "晓晓"
+  ];
+  const maleTerms = [
     "yunxi",
     "云希",
     "yunyang",
@@ -191,7 +199,12 @@ function scoreVoice(voice: SpeechSynthesisVoice, mode: VoiceMode): number {
     "male",
     "男"
   ];
-  const terms = mode === "warm" ? warmTerms : clearTerms;
+  const terms =
+    mode === "warm"
+      ? warmTerms
+      : mode === "clear"
+        ? clearTerms
+        : maleTerms;
   return (
     (voice.lang.toLowerCase().startsWith("zh") ? 20 : 0) +
     (voice.localService ? 5 : 0) +
@@ -204,7 +217,11 @@ function pickChineseVoice(mode: VoiceMode): SpeechSynthesisVoice | undefined {
     .getVoices()
     .filter((voice) => voice.lang.toLowerCase().startsWith("zh"))
     .sort((left, right) => scoreVoice(right, mode) - scoreVoice(left, mode));
-  return voices[mode === "warm" ? 0 : Math.min(1, voices.length - 1)];
+  const preferred = voices.find((voice) => scoreVoice(voice, mode) >= 20);
+  if (preferred) return preferred;
+  const fallbackIndex =
+    mode === "warm" ? 0 : mode === "clear" ? 1 : mode === "male" ? 0 : 0;
+  return voices[Math.min(fallbackIndex, voices.length - 1)];
 }
 
 function naturalSpeechText(text: string): string {
@@ -229,8 +246,22 @@ export function speakText(
   const utterance = new SpeechSynthesisUtterance(naturalSpeechText(text));
   utterance.lang = "zh-CN";
   utterance.voice = pickChineseVoice(voiceMode) ?? null;
-  utterance.rate = voiceMode === "warm" ? 0.9 : 0.96;
-  utterance.pitch = voiceMode === "warm" ? 0.96 : 1.03;
+  utterance.rate =
+    voiceMode === "warm"
+      ? 0.9
+      : voiceMode === "clear"
+        ? 0.96
+        : voiceMode === "male"
+          ? 0.94
+          : 0.82;
+  utterance.pitch =
+    voiceMode === "warm"
+      ? 0.96
+      : voiceMode === "clear"
+        ? 1.04
+        : voiceMode === "male"
+          ? 0.9
+          : 0.84;
   utterance.volume = 1;
   window.speechSynthesis.speak(utterance);
   return true;
@@ -266,14 +297,24 @@ export function testVoiceMode(mode: VoiceMode): boolean {
   return speakText(
     mode === "warm"
       ? "您好，我会用温和清楚的声音陪您核对用药。"
-      : "您好，现在使用清晰明亮的音色为您朗读。",
+      : mode === "clear"
+        ? "您好，现在使用清晰明亮的音色为您朗读。"
+        : mode === "male"
+          ? "您好，现在使用清晰男声为您朗读。"
+          : "您好，现在使用沉稳男声慢慢为您朗读。",
     true,
     mode
   );
 }
 
 export function getVoiceModeLabel(mode: VoiceMode): string {
-  return mode === "warm" ? "温和女声" : "清晰声线";
+  return mode === "warm"
+    ? "温和女声"
+    : mode === "clear"
+      ? "明亮女声"
+      : mode === "male"
+        ? "清晰男声"
+        : "沉稳男声";
 }
 
 export function currentPreferredVoiceMode(): VoiceMode {

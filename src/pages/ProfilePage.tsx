@@ -36,10 +36,18 @@ import {
   resumeSpeaking,
   stopSpeaking,
   testVoiceMode,
-  type SpeechPlaybackState
+  type SpeechPlaybackState,
+  type VoiceMode
 } from "../lib/speech";
 import { useAppStore } from "../store/useAppStore";
 import type { EmergencyContact } from "../types";
+
+const voiceOptions: Array<{ value: VoiceMode; label: string }> = [
+  { value: "warm", label: "温和女声" },
+  { value: "clear", label: "明亮女声" },
+  { value: "male", label: "清晰男声" },
+  { value: "calm", label: "沉稳男声" }
+];
 
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -526,9 +534,28 @@ export function ProfilePage() {
             </div>
             {preferences.soundEnabled ? (
               <div className="voice-settings">
-                <div className="voice-mode-static">
-                  <Volume2 size={18} aria-hidden="true" />
-                  温和女声
+                <div
+                  className="voice-mode-options"
+                  role="group"
+                  aria-label="朗读音色"
+                >
+                  {voiceOptions.map((option) => (
+                    <button
+                      type="button"
+                      className={
+                        preferences.voiceMode === option.value ? "active" : ""
+                      }
+                      aria-pressed={preferences.voiceMode === option.value}
+                      key={option.value}
+                      onClick={() => {
+                        stopSpeaking();
+                        updatePreferences({ voiceMode: option.value });
+                        setSpeechPlayback("idle");
+                      }}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
                 </div>
                 <button
                   className="btn voice-playback-button"
@@ -1047,9 +1074,28 @@ export function ProfilePage() {
           </div>
           {preferences.soundEnabled ? (
             <div className="voice-settings family-voice-settings">
-              <div className="voice-mode-static">
-                <Volume2 size={18} aria-hidden="true" />
-                温和女声
+              <div
+                className="voice-mode-options"
+                role="group"
+                aria-label="朗读音色"
+              >
+                {voiceOptions.map((option) => (
+                  <button
+                    type="button"
+                    className={
+                      preferences.voiceMode === option.value ? "active" : ""
+                    }
+                    aria-pressed={preferences.voiceMode === option.value}
+                    key={option.value}
+                    onClick={() => {
+                      stopSpeaking();
+                      updatePreferences({ voiceMode: option.value });
+                      setSpeechPlayback("idle");
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                ))}
               </div>
               <button
                 className="btn voice-playback-button"
