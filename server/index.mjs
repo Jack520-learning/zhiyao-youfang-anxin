@@ -22,6 +22,28 @@ const initialDatabase = {
 
 let database = await loadDatabase();
 let writeQueue = Promise.resolve();
+const familyEventClients = new Map();
+
+function broadcastFamily(familyCode, payload) {
+  const clients = familyEventClients.get(familyCode);
+  if (!clients) return;
+  const message = `data: ${JSON.stringify(payload)}\n\n`;
+  for (const response of clients) {
+    try {
+      response.write(message);
+    } catch {
+      clients.delete(response);
+    }
+  }
+}
+
+function pruneHandledAlerts(alerts = []) {
+  const cutoff = Date.now() - 15 * 24 * 60 * 60 * 1000;
+  return alerts.filter(
+    (alert) =>
+      !alert?.handledAt || new Date(alert.handledAt).getTime() >= cutoff
+  );
+}
 
 async function loadDatabase() {
   try {
@@ -108,9 +130,9 @@ async function sendPush(subscription, payload) {
   }
 }
 
-function chinaTimeParts(date = new Date()) {
+function timeParts(date = new Date(), timeZone = "Asia/Shanghai") {
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Shanghai",
+    timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -133,11 +155,20 @@ function minutesSinceMidnight(time) {
 }
 
 async function checkReminders() {
-  const current = chinaTimeParts();
   let changed = false;
   for (const [familyCode, family] of Object.entries(database.families)) {
     const snapshot = family.snapshot;
     if (!snapshot?.consent) continue;
+    const activeAlerts = pruneHandledAlerts(snapshot.familyAlerts || []);
+    if (activeAlerts.length !== (snapshot.familyAlerts || []).length) {
+      snapshot.familyAlerts = activeAlerts;
+      family.revision = (family.revision || 0) + 1;
+      changed = true;
+    }
+    const current = timeParts(
+      new Date(),
+      snapshot.profile?.timeZone || "Asia/Shanghai"
+    );
     for (const medication of snapshot.medications || []) {
       if (medication.status !== "active") continue;
       if (medication.reminderEnabled === false) continue;
@@ -552,11 +583,12 @@ const server = createServer(async (request, response) => {
         ).slice(0, 160),
         createdAt: new Date().toISOString()
       };
-      family.snapshot.familyAlerts = [
+      family.snapshot.familyAlerts = pruneHandledAlerts([
         alert,
         ...(family.snapshot.familyAlerts || [])
-      ].slice(0, 20);
+      ]).slice(0, 100);
       family.snapshot.updatedAt = alert.createdAt;
+      family.revision = (family.revision || 0) + 1;
       const subscriptions = family.subscriptions || [];
       for (const record of subscriptions.filter(
         (item) => item.role === "family"
@@ -571,6 +603,11 @@ const server = createServer(async (request, response) => {
       }
       family.subscriptions = subscriptions.filter((record) => !record.invalid);
       await saveDatabase();
+      broadcastFamily(familyCode, {
+        type: "update",
+        revision: family.revision || 0,
+        familyCode
+      });
       return json(response, 200, { ok: true, alert });
     }
 
@@ -591,11 +628,12 @@ const server = createServer(async (request, response) => {
         createdAt: new Date().toISOString()
       };
       if (family?.snapshot) {
-        family.snapshot.familyAlerts = [
+        family.snapshot.familyAlerts = pruneHandledAlerts([
           alert,
           ...(family.snapshot.familyAlerts || [])
-        ].slice(0, 20);
+        ]).slice(0, 100);
         family.snapshot.updatedAt = alert.createdAt;
+        family.revision = (family.revision || 0) + 1;
       }
       const payload = {
         title: `紧急求助：${String(body.elderName || "老人").slice(0, 20)}`,
@@ -617,6 +655,11 @@ const server = createServer(async (request, response) => {
       }
       family.subscriptions = subscriptions.filter((record) => !record.invalid);
       await saveDatabase();
+      broadcastFamily(familyCode, {
+        type: "update",
+        revision: family.revision || 0,
+        familyCode
+      });
       return json(response, 200, {
         ok: true,
         delivered: subscriptions.filter((record) => !record.invalid).length
@@ -636,17 +679,84 @@ const server = createServer(async (request, response) => {
       family.updatedAt = new Date().toISOString();
       family.revision = (family.revision || 0) + 1;
       await saveDatabase();
+      broadcastFamily(familyCode, {
+        type: "update",
+        revision: family.revision,
+        familyCode
+      });
       return json(response, 200, { revision: family.revision });
+    }
+
+    const eventMatch = url.pathname.match(
+      /^\/api\/family\/([A-Z0-9]+)\/events$/
+    );
+    if (eventMatch && request.method === "GET") {
+      const familyCode = sanitizeFamilyCode(eventMatch[1]);
+      response.writeHead(200, {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no"
+      });
+      response.write("retry: 2000\n\n");
+      response.write(
+        `data: ${JSON.stringify({
+          type: "connected",
+          familyCode,
+          revision: database.families[familyCode]?.revision || 0
+        })}\n\n`
+      );
+      const clients = familyEventClients.get(familyCode) ?? new Set();
+      clients.add(response);
+      familyEventClients.set(familyCode, clients);
+      const heartbeat = setInterval(() => {
+        response.write(`event: heartbeat\ndata: ${Date.now()}\n\n`);
+      }, 20_000);
+      request.on("close", () => {
+        clearInterval(heartbeat);
+        clients.delete(response);
+        if (!clients.size) familyEventClients.delete(familyCode);
+      });
+      return;
     }
 
     if (url.pathname.startsWith("/api/family/")) {
       const pathParts = url.pathname.split("/").filter(Boolean);
       const isContactsUpdate =
         request.method === "PUT" && pathParts.at(-1) === "contacts";
+      const isAlertUpdate =
+        request.method === "PUT" && pathParts[3] === "alerts" && pathParts[4];
       const familyCode = sanitizeFamilyCode(
-        isContactsUpdate ? pathParts.at(-2) : pathParts.at(-1)
+        isContactsUpdate ? pathParts.at(-2) : pathParts[2]
       );
       const family = database.families[familyCode];
+      if (isAlertUpdate) {
+        if (!family?.snapshot) return json(response, 404, { error: "未找到家庭" });
+        const body = await readJson(request, 128 * 1024);
+        const alert = (family.snapshot.familyAlerts || []).find(
+          (item) => item.id === pathParts[4]
+        );
+        if (!alert) return json(response, 404, { error: "未找到记录" });
+        alert.handledAt =
+          body.handled === false ? undefined : new Date().toISOString();
+        alert.handledBy = String(body.handledBy || "家属").slice(0, 30);
+        family.snapshot.familyAlerts = pruneHandledAlerts(
+          family.snapshot.familyAlerts || []
+        );
+        family.snapshot.updatedAt = new Date().toISOString();
+        family.revision = (family.revision || 0) + 1;
+        await saveDatabase();
+        broadcastFamily(familyCode, {
+          type: "update",
+          revision: family.revision,
+          familyCode
+        });
+        return json(response, 200, {
+          ok: true,
+          alert,
+          revision: family.revision
+        });
+      }
       if (isContactsUpdate) {
         if (!family?.snapshot) return json(response, 404, { error: "未找到家庭" });
         const body = await readJson(request, 512 * 1024);
@@ -669,6 +779,11 @@ const server = createServer(async (request, response) => {
         family.snapshot.updatedAt = new Date().toISOString();
         family.revision = (family.revision || 0) + 1;
         await saveDatabase();
+        broadcastFamily(familyCode, {
+          type: "update",
+          revision: family.revision,
+          familyCode
+        });
         return json(response, 200, {
           ok: true,
           revision: family.revision,

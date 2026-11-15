@@ -17,6 +17,7 @@ import {
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useCloudSync, type SyncStatus } from "../hooks/useCloudSync";
+import { localTimeZone } from "../lib/time";
 import { useAppStore } from "../store/useAppStore";
 import { AccountSwitcher } from "./AccountSwitcher";
 import { AuthGate } from "./AuthGate";
@@ -96,6 +97,15 @@ export function AppShell() {
       navigate("/", { replace: true });
     }
   }, [location.pathname, navigate, role, sessionAccountId]);
+
+  useEffect(() => {
+    if (!sessionAccountId || role !== "elder") return;
+    const state = useAppStore.getState();
+    const timeZone = localTimeZone();
+    if (state.profile.timeZone !== timeZone) {
+      state.updateProfile({ timeZone });
+    }
+  }, [sessionAccountId, role]);
 
   if (!hydrated) {
     return (

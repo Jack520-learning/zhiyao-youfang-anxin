@@ -62,6 +62,27 @@ export async function updateFamilyEmergencyContacts(
   if (!response.ok) throw new Error(`联系人同步失败：${response.status}`);
 }
 
+export async function updateFamilyAlertStatus(input: {
+  familyCode: string;
+  alertId: string;
+  handledBy: string;
+}): Promise<void> {
+  const response = await fetch(
+    `/api/family/${encodeURIComponent(
+      input.familyCode.toUpperCase()
+    )}/alerts/${encodeURIComponent(input.alertId)}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        handled: true,
+        handledBy: input.handledBy
+      })
+    }
+  );
+  if (!response.ok) throw new Error(`记录状态同步失败：${response.status}`);
+}
+
 function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding)

@@ -64,6 +64,14 @@ function titleFromQuestion(content: string): string {
   return clean.length > 20 ? `${clean.slice(0, 20)}…` : clean || "新的用药咨询";
 }
 
+function pruneHandledAlerts(alerts: FamilyAlert[]): FamilyAlert[] {
+  const cutoff = Date.now() - 15 * 24 * 60 * 60 * 1000;
+  return alerts.filter(
+    (alert) =>
+      !alert.handledAt || new Date(alert.handledAt).getTime() >= cutoff
+  );
+}
+
 const indexedDbStorage: StateStorage = {
   getItem: async (name) => (await get<string>(name)) ?? null,
   setItem: async (name, value) => {
@@ -90,6 +98,8 @@ interface AppActions {
   ) => Promise<{ ok: boolean; error?: string }>;
   switchAccount: (accountId: string) => { ok: boolean; error?: string };
   logoutAccount: () => void;
+  verifyCurrentPassword: (password: string) => Promise<boolean>;
+  clearFamilyAccountData: (familyCode: string) => void;
   setRole: (role: UserRole) => void;
   setFamilyCode: (familyCode: string) => void;
   updateProfile: (profile: Partial<ElderProfile>) => void;
@@ -97,6 +107,7 @@ interface AppActions {
   updatePreferences: (preferences: Partial<AppPreferences>) => void;
   updateEmergencyContacts: (contacts: EmergencyContact[]) => void;
   addFamilyAlert: (alert: FamilyAlert) => void;
+  markFamilyAlertHandled: (id: string) => void;
   saveIntakeDraft: (draft: IntakeDraft) => void;
   clearIntakeDraft: () => void;
   addMedication: (medication: Medication, riskCheck: RiskCheck) => void;
@@ -264,6 +275,40 @@ export const useAppStore = create<AppStore>()(
             ...state.auditEvents
           ].slice(0, 100)
         })),
+      verifyCurrentPassword: async (password) => {
+        const state = getState();
+        const account = state.accounts.find(
+          (item) => item.id === state.sessionAccountId
+        );
+        if (!account || account.role !== "family") return false;
+        return verifyPassword(
+          password,
+          account.passwordHash,
+          account.passwordSalt
+        );
+      },
+      clearFamilyAccountData: (familyCode) =>
+        setState((state) => {
+          const account = state.accounts.find(
+            (item) => item.id === state.sessionAccountId
+          );
+          const accounts = state.accounts.filter(
+            (item) => item.familyCode !== familyCode
+          );
+          return {
+            ...createInitialState({ role: "elder" }),
+            accounts,
+            sessionAccountId: undefined,
+            hydrated: true,
+            auditEvents: [
+              auditEvent(
+                "data-deleted",
+                `注销账号并删除家庭 ${familyCode}`,
+                { account: account?.username || "family" }
+              )
+            ]
+          };
+        }),
       setRole: (role) =>
         setState((state) => {
           const account = state.accounts.find(
@@ -323,12 +368,29 @@ export const useAppStore = create<AppStore>()(
         })),
       addFamilyAlert: (alert) =>
         setState((state) => ({
-          familyAlerts: [
+          familyAlerts: pruneHandledAlerts([
             alert,
             ...state.familyAlerts.filter((item) => item.id !== alert.id)
-          ].slice(0, 30),
+          ]).slice(0, 100),
           lastLocalSaveAt: nowIso()
         })),
+      markFamilyAlertHandled: (id) =>
+        setState((state) => {
+          const account = state.accounts.find(
+            (item) => item.id === state.sessionAccountId
+          );
+          return {
+            familyAlerts: state.familyAlerts.map((alert) =>
+              alert.id === id
+                ? {
+                    ...alert,
+                    handledAt: nowIso(),
+                    handledBy: account?.displayName || "家属"
+                  }
+                : alert
+            )
+          };
+        }),
       saveIntakeDraft: (intakeDraft) =>
         setState({
           intakeDraft,
@@ -597,7 +659,8 @@ export const useAppStore = create<AppStore>()(
               : [],
             allergies: state.consent.shareMedicationSummary
               ? state.profile.allergies
-              : []
+              : [],
+            timeZone: state.profile.timeZone || "Asia/Shanghai"
           },
           consent: state.consent,
           medications: state.consent.shareMedicationSummary
@@ -619,7 +682,7 @@ export const useAppStore = create<AppStore>()(
                 .slice(0, 20),
           emergencyContacts: state.emergencyContacts,
           familyAlerts: state.consent.shareEmergency
-            ? state.familyAlerts.slice(0, 20)
+            ? pruneHandledAlerts(state.familyAlerts).slice(0, 100)
             : []
         };
       },
@@ -630,13 +693,16 @@ export const useAppStore = create<AppStore>()(
             name: snapshot.elderName,
             age: snapshot.profile.age,
             conditions: snapshot.profile.conditions,
-            allergies: snapshot.profile.allergies
+            allergies: snapshot.profile.allergies,
+            timeZone: snapshot.profile.timeZone || state.profile.timeZone
           },
           medications: snapshot.medications,
           doseEvents: snapshot.doseEvents,
           riskChecks: snapshot.riskChecks,
           emergencyContacts: snapshot.emergencyContacts,
-          familyAlerts: snapshot.familyAlerts ?? state.familyAlerts,
+          familyAlerts: pruneHandledAlerts(
+            snapshot.familyAlerts ?? state.familyAlerts
+          ),
           consent: snapshot.consent,
           lastSyncedAt: snapshot.updatedAt,
           hydrated: true
@@ -694,7 +760,15 @@ export const useAppStore = create<AppStore>()(
               reminderEnabled: medication.reminderEnabled !== false
             })
           ),
-          familyAlerts: saved.familyAlerts ?? []
+          profile: {
+            ...current.profile,
+            ...saved.profile,
+            timeZone:
+              saved.profile?.timeZone ||
+              Intl.DateTimeFormat().resolvedOptions().timeZone ||
+              "Asia/Shanghai"
+          },
+          familyAlerts: pruneHandledAlerts(saved.familyAlerts ?? [])
         };
       },
       onRehydrateStorage: () => (state) => {

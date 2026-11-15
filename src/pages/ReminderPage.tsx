@@ -19,6 +19,7 @@ export function ReminderPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const medications = useAppStore((state) => state.medications);
+  const profile = useAppStore((state) => state.profile);
   const doseEvents = useAppStore((state) => state.doseEvents);
   const contacts = useAppStore((state) => state.emergencyContacts);
   const updateDose = useAppStore((state) => state.updateDose);
@@ -40,7 +41,12 @@ export function ReminderPage() {
     );
   }
 
-  const dose = getTodayDoses(medications, doseEvents).find(
+  const dose = getTodayDoses(
+    medications,
+    doseEvents,
+    new Date(),
+    profile.timeZone
+  ).find(
     (item) => item.medication.id === medication.id
   );
 

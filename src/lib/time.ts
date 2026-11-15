@@ -4,44 +4,111 @@ export function nowIso(): string {
   return new Date().toISOString();
 }
 
-export function dateKey(date = new Date()): string {
+export function localTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai";
+}
+
+function dateParts(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(date);
+  return {
+    year: Number(parts.find((part) => part.type === "year")?.value),
+    month: Number(parts.find((part) => part.type === "month")?.value),
+    day: Number(parts.find((part) => part.type === "day")?.value),
+    hour: Number(parts.find((part) => part.type === "hour")?.value),
+    minute: Number(parts.find((part) => part.type === "minute")?.value),
+    second: Number(parts.find((part) => part.type === "second")?.value)
+  };
+}
+
+function timeZoneOffsetMs(date: Date, timeZone: string): number {
+  const parts = dateParts(date, timeZone);
+  const representedAsUtc = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second
+  );
+  return representedAsUtc - Math.floor(date.getTime() / 1000) * 1000;
+}
+
+export function dateKey(
+  date = new Date(),
+  timeZone = localTimeZone()
+): string {
   return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Shanghai",
+    timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit"
   }).format(date);
 }
 
-export function formatChineseDate(date = new Date()): string {
+export function formatChineseDate(
+  date = new Date(),
+  timeZone = localTimeZone()
+): string {
   return new Intl.DateTimeFormat("zh-CN", {
-    timeZone: "Asia/Shanghai",
+    timeZone,
     month: "long",
     day: "numeric",
     weekday: "long"
   }).format(date);
 }
 
-export function formatTime(date: Date): string {
+export function formatTime(date: Date, timeZone = localTimeZone()): string {
   return new Intl.DateTimeFormat("zh-CN", {
-    timeZone: "Asia/Shanghai",
+    timeZone,
     hour: "2-digit",
     minute: "2-digit",
     hour12: false
   }).format(date);
 }
 
-export function scheduledDateTime(time: string, day = new Date()): Date {
+export function scheduledDateTime(
+  time: string,
+  day = new Date(),
+  timeZone = localTimeZone()
+): Date {
   const [hours, minutes] = time.split(":").map(Number);
-  const result = new Date(day);
-  result.setHours(hours, minutes, 0, 0);
-  return result;
+  const parts = dateParts(day, timeZone);
+  let utcValue = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    hours,
+    minutes,
+    0
+  );
+  for (let index = 0; index < 2; index += 1) {
+    utcValue =
+      Date.UTC(
+        parts.year,
+        parts.month - 1,
+        parts.day,
+        hours,
+        minutes,
+        0
+      ) - timeZoneOffsetMs(new Date(utcValue), timeZone);
+  }
+  return new Date(utcValue);
 }
 
 export function getTodayDoses(
   medications: Medication[],
   doseEvents: DoseEvent[],
-  day = new Date()
+  day = new Date(),
+  timeZone = localTimeZone()
 ): Array<{
   medication: Medication;
   scheduledAt: string;
@@ -49,7 +116,7 @@ export function getTodayDoses(
   doseId: string;
   recordedAt?: string;
 }> {
-  const key = dateKey(day);
+  const key = dateKey(day, timeZone);
   return medications
     .filter(
       (medication) =>
@@ -57,7 +124,7 @@ export function getTodayDoses(
     )
     .flatMap((medication) =>
       medication.times.map((time) => {
-        const scheduled = scheduledDateTime(time, day);
+        const scheduled = scheduledDateTime(time, day, timeZone);
         const scheduledAt = scheduled.toISOString();
         const doseId = `${key}-${medication.id}-${time}`;
         const event = doseEvents.find((item) => item.id === doseId);
@@ -79,9 +146,10 @@ export function getTodayDoses(
 export function getNextDose(
   medications: Medication[],
   doseEvents: DoseEvent[],
-  day = new Date()
+  day = new Date(),
+  timeZone = localTimeZone()
 ) {
-  const doses = getTodayDoses(medications, doseEvents, day);
+  const doses = getTodayDoses(medications, doseEvents, day, timeZone);
   return (
     doses.find(
       (dose) =>

@@ -55,6 +55,8 @@ export function createInitialState(options?: {
     age: 72,
     conditions: ["高血压"],
     allergies: ["青霉素"],
+    timeZone:
+      Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai",
     visionPreference: "large",
     voiceEnabled: true
   };

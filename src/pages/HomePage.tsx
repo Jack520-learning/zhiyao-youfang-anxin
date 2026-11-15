@@ -49,8 +49,18 @@ export function HomePage() {
   const addAuditEvent = useAppStore((state) => state.addAuditEvent);
   const preferences = useAppStore((state) => state.preferences);
   const firstContact = useAppStore((state) => state.emergencyContacts[0]);
-  const nextDose = getNextDose(medications, doseEvents);
-  const todayDoses = getTodayDoses(medications, doseEvents);
+  const nextDose = getNextDose(
+    medications,
+    doseEvents,
+    new Date(),
+    profile.timeZone
+  );
+  const todayDoses = getTodayDoses(
+    medications,
+    doseEvents,
+    new Date(),
+    profile.timeZone
+  );
   const latestRisk = riskChecks[0];
   const now = new Date();
   const [lastAction, setLastAction] = useState<{
@@ -139,7 +149,7 @@ export function HomePage() {
             <p className="eyebrow">今日用药</p>
             <h1 className="page-title">今天的用药都确认好了</h1>
             <p className="page-description">
-              {formatChineseDate()}，当前没有待确认的药物。如果身体不舒服，可以直接告诉我。
+              {formatChineseDate(new Date(), profile.timeZone)}，当前没有待确认的药物。如果身体不舒服，可以直接告诉我。
             </p>
           </div>
         </header>
@@ -225,7 +235,7 @@ export function HomePage() {
       </button>
       <header className="page-header">
         <div>
-          <p className="eyebrow">{formatChineseDate()} · 下午好</p>
+          <p className="eyebrow">{formatChineseDate(new Date(), profile.timeZone)} · 下午好</p>
           <h1 className="page-title">{profile.name}，现在先看这一件事</h1>
           <p className="page-description">
             文字大一些、步骤少一点。需要时按住说话，我也会读给您听。
@@ -275,7 +285,7 @@ export function HomePage() {
           <div className="hero-task-top">
             <span className="hero-kicker">
               <Clock3 size={17} aria-hidden="true" />
-              下一次 · {formatTime(new Date(nextDose.scheduledAt))}
+              下一次 · {formatTime(new Date(nextDose.scheduledAt), profile.timeZone)}
             </span>
             <span className="hero-time">{humanizeRelation(nextDose.medication.relation, nextDose.medication.instructions)}</span>
           </div>
@@ -384,7 +394,7 @@ export function HomePage() {
         <div className="timeline">
           {todayDoses.map((dose) => (
             <div className="timeline-row" key={dose.doseId}>
-              <div className="timeline-time">{formatTime(new Date(dose.scheduledAt))}</div>
+              <div className="timeline-time">{formatTime(new Date(dose.scheduledAt), profile.timeZone)}</div>
               <div className="timeline-med">
                 <strong>{dose.medication.name}</strong>
                 <span>
@@ -407,7 +417,7 @@ export function HomePage() {
                 )}
                 {dose.recordedAt ? (
                   <span className="record-time">
-                    记录于 {formatTime(new Date(dose.recordedAt))}
+                    记录于 {formatTime(new Date(dose.recordedAt), profile.timeZone)}
                   </span>
                 ) : null}
               </div>

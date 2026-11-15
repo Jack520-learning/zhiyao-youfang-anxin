@@ -49,11 +49,20 @@ export function ProfilePage() {
   const logoutAccount = useAppStore((state) => state.logoutAccount);
   const setFamilyCode = useAppStore((state) => state.setFamilyCode);
   const resetDemo = useAppStore((state) => state.resetDemo);
-  const clearAllData = useAppStore((state) => state.clearAllData);
+  const verifyCurrentPassword = useAppStore(
+    (state) => state.verifyCurrentPassword
+  );
+  const clearFamilyAccountData = useAppStore(
+    (state) => state.clearFamilyAccountData
+  );
   const exportSnapshot = useAppStore((state) => state.exportSnapshot);
   const addAuditEvent = useAppStore((state) => state.addAuditEvent);
   const [codeInput, setCodeInput] = useState(familyCode);
   const [toast, setToast] = useState("");
+  const [cancelAccountOpen, setCancelAccountOpen] = useState(false);
+  const [cancelPassword, setCancelPassword] = useState("");
+  const [cancelError, setCancelError] = useState("");
+  const [cancelBusy, setCancelBusy] = useState(false);
   const [notificationState, setNotificationState] = useState<
     "idle" | "loading" | "granted" | "denied"
   >("idle");
@@ -112,21 +121,30 @@ export function ProfilePage() {
     setToast("档案已经导出");
   }
 
-  async function deleteData() {
-    if (
-      !window.confirm(
-        "确定删除本地和云端的演示档案吗？当前药物、风险记录和授权关系将被清除。"
-      )
-    ) {
+  async function cancelFamilyAccount() {
+    setCancelError("");
+    if (!cancelPassword) {
+      setCancelError("请输入当前家属账号的密码");
+      return;
+    }
+    setCancelBusy(true);
+    const valid = await verifyCurrentPassword(cancelPassword);
+    if (!valid) {
+      setCancelBusy(false);
+      setCancelError("密码不正确，账号尚未注销");
       return;
     }
     try {
       await deleteCloudFamily(familyCode);
     } catch {
-      // Local deletion remains available even if the prototype server is offline.
+      setCancelBusy(false);
+      setCancelError("云端数据删除失败，请检查连接后重试");
+      return;
     }
-    await clearAllData();
-    setToast("演示档案已经删除");
+    clearFamilyAccountData(familyCode);
+    setCancelPassword("");
+    setCancelBusy(false);
+    setCancelAccountOpen(false);
     navigate("/");
   }
 
@@ -146,7 +164,7 @@ export function ProfilePage() {
     }
     setFamilyCode(clean);
     addAuditEvent("settings-updated", "更新家庭连接码");
-    setToast("家庭连接码已更新，正在重新同步");
+    setToast("家庭连接码已保存，数据会自动同步");
   }
 
   function saveHealthProfile() {
@@ -457,7 +475,10 @@ export function ProfilePage() {
             </span>
             <span className="settings-copy">
               <strong>吃药提醒通知</strong>
-              <span>{preferences.notificationsEnabled ? "已经开启" : "还没开启"}</span>
+              <span>
+                {preferences.notificationsEnabled ? "已经开启" : "还没开启"} ·
+                时区 {profile.timeZone}
+              </span>
             </span>
             <button
               className="btn"
@@ -668,10 +689,6 @@ export function ProfilePage() {
                 <RotateCcw size={19} aria-hidden="true" />
                 恢复演示
               </button>
-              <button className="btn btn-danger" type="button" onClick={deleteData}>
-                <Trash2 size={19} aria-hidden="true" />
-                删除全部数据
-              </button>
               <button className="btn" type="button" onClick={logout}>
                 <LogOut size={19} aria-hidden="true" />
                 退出当前账号
@@ -732,7 +749,7 @@ export function ProfilePage() {
           </label>
           <button className="btn btn-primary" type="button" style={{ marginTop: 10 }} onClick={changeFamilyCode}>
             <Cloud size={18} aria-hidden="true" />
-            更新并重新同步
+            保存家庭连接码
           </button>
           <p className="field-hint" style={{ marginTop: 12 }}>
             原型使用连接码而非正式账号认证，正式部署前必须替换为登录与细粒度授权。
@@ -882,7 +899,7 @@ export function ProfilePage() {
           <div className="settings-row">
             <div className="settings-copy">
               <strong>系统通知</strong>
-              <span>关闭页面后接收提醒所需</span>
+              <span>关闭页面后接收提醒所需 · 老人时区 {profile.timeZone}</span>
             </div>
             <button
               className="btn"
@@ -951,9 +968,17 @@ export function ProfilePage() {
             <RotateCcw size={19} aria-hidden="true" />
             恢复演示数据
           </button>
-          <button className="btn btn-danger" type="button" onClick={deleteData}>
+          <button
+            className="btn btn-danger"
+            type="button"
+            onClick={() => {
+              setCancelPassword("");
+              setCancelError("");
+              setCancelAccountOpen(true);
+            }}
+          >
             <Trash2 size={19} aria-hidden="true" />
-            删除全部数据
+            注销账号
           </button>
           <button className="btn" type="button" onClick={logout}>
             <LogOut size={19} aria-hidden="true" />
@@ -986,6 +1011,60 @@ export function ProfilePage() {
           ))}
         </div>
       </details>
+
+      {cancelAccountOpen ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onMouseDown={() => setCancelAccountOpen(false)}
+        >
+          <section
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancel-account-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <h2 id="cancel-account-title">注销家属账号</h2>
+            <p>
+              注销后，这个家属账号、关联的老人账号、云端用药记录、对话记录、风险记录和家庭摘要都会删除，无法恢复。
+            </p>
+            <label className="field" style={{ marginTop: 16 }}>
+              <span className="field-label">输入当前账号密码确认</span>
+              <input
+                className="input"
+                type="password"
+                value={cancelPassword}
+                onChange={(event) => setCancelPassword(event.target.value)}
+                autoComplete="current-password"
+              />
+            </label>
+            {cancelError ? (
+              <p className="auth-error" role="alert">
+                {cancelError}
+              </p>
+            ) : null}
+            <div className="modal-actions">
+              <button
+                className="btn btn-danger"
+                type="button"
+                disabled={cancelBusy}
+                onClick={() => void cancelFamilyAccount()}
+              >
+                <Trash2 size={18} aria-hidden="true" />
+                {cancelBusy ? "正在删除" : "确认注销并删除"}
+              </button>
+              <button
+                className="btn"
+                type="button"
+                onClick={() => setCancelAccountOpen(false)}
+              >
+                取消
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {toast ? <div className="toast" role="status">{toast}</div> : null}
     </div>

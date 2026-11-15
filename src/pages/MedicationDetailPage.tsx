@@ -298,10 +298,17 @@ export function MedicationDetailPage() {
                   .map((event) => (
                     <div className="source-item" key={event.id}>
                       <strong>
-                        计划 {new Date(event.scheduledAt).toLocaleString("zh-CN")}
+                        计划{" "}
+                        {new Date(event.scheduledAt).toLocaleString("zh-CN", {
+                          timeZone: profile.timeZone
+                        })}
                       </strong>
                       <span>
-                        记录时间 {new Date(event.updatedAt).toLocaleString("zh-CN")} ·
+                        记录时间{" "}
+                        {new Date(event.updatedAt).toLocaleString("zh-CN", {
+                          timeZone: profile.timeZone
+                        })}{" "}
+                        ·
                         状态：{event.status}
                       </span>
                     </div>

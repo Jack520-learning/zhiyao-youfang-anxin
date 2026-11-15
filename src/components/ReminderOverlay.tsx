@@ -12,7 +12,12 @@ export function ReminderOverlay() {
   const profile = useAppStore((state) => state.profile);
   const contacts = useAppStore((state) => state.emergencyContacts);
   const updateDose = useAppStore((state) => state.updateDose);
-  const nextDose = getNextDose(medications, doseEvents);
+  const nextDose = getNextDose(
+    medications,
+    doseEvents,
+    new Date(),
+    profile.timeZone
+  );
   const [dismissedDoseId, setDismissedDoseId] = useState("");
   const [demoOpen, setDemoOpen] = useState(false);
 
@@ -81,7 +86,7 @@ export function ReminderOverlay() {
         </p>
         <div className="reminder-time">
           <Clock3 size={23} aria-hidden="true" />
-          {formatTime(new Date(nextDose.scheduledAt))}
+          {formatTime(new Date(nextDose.scheduledAt), profile.timeZone)}
         </div>
         <div className="reminder-actions">
           <button className="btn btn-primary btn-large" type="button" onClick={() => record("taken")}>

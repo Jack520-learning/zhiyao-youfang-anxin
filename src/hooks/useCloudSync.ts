@@ -9,6 +9,7 @@ export type SyncStatus = "idle" | "syncing" | "synced" | "offline" | "error";
 
 export function useCloudSync() {
   const [status, setStatus] = useState<SyncStatus>("idle");
+  const [connectionTick, setConnectionTick] = useState(0);
   const lastFamilyUpdateRef = useRef("");
   const hydrated = useAppStore((state) => state.hydrated);
   const sessionAccountId = useAppStore((state) => state.sessionAccountId);
@@ -21,6 +22,16 @@ export function useCloudSync() {
   const consent = useAppStore((state) => state.consent);
   const emergencyContacts = useAppStore((state) => state.emergencyContacts);
   const familyAlerts = useAppStore((state) => state.familyAlerts);
+
+  useEffect(() => {
+    const retry = () => setConnectionTick((value) => value + 1);
+    window.addEventListener("online", retry);
+    window.addEventListener("offline", retry);
+    return () => {
+      window.removeEventListener("online", retry);
+      window.removeEventListener("offline", retry);
+    };
+  }, []);
 
   // The elder device is the writer. Debouncing prevents one request for every
   // keystroke or short-lived status change.
@@ -43,7 +54,7 @@ export function useCloudSync() {
       } catch {
         setStatus("offline");
       }
-    }, 1000);
+    }, 150);
     return () => window.clearTimeout(timer);
   }, [
     hydrated,
@@ -56,7 +67,8 @@ export function useCloudSync() {
     profile,
     consent,
     emergencyContacts,
-    familyAlerts
+    familyAlerts,
+    connectionTick
   ]);
 
   // The family device is a reader. Polling depends only on the connection and
@@ -95,14 +107,24 @@ export function useCloudSync() {
     }
 
     void loadFamily(true);
+    const source = new EventSource(
+      `/api/family/${encodeURIComponent(familyCode.toUpperCase())}/events`
+    );
+    source.onmessage = () => {
+      void loadFamily(false);
+    };
+    source.onerror = () => {
+      if (!cancelled) setStatus("offline");
+    };
     const interval = window.setInterval(() => {
       void loadFamily(false);
-    }, 5000);
+    }, 30_000);
     return () => {
       cancelled = true;
+      source.close();
       window.clearInterval(interval);
     };
-  }, [hydrated, sessionAccountId, role, familyCode]);
+  }, [hydrated, sessionAccountId, role, familyCode, connectionTick]);
 
   return status;
 }

@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   BellRing,
   CalendarCheck,
+  CheckCircle2,
   ChevronRight,
   FileHeart,
   HeartPulse,
@@ -14,6 +15,7 @@ import { useNavigate } from "react-router-dom";
 import { RiskBadge } from "../components/RiskBadge";
 import { formatChineseDate, getTodayDoses } from "../lib/time";
 import { useAppStore } from "../store/useAppStore";
+import { updateFamilyAlertStatus } from "../lib/cloud";
 
 export function FamilyPage() {
   const navigate = useNavigate();
@@ -26,7 +28,20 @@ export function FamilyPage() {
   const consent = useAppStore((state) => state.consent);
   const contacts = useAppStore((state) => state.emergencyContacts);
   const familyAlerts = useAppStore((state) => state.familyAlerts);
-  const doses = getTodayDoses(medications, doseEvents);
+  const sessionAccountId = useAppStore((state) => state.sessionAccountId);
+  const accounts = useAppStore((state) => state.accounts);
+  const markFamilyAlertHandled = useAppStore(
+    (state) => state.markFamilyAlertHandled
+  );
+  const currentAccount = accounts.find(
+    (account) => account.id === sessionAccountId
+  );
+  const doses = getTodayDoses(
+    medications,
+    doseEvents,
+    new Date(),
+    profile.timeZone
+  );
   const taken = doses.filter((dose) => dose.status === "taken").length;
   const unconfirmed = doses.filter((dose) => dose.status === "pending").length;
   const unresolvedRisks = riskChecks.filter(
@@ -38,6 +53,22 @@ export function FamilyPage() {
   const visibleRisks = consent.shareHighRisk
     ? unresolvedRisks
     : unresolvedRisks.filter((riskCheck) => riskCheck.level !== "high");
+  const openAlerts = familyAlerts.filter((alert) => !alert.handledAt);
+  const handledAlerts = familyAlerts.filter((alert) => alert.handledAt);
+
+  async function markHandled(alertId: string) {
+    try {
+      await updateFamilyAlertStatus({
+        familyCode,
+        alertId,
+        handledBy: currentAccount?.displayName || "家属"
+      });
+      markFamilyAlertHandled(alertId);
+    } catch {
+      // Keep the local action available during a brief network interruption.
+      markFamilyAlertHandled(alertId);
+    }
+  }
 
   if (role !== "family") {
     return (
@@ -57,7 +88,7 @@ export function FamilyPage() {
     <div className="page">
       <header className="page-header">
         <div>
-          <p className="eyebrow">{formatChineseDate()} · 家属摘要</p>
+          <p className="eyebrow">{formatChineseDate(new Date(), profile.timeZone)} · 家属摘要</p>
           <h1 className="page-title">{profile.name}今天还好吗？</h1>
           <p className="page-description">
             这里只显示老人授权的摘要和需要介入的异常，不展示完整对话与逐条隐私日志。
@@ -105,18 +136,63 @@ export function FamilyPage() {
             <BellRing size={22} color="var(--red)" aria-hidden="true" />
           </div>
           <div style={{ display: "grid", gap: 9 }}>
-            {familyAlerts.slice(0, 5).map((alert) => (
+            {openAlerts.slice(0, 5).map((alert) => (
               <div className="risk-card high" key={alert.id}>
                 <div className="message-risk-top">
                   <h3>{alert.title}</h3>
                   <span className="record-time">
-                    {new Date(alert.createdAt).toLocaleString("zh-CN")}
+                    {new Date(alert.createdAt).toLocaleString("zh-CN", {
+                      timeZone: profile.timeZone
+                    })}
                   </span>
                 </div>
                 <p>{alert.message}</p>
+                <button
+                  className="btn"
+                  type="button"
+                  style={{ marginTop: 10 }}
+                  onClick={() => void markHandled(alert.id)}
+                >
+                  <CheckCircle2 size={18} aria-hidden="true" />
+                  标记已处理
+                </button>
               </div>
             ))}
+            {!openAlerts.length ? (
+              <div className="notice">
+                <CheckCircle2 size={20} aria-hidden="true" />
+                当前没有待处理的不舒服或 SOS 记录。
+              </div>
+            ) : null}
           </div>
+          {handledAlerts.length ? (
+            <details style={{ marginTop: 14 }}>
+              <summary className="text-link">
+                查看已处理记录（保留 15 天）
+              </summary>
+              <div style={{ display: "grid", gap: 9, marginTop: 10 }}>
+                {handledAlerts.slice(0, 10).map((alert) => (
+                  <div className="risk-card medium" key={alert.id}>
+                    <div className="message-risk-top">
+                      <h3>{alert.title}</h3>
+                      <span className="chip">
+                        已处理 · {alert.handledBy || "家属"}
+                      </span>
+                    </div>
+                    <p>{alert.message}</p>
+                    <small>
+                      处理时间：
+                      {alert.handledAt
+                        ? new Date(alert.handledAt).toLocaleString("zh-CN", {
+                            timeZone: profile.timeZone
+                          })
+                        : "未记录"}
+                    </small>
+                  </div>
+                ))}
+              </div>
+            </details>
+          ) : null}
         </section>
       ) : null}
 

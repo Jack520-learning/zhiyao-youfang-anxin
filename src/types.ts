@@ -107,6 +107,7 @@ export interface ElderProfile {
   age: number;
   conditions: string[];
   allergies: string[];
+  timeZone: string;
   visionPreference: "standard" | "large" | "extra-large";
   voiceEnabled: boolean;
 }
@@ -173,6 +174,8 @@ export interface FamilyAlert {
   title: string;
   message: string;
   createdAt: string;
+  handledAt?: string;
+  handledBy?: string;
 }
 
 export interface AppState {
@@ -203,7 +206,10 @@ export interface CloudSnapshot {
   familyCode: string;
   updatedAt: string;
   elderName: string;
-  profile: Pick<ElderProfile, "age" | "conditions" | "allergies">;
+  profile: Pick<
+    ElderProfile,
+    "age" | "conditions" | "allergies" | "timeZone"
+  >;
   consent: ConsentSettings;
   medications: Medication[];
   doseEvents: DoseEvent[];
