@@ -758,6 +758,22 @@ function buildAssistantRequest(payload) {
     activeSkill: payload.skillLabel || "",
     skillFocus,
     answerStyle,
+    agentTrace: Array.isArray(payload.agentTrace)
+      ? payload.agentTrace
+          .filter(
+            (item) =>
+              item &&
+              typeof item.id === "string" &&
+              typeof item.label === "string"
+          )
+          .slice(0, 8)
+          .map((item) => ({
+            id: item.id.slice(0, 80),
+            label: item.label.slice(0, 120),
+            summary: String(item.summary || "").slice(0, 220),
+            durationMs: Math.max(0, Number(item.durationMs) || 0)
+          }))
+      : [],
     groundingText: String(payload.groundingText || "").slice(0, 5000),
     conversationHistory: Array.isArray(payload.history)
       ? payload.history
@@ -1466,10 +1482,16 @@ const server = createServer(async (request, response) => {
       };
       const abortController = new AbortController();
       response.on("close", () => abortController.abort());
-      sendEvent("stage", {
-        id: "grounding",
-        label: "已载入安全规则、药品资料和家庭档案"
-      });
+      for (const trace of Array.isArray(body.agentTrace)
+        ? body.agentTrace.slice(0, 8)
+        : []) {
+        if (trace?.id && trace?.label) {
+          sendEvent("stage", {
+            id: String(trace.id),
+            label: String(trace.label)
+          });
+        }
+      }
       sendEvent("stage", {
         id: "generating",
         label: "千问正在生成受控回答"

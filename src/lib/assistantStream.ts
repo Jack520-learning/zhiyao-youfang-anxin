@@ -18,6 +18,12 @@ export interface AssistantStreamPayload {
   skill?: string;
   skillLabel?: string;
   answerMode: string;
+  agentTrace?: Array<{
+    id: string;
+    label: string;
+    summary: string;
+    durationMs: number;
+  }>;
   history: Array<{ role: "user" | "assistant"; content: string }>;
 }
 

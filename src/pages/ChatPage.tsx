@@ -34,6 +34,12 @@ import { createId } from "../lib/ids";
 import { answerWithRules, checkNewMedication } from "../lib/riskEngine";
 import { sendConcernAlert } from "../lib/cloud";
 import { streamAssistantAnswer } from "../lib/assistantStream";
+import {
+  catalogResponseFromRuns,
+  planAgentTools,
+  runAgentPlan,
+  safetyResponseFromRuns
+} from "../lib/agentTools";
 import { createManualDraft, recognizeMedicineImage } from "../lib/ocr";
 import {
   answerFromDrugCatalog,
@@ -440,11 +446,24 @@ export function ChatPage() {
       currentConversationDraft.name
         ? `${currentConversationDraft.name} ${clean}`
         : clean;
-    let localResponse = answerWithRules(
+    const plannedTools = planAgentTools(
       contextualQuestion,
-      activeMedications,
-      profile
+      Boolean(currentConversationDraft?.name)
     );
+    const agentRuns = runAgentPlan(plannedTools, {
+      query: contextualQuestion,
+      profile,
+      medications: activeMedications
+    });
+    const agentTrace = agentRuns.map((run) => ({
+      id: `tool-${run.name}`,
+      label: run.label,
+      summary: run.summary,
+      durationMs: run.durationMs
+    }));
+    let localResponse =
+      safetyResponseFromRuns(agentRuns) ??
+      answerWithRules(contextualQuestion, activeMedications, profile);
     if (composerSkill === "herbs") {
       localResponse =
         herbSkillAnswer(
@@ -453,11 +472,13 @@ export function ChatPage() {
           activeMedications.map((medication) => medication.name)
         ) ?? localResponse;
     }
-    const catalogResponse = answerFromDrugCatalog(
-      contextualQuestion,
-      profile,
-      activeMedications.map((medication) => medication.name)
-    );
+    const catalogResponse =
+      catalogResponseFromRuns(agentRuns) ??
+      answerFromDrugCatalog(
+        contextualQuestion,
+        profile,
+        activeMedications.map((medication) => medication.name)
+      );
     const mentionsCurrentMedication = activeMedications.some((medication) =>
       clean.includes(medication.name) ||
       clean.includes(medication.genericName) ||
@@ -490,13 +511,22 @@ export function ChatPage() {
       }).catch(() => undefined);
     }
     setStages(
-      localResponse.stages.map((stage, index) => ({
+      [
+        ...localResponse.stages,
+        ...agentTrace.map((trace) => ({
+          id: `trace-${trace.id}`,
+          label: trace.label,
+          status: "pending" as const
+        }))
+      ].map((stage, index) => ({
         ...stage,
         status: index === 0 ? "active" : "pending"
       }))
     );
 
-    for (let index = 0; index < localResponse.stages.length; index += 1) {
+    const localStageCount =
+      localResponse.stages.length + agentTrace.length;
+    for (let index = 0; index < localStageCount; index += 1) {
       await wait(260);
       setStages((current) =>
         current.map((stage, stageIndex) => ({
@@ -560,6 +590,7 @@ export function ChatPage() {
               (item) => item.id === composerSkill
             )?.label,
             answerMode,
+            agentTrace,
             history: (currentConversation?.messages ?? [])
               .filter((message) => message.id !== userMessage.id)
               .filter(

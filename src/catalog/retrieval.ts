@@ -34,6 +34,13 @@ export type MedicineMatch = {
   medicine: Medicine;
   score: number;
   matchedAlias: string;
+  matchedField:
+    | "药名"
+    | "通用名/成分"
+    | "别名"
+    | "剂型"
+    | "分类"
+    | "警示说明";
 };
 
 export function matchMedicines(query: string, limit = 8): MedicineMatch[] {
@@ -43,21 +50,44 @@ export function matchMedicines(query: string, limit = 8): MedicineMatch[] {
       medicine,
       score: 1,
       matchedAlias: medicine.displayName,
+      matchedField: "药名",
     }));
   }
 
   return medicines
     .map((medicine) => {
-      const candidates = [
-        medicine.displayName,
-        medicine.activeIngredient,
-        ...medicine.aliases,
+      const candidates: Array<{
+        value: string;
+        field: MedicineMatch["matchedField"];
+        weight: number;
+      }> = [
+        { value: medicine.displayName, field: "药名", weight: 1.18 },
+        {
+          value: medicine.activeIngredient,
+          field: "通用名/成分",
+          weight: 1.14
+        },
+        ...medicine.aliases.map((alias) => ({
+          value: alias,
+          field: "别名" as const,
+          weight: 1.06
+        })),
+        { value: medicine.dosageForm, field: "剂型", weight: 0.72 },
+        { value: medicine.category, field: "分类", weight: 0.56 },
+        {
+          value: [...medicine.keyWarnings, medicine.timing, medicine.food].join(
+            " "
+          ),
+          field: "警示说明",
+          weight: 0.48
+        }
       ];
       let bestScore = 0;
       let matchedAlias = medicine.displayName;
+      let matchedField: MedicineMatch["matchedField"] = "药名";
 
       for (const candidate of candidates) {
-        const normalizedCandidate = normalize(candidate);
+        const normalizedCandidate = normalize(candidate.value);
         // Dosage-form-only aliases such as "缓释胶囊" normalize to an empty
         // string. Treating "" as a match would incorrectly match every query.
         if (normalizedCandidate.length < 2) continue;
@@ -69,19 +99,32 @@ export function matchMedicines(query: string, limit = 8): MedicineMatch[] {
         ) {
           score = Math.max(score, 0.92);
         }
-        if (score > bestScore) {
-          bestScore = score;
-          matchedAlias = candidate;
+        const weightedScore =
+          score * candidate.weight +
+          (candidate.field === "警示说明" ? score * 0.08 : 0);
+        if (weightedScore > bestScore) {
+          bestScore = weightedScore;
+          matchedAlias = candidate.value;
+          matchedField = candidate.field;
         }
       }
 
       const requestedForm = detectDosageForm(query);
       const medicineForm = detectDosageForm(medicine.dosageForm);
-      if (requestedForm && medicineForm?.key === requestedForm.key) {
-        bestScore += 0.08;
+      if (requestedForm && medicineForm) {
+        if (medicineForm.key === requestedForm.key) {
+          bestScore += 0.12;
+        } else {
+          bestScore -= 0.45;
+        }
       }
 
-      return { medicine, score: bestScore, matchedAlias };
+      return {
+        medicine,
+        score: Math.min(1, bestScore),
+        matchedAlias,
+        matchedField
+      };
     })
     .filter((item) => item.score >= 0.24)
     .sort((left, right) => right.score - left.score)
