@@ -27,6 +27,7 @@ import {
   deleteCloudFamily,
   subscribeToPush,
   syncCloudSnapshot,
+  unsubscribeFromPush,
   updateFamilyEmergencyContacts
 } from "../lib/cloud";
 import {
@@ -61,8 +62,8 @@ export function ProfilePage() {
   const verifyCurrentPassword = useAppStore(
     (state) => state.verifyCurrentPassword
   );
-  const clearFamilyAccountData = useAppStore(
-    (state) => state.clearFamilyAccountData
+  const cancelCurrentAccount = useAppStore(
+    (state) => state.cancelCurrentAccount
   );
   const exportSnapshot = useAppStore((state) => state.exportSnapshot);
   const addAuditEvent = useAppStore((state) => state.addAuditEvent);
@@ -144,7 +145,7 @@ export function ProfilePage() {
     setToast("档案已经导出");
   }
 
-  async function cancelFamilyAccount() {
+  async function cancelAccount() {
     setCancelError("");
     if (!cancelPassword) {
       setCancelError("请输入当前家属账号的密码");
@@ -157,14 +158,18 @@ export function ProfilePage() {
       setCancelError("密码不正确，账号尚未注销");
       return;
     }
-    try {
-      await deleteCloudFamily(familyCode);
-    } catch {
-      setCancelBusy(false);
-      setCancelError("云端数据删除失败，请检查连接后重试");
-      return;
+    if (role === "elder") {
+      try {
+        await deleteCloudFamily(familyCode);
+      } catch {
+        setCancelBusy(false);
+        setCancelError("云端老人数据删除失败，请检查连接后重试");
+        return;
+      }
+    } else {
+      await unsubscribeFromPush().catch(() => undefined);
     }
-    clearFamilyAccountData(familyCode);
+    cancelCurrentAccount();
     setCancelPassword("");
     setCancelBusy(false);
     setCancelAccountOpen(false);
@@ -769,6 +774,18 @@ export function ProfilePage() {
                 <LogOut size={19} aria-hidden="true" />
                 退出当前账号
               </button>
+              <button
+                className="btn btn-danger"
+                type="button"
+                onClick={() => {
+                  setCancelPassword("");
+                  setCancelError("");
+                  setCancelAccountOpen(true);
+                }}
+              >
+                <Trash2 size={19} aria-hidden="true" />
+                注销老人账号
+              </button>
             </div>
             <details style={{ marginTop: 14 }}>
               <summary className="text-link">查看最近操作记录</summary>
@@ -783,6 +800,59 @@ export function ProfilePage() {
             </details>
           </details>
         </div>
+        {cancelAccountOpen ? (
+          <div
+            className="modal-backdrop"
+            role="presentation"
+            onMouseDown={() => setCancelAccountOpen(false)}
+          >
+            <section
+              className="modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="cancel-elder-account-title"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <h2 id="cancel-elder-account-title">注销老人账号</h2>
+              <p>
+                注销后会删除当前老人账号、健康资料、用药记录、对话记录和云端家庭摘要。家属账号会保留，但会失去这个家庭的访问权限。
+              </p>
+              <label className="field" style={{ marginTop: 16 }}>
+                <span className="field-label">输入当前老人账号密码确认</span>
+                <input
+                  className="input"
+                  type="password"
+                  value={cancelPassword}
+                  onChange={(event) => setCancelPassword(event.target.value)}
+                  autoComplete="current-password"
+                />
+              </label>
+              {cancelError ? (
+                <p className="auth-error" role="alert">
+                  {cancelError}
+                </p>
+              ) : null}
+              <div className="modal-actions">
+                <button
+                  className="btn btn-danger"
+                  type="button"
+                  disabled={cancelBusy}
+                  onClick={() => void cancelAccount()}
+                >
+                  <Trash2 size={18} aria-hidden="true" />
+                  {cancelBusy ? "正在注销" : "确认注销老人账号"}
+                </button>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => setCancelAccountOpen(false)}
+                >
+                  取消
+                </button>
+              </div>
+            </section>
+          </div>
+        ) : null}
         {toast ? <div className="toast" role="status">{toast}</div> : null}
       </div>
     );
@@ -1115,7 +1185,7 @@ export function ProfilePage() {
           >
             <h2 id="cancel-account-title">注销家属账号</h2>
             <p>
-              注销后，这个家属账号、关联的老人账号、云端用药记录、对话记录、风险记录和家庭摘要都会删除，无法恢复。
+              注销后只删除当前家属账号和家庭访问权限。老人账号、健康资料、用药记录和其他账号都会保留。
             </p>
             <label className="field" style={{ marginTop: 16 }}>
               <span className="field-label">输入当前账号密码确认</span>
@@ -1137,10 +1207,10 @@ export function ProfilePage() {
                 className="btn btn-danger"
                 type="button"
                 disabled={cancelBusy}
-                onClick={() => void cancelFamilyAccount()}
+                onClick={() => void cancelAccount()}
               >
                 <Trash2 size={18} aria-hidden="true" />
-                {cancelBusy ? "正在删除" : "确认注销并删除"}
+                {cancelBusy ? "正在注销" : "确认注销家属账号"}
               </button>
               <button
                 className="btn"

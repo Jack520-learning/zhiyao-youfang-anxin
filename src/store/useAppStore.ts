@@ -99,6 +99,7 @@ interface AppActions {
   switchAccount: (accountId: string) => { ok: boolean; error?: string };
   logoutAccount: () => void;
   verifyCurrentPassword: (password: string) => Promise<boolean>;
+  cancelCurrentAccount: () => void;
   clearFamilyAccountData: (familyCode: string) => void;
   setRole: (role: UserRole) => void;
   setFamilyCode: (familyCode: string) => void;
@@ -285,13 +286,45 @@ export const useAppStore = create<AppStore>()(
         const account = state.accounts.find(
           (item) => item.id === state.sessionAccountId
         );
-        if (!account || account.role !== "family") return false;
+        if (!account) return false;
         return verifyPassword(
           password,
           account.passwordHash,
           account.passwordSalt
         );
       },
+      cancelCurrentAccount: () =>
+        setState((state) => {
+          const account = state.accounts.find(
+            (item) => item.id === state.sessionAccountId
+          );
+          if (!account) return state;
+          const accounts = state.accounts.filter(
+            (item) => item.id !== account.id
+          );
+          if (account.role === "family") {
+            return {
+              accounts,
+              sessionAccountId: undefined,
+              auditEvents: [
+                auditEvent("data-deleted", "注销家属账号，老人档案继续保留"),
+                ...state.auditEvents
+              ].slice(0, 100)
+            };
+          }
+          return {
+            ...createInitialState({ role: "elder" }),
+            accounts,
+            sessionAccountId: undefined,
+            hydrated: true,
+            auditEvents: [
+              auditEvent(
+                "data-deleted",
+                "注销老人账号并删除老人健康数据，家属账号保留"
+              )
+            ]
+          };
+        }),
       clearFamilyAccountData: (familyCode) =>
         setState((state) => {
           const account = state.accounts.find(

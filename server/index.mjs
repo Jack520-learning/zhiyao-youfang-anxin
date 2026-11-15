@@ -583,6 +583,19 @@ const server = createServer(async (request, response) => {
       return json(response, 200, { ok: true });
     }
 
+    if (url.pathname === "/api/push/subscribe" && request.method === "DELETE") {
+      const body = await readJson(request);
+      const endpoint = String(body.endpoint || "");
+      if (!endpoint) return json(response, 400, { error: "缺少订阅地址" });
+      for (const family of Object.values(database.families)) {
+        family.subscriptions = (family.subscriptions || []).filter(
+          (record) => record.subscription?.endpoint !== endpoint
+        );
+      }
+      await saveDatabase();
+      return json(response, 200, { ok: true });
+    }
+
     if (url.pathname === "/api/concern" && request.method === "POST") {
       const body = await readJson(request);
       const familyCode = sanitizeFamilyCode(body.familyCode);

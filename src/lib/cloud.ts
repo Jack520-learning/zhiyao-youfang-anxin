@@ -125,3 +125,16 @@ export async function subscribeToPush(
   });
   return response.ok;
 }
+
+export async function unsubscribeFromPush(): Promise<void> {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+  const registration = await navigator.serviceWorker.ready;
+  const subscription = await registration.pushManager.getSubscription();
+  if (!subscription) return;
+  await fetch("/api/push/subscribe", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint: subscription.endpoint })
+  });
+  await subscription.unsubscribe();
+}
