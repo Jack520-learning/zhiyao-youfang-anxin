@@ -725,7 +725,7 @@ async function deleteCustomVoice(voiceId) {
   return response.json();
 }
 
-async function callAiAssistant(payload) {
+function buildAssistantRequest(payload) {
   const baseUrl = getAiBaseUrl();
   const skillFocus = {
     photo:
@@ -774,16 +774,30 @@ async function callAiAssistant(payload) {
           }))
       : []
   };
-  const response = await fetch(`${baseUrl}/chat/completions`, {
+  return {
+    baseUrl,
+    model: getTextModel(),
+    context,
+    skillFocus,
+    answerStyle
+  };
+}
+
+async function requestAiAssistant(payload, options = {}) {
+  const { baseUrl, model, context, skillFocus, answerStyle } =
+    buildAssistantRequest(payload);
+  return fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
+    signal: options.signal,
     headers: {
       Authorization: `Bearer ${getAiKey()}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: getTextModel(),
+      model,
       temperature: 0.1,
       max_tokens: 1200,
+      stream: Boolean(options.stream),
       messages: [
         {
           role: "system",
@@ -797,9 +811,53 @@ async function callAiAssistant(payload) {
       ]
     })
   });
+}
+
+async function callAiAssistant(payload) {
+  const response = await requestAiAssistant(payload);
   if (!response.ok) throw new Error(`AI 服务返回 ${response.status}`);
   const data = await response.json();
   return data.choices?.[0]?.message?.content?.trim();
+}
+
+async function streamAiAssistant(payload, sendEvent, signal) {
+  const response = await requestAiAssistant(payload, {
+    stream: true,
+    signal
+  });
+  if (!response.ok || !response.body) {
+    throw new Error(`AI 服务返回 ${response.status}`);
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let emitted = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const blocks = buffer.split(/\r?\n\r?\n/);
+    buffer = blocks.pop() || "";
+    for (const block of blocks) {
+      for (const line of block.split(/\r?\n/)) {
+        if (!line.startsWith("data:")) continue;
+        const data = line.slice(5).trim();
+        if (!data || data === "[DONE]") continue;
+        try {
+          const payload = JSON.parse(data);
+          const delta = payload.choices?.[0]?.delta?.content;
+          if (typeof delta === "string" && delta) {
+            emitted += delta;
+            sendEvent("delta", { text: delta });
+          }
+        } catch {
+          // Ignore non-JSON keepalive lines from the upstream provider.
+        }
+      }
+    }
+  }
+  return emitted;
 }
 
 const mimeTypes = {
@@ -1384,6 +1442,57 @@ const server = createServer(async (request, response) => {
         await saveDatabase();
         return json(response, 200, { ok: true });
       }
+    }
+
+    if (
+      url.pathname === "/api/assistant/stream" &&
+      request.method === "POST"
+    ) {
+      if (!isAiConfigured()) {
+        return json(response, 501, {
+          error: "未配置大模型，客户端应使用本地安全规则模式"
+        });
+      }
+      const body = await readJson(request, 1024 * 1024);
+      response.writeHead(200, {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no"
+      });
+      const sendEvent = (event, data) => {
+        response.write(`event: ${event}\n`);
+        response.write(`data: ${JSON.stringify(data)}\n\n`);
+      };
+      const abortController = new AbortController();
+      response.on("close", () => abortController.abort());
+      sendEvent("stage", {
+        id: "grounding",
+        label: "已载入安全规则、药品资料和家庭档案"
+      });
+      sendEvent("stage", {
+        id: "generating",
+        label: "千问正在生成受控回答"
+      });
+      try {
+        const answer = await streamAiAssistant(
+          body,
+          sendEvent,
+          abortController.signal
+        );
+        if (!answer) throw new Error("模型没有返回内容");
+        sendEvent("done", { mode: "llm" });
+      } catch (error) {
+        if (!response.destroyed) {
+          sendEvent("error", {
+            error:
+              error instanceof Error ? error.message : "AI 流式回答失败"
+          });
+        }
+      } finally {
+        if (!response.destroyed) response.end();
+      }
+      return;
     }
 
     if (url.pathname === "/api/assistant" && request.method === "POST") {

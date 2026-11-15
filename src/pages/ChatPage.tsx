@@ -33,6 +33,7 @@ import { DiscoveryNav } from "../components/DiscoveryNav";
 import { createId } from "../lib/ids";
 import { answerWithRules, checkNewMedication } from "../lib/riskEngine";
 import { sendConcernAlert } from "../lib/cloud";
+import { streamAssistantAnswer } from "../lib/assistantStream";
 import { createManualDraft, recognizeMedicineImage } from "../lib/ocr";
 import {
   answerFromDrugCatalog,
@@ -291,6 +292,9 @@ export function ChatPage() {
   const familyCode = useAppStore((state) => state.familyCode);
   const addFamilyAlert = useAppStore((state) => state.addFamilyAlert);
   const addChatMessage = useAppStore((state) => state.addChatMessage);
+  const replaceChatMessage = useAppStore(
+    (state) => state.replaceChatMessage
+  );
   const saveIntakeDraft = useAppStore((state) => state.saveIntakeDraft);
   const createConversation = useAppStore((state) => state.createConversation);
   const deleteConversation = useAppStore((state) => state.deleteConversation);
@@ -315,6 +319,7 @@ export function ChatPage() {
   const [answerMode, setAnswerMode] = useState<AnswerMode>("safety");
   const [skillMenuOpen, setSkillMenuOpen] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [streamingMessageId, setStreamingMessageId] = useState("");
   const [thinkingLabel, setThinkingLabel] = useState("正在思考并组织回答…");
   const [conversationToDelete, setConversationToDelete] = useState<{
     id: string;
@@ -324,6 +329,7 @@ export function ChatPage() {
   const messagesRef = useRef<HTMLDivElement>(null);
   const initialQueryHandled = useRef(false);
   const autoScrollRef = useRef(false);
+  const streamTraceRef = useRef<AssistantStage[]>([]);
 
   const speech = useQwenSpeechRecognition((transcript) => {
     setInput(transcript);
@@ -399,6 +405,8 @@ export function ChatPage() {
     autoScrollRef.current = autoScroll;
     setInput("");
     setSending(true);
+    setStreamingMessageId("");
+    streamTraceRef.current = [];
     setThinkingLabel(
       needsMedicationReview(clean, composerSkill)
         ? "正在核对用药安全、当前药物和资料来源…"
@@ -504,16 +512,43 @@ export function ChatPage() {
     }
 
     let response: AssistantResponse = localResponse;
+    let streamedAssistantMessageId = "";
     if (
       localResponse.riskCheck.level === "low" ||
       localResponse.riskCheck.level === "medium" ||
       localResponse.riskCheck.level === "unknown"
     ) {
+      streamedAssistantMessageId = createId("chat");
+      const streamedMessage: ChatMessage = {
+        id: streamedAssistantMessageId,
+        role: "assistant",
+        content: "",
+        createdAt: nowIso(),
+        pending: true
+      };
+      addChatMessage(streamedMessage, targetConversationId);
+      setStreamingMessageId(streamedAssistantMessageId);
+      let fullText = "";
+      let flushScheduled = false;
+      const flushStream = () => {
+        if (flushScheduled) return;
+        flushScheduled = true;
+        window.requestAnimationFrame(() => {
+          flushScheduled = false;
+          replaceChatMessage(
+            streamedAssistantMessageId,
+            {
+              ...streamedMessage,
+              content: fullText,
+              pending: true
+            },
+            targetConversationId
+          );
+        });
+      };
       try {
-        const aiResponse = await fetch("/api/assistant", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const streamed = await streamAssistantAnswer(
+          {
             query: clean,
             profile,
             medications,
@@ -536,41 +571,89 @@ export function ChatPage() {
                 role: message.role,
                 content: message.content.slice(0, 1000)
               }))
-          })
-        });
-        if (aiResponse.ok) {
-          const payload = (await aiResponse.json()) as {
-            message: string;
-            mode: "llm";
-          };
-          response = {
-            ...localResponse,
-            message: payload.message,
-            mode: "llm"
-          };
-        }
+          },
+          {
+            onDelta: (_delta, nextFullText) => {
+              fullText = nextFullText;
+              flushStream();
+            },
+            onStage: (stage) => {
+              const traceStage: AssistantStage = {
+                id: `stream-${stage.id}`,
+                label: stage.label,
+                status: "done"
+              };
+              if (
+                !streamTraceRef.current.some(
+                  (item) => item.id === traceStage.id
+                )
+              ) {
+                streamTraceRef.current.push(traceStage);
+              }
+              setStages((current) => [
+                ...current.filter(
+                  (item) => item.id !== traceStage.id
+                ),
+                traceStage
+              ]);
+            }
+          }
+        );
+        if (!streamed.trim()) throw new Error("模型没有返回内容");
+        response = {
+          ...localResponse,
+          message: streamed,
+          mode: "llm"
+        };
+        replaceChatMessage(
+          streamedAssistantMessageId,
+          {
+            ...streamedMessage,
+            content: streamed,
+            pending: false,
+            riskCheck: response.riskCheck
+          },
+          targetConversationId
+        );
       } catch {
-        // The local safety response is still complete and available.
+        replaceChatMessage(
+          streamedAssistantMessageId,
+          {
+            ...streamedMessage,
+            content: response.message,
+            pending: false,
+            riskCheck: response.riskCheck
+          },
+          targetConversationId
+        );
+      } finally {
+        setStreamingMessageId("");
       }
     }
 
     setMode(response.mode);
-    addChatMessage({
-      id: createId("chat"),
-      role: "assistant",
-      content: response.message,
-      createdAt: nowIso(),
-      riskCheck: response.riskCheck
-    }, targetConversationId);
+    if (!streamedAssistantMessageId) {
+      addChatMessage({
+        id: createId("chat"),
+        role: "assistant",
+        content: response.message,
+        createdAt: nowIso(),
+        riskCheck: response.riskCheck
+      }, targetConversationId);
+    }
     speakText(
       `${response.message}。${response.riskCheck.nextStep}`,
       profile.voiceEnabled && preferences.soundEnabled,
       preferences.voiceMode,
       preferences.customVoiceId
     );
-    setStages(
-      response.stages.map((stage) => ({ ...stage, status: "done" }))
-    );
+    setStages([
+      ...response.stages.map((stage) => ({
+        ...stage,
+        status: "done" as const
+      })),
+      ...streamTraceRef.current
+    ]);
     setSending(false);
     autoScrollRef.current = false;
   }
@@ -980,7 +1063,10 @@ export function ChatPage() {
 
   function renderMessage(message: ChatMessage) {
     return (
-      <article className={`message ${message.role}`} key={message.id}>
+      <article
+        className={`message ${message.role} ${message.pending ? "streaming" : ""}`}
+        key={message.id}
+      >
         <div className="message-role">
           {message.role === "assistant" ? "智药有方" : "您"}
         </div>
@@ -994,7 +1080,16 @@ export function ChatPage() {
         ) : null}
         <div className="message-bubble">
           {message.role === "assistant" ? (
-            <AssistantMarkdown content={message.content} />
+            <>
+              {message.content ? (
+                <AssistantMarkdown content={message.content} />
+              ) : message.pending ? (
+                <span className="streaming-placeholder">正在生成回答…</span>
+              ) : null}
+              {message.pending && message.content ? (
+                <span className="streaming-caret" aria-hidden="true" />
+              ) : null}
+            </>
           ) : (
             message.content
           )}
@@ -1018,7 +1113,9 @@ export function ChatPage() {
             customVoiceId={preferences.customVoiceId}
           />
         ) : null}
-        {message.role === "assistant" && message.riskCheck ? (
+        {message.role === "assistant" &&
+        message.riskCheck &&
+        !message.pending ? (
           <div className="answer-followups">
             <button
               type="button"
@@ -1220,7 +1317,7 @@ export function ChatPage() {
                   </details>
                 ) : null}
                 {recentMessages.map(renderMessage)}
-                {sending ? (
+                {sending && !streamingMessageId ? (
                   <article className="message assistant">
                     <div className="message-role">智药有方</div>
                     <div className="message-bubble">

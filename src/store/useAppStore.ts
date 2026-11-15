@@ -238,7 +238,11 @@ interface AppActions {
     doseId: string
   ) => void;
   addChatMessage: (message: ChatMessage, conversationId?: string) => void;
-  replaceChatMessage: (id: string, message: ChatMessage) => void;
+  replaceChatMessage: (
+    id: string,
+    message: ChatMessage,
+    conversationId?: string
+  ) => void;
   createConversation: () => string;
   setActiveConversation: (id: string) => void;
   deleteConversation: (id: string) => void;
@@ -1178,10 +1182,11 @@ export const useAppStore = create<AppStore>()(
               : state.riskChecks
           };
         }),
-      replaceChatMessage: (id, message) =>
+      replaceChatMessage: (id, message, requestedConversationId) =>
         setState((state) => ({
           conversations: state.conversations.map((conversation) =>
-            conversation.id === state.activeConversationId
+            conversation.id ===
+            (requestedConversationId || state.activeConversationId)
               ? {
                   ...conversation,
                   updatedAt: nowIso(),

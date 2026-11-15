@@ -3361,6 +3361,24 @@ img {
   color: var(--primary);
 }
 
+.route-loading {
+  display: flex;
+  min-height: 42vh;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: calc(15px * var(--font-scale));
+}
+
+.route-loading-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--primary);
+  animation: pulse 1s ease-in-out infinite;
+}
+
 .loading-mark {
   display: grid;
   width: 86px;
@@ -4753,6 +4771,35 @@ img {
   color: var(--ink);
   font-size: calc(16px * var(--font-scale));
   line-height: 1.85;
+}
+
+.message.assistant.streaming .message-bubble {
+  position: relative;
+}
+
+.streaming-placeholder {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  color: var(--muted);
+  font-size: calc(15px * var(--font-scale));
+}
+
+.streaming-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin-left: 3px;
+  border-radius: 999px;
+  background: var(--primary);
+  vertical-align: -0.12em;
+  animation: streaming-caret 0.8s steps(2, end) infinite;
+}
+
+@keyframes streaming-caret {
+  50% {
+    opacity: 0.2;
+  }
 }
 
 .assistant-markdown p {
