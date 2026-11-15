@@ -8,6 +8,7 @@ import {
   UsersRound
 } from "lucide-react";
 import { FormEvent, useState } from "react";
+import { subscribeToPush } from "../lib/cloud";
 import { useAppStore } from "../store/useAppStore";
 import type { UserRole } from "../types";
 
@@ -31,6 +32,15 @@ export function AuthGate() {
       setError("两次输入的密码不一致");
       return;
     }
+    const notificationPermission =
+      typeof Notification !== "undefined" &&
+      Notification.permission === "default"
+        ? Notification.requestPermission()
+        : Promise.resolve(
+            typeof Notification === "undefined"
+              ? "denied"
+              : Notification.permission
+          );
     setBusy(true);
     const result =
       mode === "login"
@@ -43,7 +53,16 @@ export function AuthGate() {
             familyCode: familyCodeInput
           });
     setBusy(false);
-    if (!result.ok) setError(result.error || "操作没有完成，请重试");
+    if (!result.ok) {
+      setError(result.error || "操作没有完成，请重试");
+      return;
+    }
+    const permission = await notificationPermission;
+    if (permission === "granted") {
+      const state = useAppStore.getState();
+      const enabled = await subscribeToPush(state.familyCode, state.role);
+      state.updatePreferences({ notificationsEnabled: enabled });
+    }
   }
 
   return (
