@@ -858,7 +858,10 @@ function buildAssistantRequest(payload) {
       genericName: medication.genericName,
       ingredients: medication.ingredients,
       dosage: medication.dosage,
-      relation: medication.relation
+      frequency: medication.frequency,
+      times: medication.times || [],
+      relation: medication.relation,
+      reminderEnabled: medication.reminderEnabled
     })),
     evidence: payload.evidence || [],
     riskLevel: payload.riskLevel || "unknown",
@@ -906,6 +909,91 @@ function buildAssistantRequest(payload) {
   };
 }
 
+const assistantTools = [
+  {
+    type: "function",
+    function: {
+      name: "get_active_medications",
+      description: "读取本轮安全上下文中的当前在用药物。只读。",
+      parameters: {
+        type: "object",
+        properties: {},
+        additionalProperties: false
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_elder_profile",
+      description: "读取年龄、慢性病、过敏史和本轮风险等级。只读。",
+      parameters: {
+        type: "object",
+        properties: {},
+        additionalProperties: false
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_grounded_evidence",
+      description: "读取本地安全规则已经确定的证据和结论。只读。",
+      parameters: {
+        type: "object",
+        properties: {},
+        additionalProperties: false
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_medication_schedule",
+      description: "读取当前药物的每日服药时间和饭前饭后要求。只读。",
+      parameters: {
+        type: "object",
+        properties: {},
+        additionalProperties: false
+      }
+    }
+  }
+];
+
+function executeAssistantTool(payload, name) {
+  if (name === "get_active_medications") {
+    return {
+      medications: payload.medications || []
+    };
+  }
+  if (name === "get_elder_profile") {
+    return {
+      age: payload.profile?.age,
+      conditions: payload.profile?.conditions || [],
+      allergies: payload.profile?.allergies || [],
+      riskLevel: payload.riskLevel || "unknown"
+    };
+  }
+  if (name === "get_grounded_evidence") {
+    return {
+      sourceIds: payload.evidence || [],
+      groundingText: String(payload.groundingText || "").slice(0, 5000)
+    };
+  }
+  if (name === "get_medication_schedule") {
+    return (payload.medications || []).flatMap((medication) =>
+      (medication.times || []).map((time) => ({
+        time,
+        name: medication.name,
+        dosage: medication.dosage,
+        relation: medication.relation,
+        reminderEnabled: medication.reminderEnabled
+      }))
+    );
+  }
+  throw new Error(`未知的助手工具：${name}`);
+}
+
 async function requestAiAssistant(payload, options = {}) {
   const { baseUrl, model, context, skillFocus, answerStyle } =
     buildAssistantRequest(payload);
@@ -921,6 +1009,12 @@ async function requestAiAssistant(payload, options = {}) {
       temperature: 0.1,
       max_tokens: 1200,
       stream: Boolean(options.stream),
+      ...(options.tools?.length
+        ? {
+            tools: options.tools,
+            tool_choice: "auto"
+          }
+        : {}),
       messages: [
         {
           role: "system",
@@ -930,7 +1024,8 @@ async function requestAiAssistant(payload, options = {}) {
         {
           role: "user",
           content: `安全上下文：${JSON.stringify(context)}\n当前技能重点：${skillFocus}\n回答方式：${answerStyle}\n用户问题：${String(payload.query || "").slice(0, 1000)}`
-        }
+        },
+        ...(Array.isArray(options.extraMessages) ? options.extraMessages : [])
       ]
     })
   });
@@ -943,10 +1038,66 @@ async function callAiAssistant(payload) {
   return data.choices?.[0]?.message?.content?.trim();
 }
 
-async function streamAiAssistant(payload, sendEvent, signal) {
+const assistantToolLabels = {
+  get_active_medications: "千问工具：读取当前用药",
+  get_elder_profile: "千问工具：读取个人风险档案",
+  get_grounded_evidence: "千问工具：读取本地安全证据",
+  get_medication_schedule: "千问工具：读取服药日程"
+};
+
+async function prepareAssistantToolCalls(payload, sendEvent, signal) {
+  const extraMessages = [];
+  for (let round = 0; round < 3; round += 1) {
+    const response = await requestAiAssistant(payload, {
+      tools: assistantTools,
+      extraMessages,
+      signal
+    });
+    if (!response.ok) return extraMessages;
+    const data = await response.json();
+    const message = data.choices?.[0]?.message;
+    const toolCalls = Array.isArray(message?.tool_calls)
+      ? message.tool_calls.slice(0, 4)
+      : [];
+    if (!toolCalls.length) return extraMessages;
+    extraMessages.push(message);
+    for (const call of toolCalls) {
+      const name = String(call?.function?.name || "");
+      sendEvent("stage", {
+        id: `function-${name}`,
+        label: assistantToolLabels[name] || `千问工具：${name}`
+      });
+      try {
+        const result = executeAssistantTool(payload, name);
+        extraMessages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify(result).slice(0, 8000)
+        });
+      } catch (error) {
+        extraMessages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify({
+            error: error instanceof Error ? error.message : "工具执行失败"
+          })
+        });
+      }
+    }
+  }
+  return extraMessages;
+}
+
+async function streamAiAssistant(
+  payload,
+  sendEvent,
+  signal,
+  extraMessages = []
+) {
   const response = await requestAiAssistant(payload, {
     stream: true,
-    signal
+    signal,
+    extraMessages
   });
   if (!response.ok || !response.body) {
     throw new Error(`AI 服务返回 ${response.status}`);
@@ -1707,6 +1858,11 @@ const server = createServer(async (request, response) => {
           });
         }
       }
+      const functionMessages = await prepareAssistantToolCalls(
+        body,
+        sendEvent,
+        abortController.signal
+      );
       sendEvent("stage", {
         id: "generating",
         label: "千问正在生成受控回答"
@@ -1715,7 +1871,8 @@ const server = createServer(async (request, response) => {
         const answer = await streamAiAssistant(
           body,
           sendEvent,
-          abortController.signal
+          abortController.signal,
+          functionMessages
         );
         if (!answer) throw new Error("模型没有返回内容");
         sendEvent("done", { mode: "llm" });

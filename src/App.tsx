@@ -33,6 +33,11 @@ const FamilyPage = lazy(() =>
 const HomePage = lazy(() =>
   import("./pages/HomePage").then((module) => ({ default: module.HomePage }))
 );
+const ImpactPage = lazy(() =>
+  import("./pages/ImpactPage").then((module) => ({
+    default: module.ImpactPage
+  }))
+);
 const HerbDetailPage = lazy(() =>
   import("./pages/HerbDetailPage").then((module) => ({
     default: module.HerbDetailPage
@@ -109,6 +114,7 @@ export default function App() {
         <Route path="herbs" element={loadRoute(<HerbsPage />)} />
         <Route path="herbs/:id" element={loadRoute(<HerbDetailPage />)} />
         <Route path="multi-drug" element={loadRoute(<MultiDrugPage />)} />
+        <Route path="impact" element={loadRoute(<ImpactPage />)} />
         <Route path="medications" element={loadRoute(<MedicationsPage />)} />
         <Route
           path="medications/:id"
