@@ -2456,6 +2456,89 @@ img {
   line-height: 1.65;
 }
 
+.empty-medication-guidance {
+  display: grid;
+  width: 100%;
+  gap: 12px;
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+
+.empty-medication-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+.empty-medication-feature-grid article {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 8px;
+  min-height: 150px;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  padding: 17px;
+  background: var(--surface-soft);
+  text-align: left;
+}
+
+.empty-medication-feature-grid article > span {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--primary);
+}
+
+.empty-medication-feature-grid h3 {
+  font-size: calc(16px * var(--font-scale));
+}
+
+.empty-medication-feature-grid p {
+  max-width: none;
+  color: var(--muted);
+  font-size: calc(13px * var(--font-scale));
+  line-height: 1.6;
+}
+
+.empty-medication-capture-tip {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--line));
+  border-radius: 15px;
+  padding: 14px 16px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  text-align: left;
+}
+
+.empty-medication-capture-tip > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.empty-medication-capture-tip div {
+  display: grid;
+  gap: 3px;
+}
+
+.empty-medication-capture-tip strong {
+  color: var(--ink);
+  font-size: calc(14px * var(--font-scale));
+}
+
+.empty-medication-capture-tip p {
+  max-width: none;
+  font-size: calc(13px * var(--font-scale));
+}
+
 .emergency-card-page .page-header {
   align-items: flex-start;
 }
@@ -3103,6 +3186,14 @@ img {
 
   .dosage-safety-inline span {
     grid-column: 1 / -1;
+  }
+
+  .empty-medication-feature-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .empty-medication-feature-grid article {
+    min-height: 0;
   }
 
   .emergency-card-head {

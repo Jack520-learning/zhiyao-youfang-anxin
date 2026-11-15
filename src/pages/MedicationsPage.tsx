@@ -7,6 +7,7 @@ import {
   Eye,
   Pill,
   Printer,
+  ShieldCheck,
   Trash2
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -97,6 +98,38 @@ export function MedicationsPage() {
             系统不会自动放入演示药物。请按照医生处方或您实际在用的药，
             使用页面上方入口添加。
           </p>
+          <div className="empty-medication-guidance">
+            <div className="empty-medication-feature-grid">
+              <article>
+                <span>
+                  <CircleCheck size={21} aria-hidden="true" />
+                </span>
+                <h3>先核对，再加入</h3>
+                <p>药名、剂量和服用时间都能修改，确认后才进入用药清单。</p>
+              </article>
+              <article>
+                <span>
+                  <ShieldCheck size={21} aria-hidden="true" />
+                </span>
+                <h3>自动检查风险</h3>
+                <p>结合过敏史、慢性病和当前药物，提示重复成分与相互作用。</p>
+              </article>
+              <article>
+                <span>
+                  <Pill size={21} aria-hidden="true" />
+                </span>
+                <h3>剂型安全提醒</h3>
+                <p>单独说明能否掰开、碾碎或嚼碎，缓释和肠溶制剂重点提示。</p>
+              </article>
+            </div>
+            <div className="empty-medication-capture-tip">
+              <Camera size={23} aria-hidden="true" />
+              <div>
+                <strong>拍照录入更省事</strong>
+                <p>尽量拍清药盒正面、规格和用法那一面；看不清时可以再手动修改。</p>
+              </div>
+            </div>
+          </div>
         </section>
       ) : (
         <div className="medication-list">
