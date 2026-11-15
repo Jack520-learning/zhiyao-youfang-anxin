@@ -2,6 +2,7 @@ import { createInitialState } from "../data/seed";
 import type {
   AccountWorkspace,
   AppState,
+  CloudSnapshot,
   LocalAccount
 } from "../types";
 
@@ -97,6 +98,32 @@ export function workspacePatch(
 
 export function createBlankWorkspace(familyCode: string): AccountWorkspace {
   return captureWorkspace(createInitialState({ familyCode }));
+}
+
+export function workspaceFromCloud(
+  snapshot: CloudSnapshot
+): AccountWorkspace {
+  const workspace = createBlankWorkspace(snapshot.familyCode);
+  return {
+    ...workspace,
+    profile: {
+      ...workspace.profile,
+      name: snapshot.elderName || "",
+      age: snapshot.profile.age || 0,
+      conditions: snapshot.profile.conditions || [],
+      allergies: snapshot.profile.allergies || [],
+      timeZone: snapshot.profile.timeZone || workspace.profile.timeZone,
+      healthProfileCompleted: Boolean(snapshot.elderName),
+      healthProfilePromptSeen: Boolean(snapshot.elderName)
+    },
+    emergencyContacts: snapshot.emergencyContacts || [],
+    consent: snapshot.consent,
+    medications: snapshot.medications || [],
+    doseEvents: snapshot.doseEvents || [],
+    riskChecks: snapshot.riskChecks || [],
+    familyAlerts: snapshot.familyAlerts || [],
+    lastSyncedAt: snapshot.updatedAt
+  };
 }
 
 export function saveActiveWorkspace(

@@ -98,6 +98,8 @@ export interface LocalAccount {
   role: UserRole;
   familyCode: string;
   linkedFamilyCodes: string[];
+  serverAccountId?: string;
+  sessionToken?: string;
   passwordHash: string;
   passwordSalt: string;
   createdAt: string;

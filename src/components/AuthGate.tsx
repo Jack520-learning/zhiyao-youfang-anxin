@@ -244,7 +244,7 @@ export function AuthGate() {
           </button>
         </form>
         <p className="auth-footnote">
-          本地账号密码采用加盐摘要保存。家庭连接码用于连接老人与家属，请只告诉可信任的家人。
+          账号由云端安全保存，可在手机、平板和电脑登录。家庭连接码请只告诉可信任的家人。
         </p>
       </section>
     </main>

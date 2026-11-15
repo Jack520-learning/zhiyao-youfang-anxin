@@ -1,7 +1,14 @@
 import { createServer } from "node:http";
+import {
+  randomBytes,
+  randomUUID,
+  scrypt as scryptCallback,
+  timingSafeEqual
+} from "node:crypto";
 import { mkdir, readFile, writeFile, access } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import * as webpush from "web-push";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -15,14 +22,21 @@ const shouldServeStatic = process.argv.includes("--serve");
 await mkdir(runtimeDir, { recursive: true });
 
 const initialDatabase = {
-  version: 1,
+  version: 2,
   families: {},
+  accounts: {},
+  sessions: {},
   sentReminders: {}
 };
 
 let database = await loadDatabase();
+database.accounts ??= {};
+database.sessions ??= {};
 let writeQueue = Promise.resolve();
 const familyEventClients = new Map();
+const scrypt = promisify(scryptCallback);
+const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const usernamePattern = /^[a-zA-Z0-9_\u4e00-\u9fa5]{3,24}$/u;
 
 function broadcastFamily(familyCode, payload) {
   const clients = familyEventClients.get(familyCode);
@@ -102,6 +116,105 @@ function sanitizeFamilyCode(value) {
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "")
     .slice(0, 8);
+}
+
+function normalizeUsername(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function sanitizeDisplayName(value, fallback) {
+  return String(value || "").trim().slice(0, 30) || fallback;
+}
+
+async function hashAccountPassword(password, salt = randomBytes(16).toString("hex")) {
+  const key = await scrypt(String(password), salt, 64);
+  return {
+    passwordSalt: salt,
+    passwordHash: Buffer.from(key).toString("hex")
+  };
+}
+
+async function verifyAccountPassword(password, account) {
+  const candidate = await hashAccountPassword(password, account.passwordSalt);
+  const expected = Buffer.from(account.passwordHash, "hex");
+  const actual = Buffer.from(candidate.passwordHash, "hex");
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
+}
+
+function publicAccount(account) {
+  return {
+    id: account.id,
+    username: account.username,
+    displayName: account.displayName,
+    role: account.role,
+    familyCode: account.familyCode,
+    linkedFamilyCodes: account.linkedFamilyCodes,
+    createdAt: account.createdAt
+  };
+}
+
+function issueSession(accountId) {
+  const token = randomBytes(32).toString("hex");
+  const now = Date.now();
+  database.sessions[token] = {
+    accountId,
+    createdAt: new Date(now).toISOString(),
+    expiresAt: new Date(now + SESSION_MAX_AGE_MS).toISOString()
+  };
+  return token;
+}
+
+function bearerToken(request) {
+  const authorization = String(request.headers.authorization || "");
+  return authorization.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length).trim()
+    : "";
+}
+
+function authenticatedAccount(request) {
+  const token = bearerToken(request);
+  if (!token) return { account: null, token: "" };
+  const session = database.sessions[token];
+  if (!session || new Date(session.expiresAt).getTime() <= Date.now()) {
+    delete database.sessions[token];
+    return { account: null, token: "" };
+  }
+  const account = Object.values(database.accounts).find(
+    (item) => item.id === session.accountId
+  );
+  return { account: account || null, token };
+}
+
+function accountCodes(account) {
+  return Array.from(
+    new Set(
+      [account?.familyCode, ...(account?.linkedFamilyCodes || [])]
+        .map(sanitizeFamilyCode)
+        .filter(Boolean)
+    )
+  );
+}
+
+function accountsShareFamily(left, right) {
+  const leftCodes = new Set(accountCodes(left));
+  return accountCodes(right).some((code) => leftCodes.has(code));
+}
+
+function connectedAccounts(account) {
+  return Object.values(database.accounts)
+    .filter(
+      (candidate) =>
+        candidate.id === account.id || accountsShareFamily(account, candidate)
+    )
+    .sort((left, right) => {
+      if (left.role !== right.role) return left.role === "elder" ? -1 : 1;
+      return left.displayName.localeCompare(right.displayName, "zh-CN");
+    })
+    .map(publicAccount);
+}
+
+function accountSnapshot(account) {
+  return database.families[account.familyCode]?.snapshot || null;
 }
 
 function publicSnapshot(snapshot) {
@@ -729,6 +842,271 @@ const server = createServer(async (request, response) => {
 
     if (url.pathname === "/api/health" && request.method === "GET") {
       return json(response, 200, { ok: true, aiConfigured: isAiConfigured() });
+    }
+
+    if (url.pathname === "/api/auth/register" && request.method === "POST") {
+      const body = await readJson(request, 128 * 1024);
+      const username = normalizeUsername(body.username);
+      const password = String(body.password || "");
+      const role = body.role === "family" ? "family" : "elder";
+      const familyCode = sanitizeFamilyCode(body.familyCode);
+      if (!usernamePattern.test(username)) {
+        return json(response, 400, {
+          error: "账号需为 3 到 24 位中文、字母、数字或下划线"
+        });
+      }
+      if (password.length < 6) {
+        return json(response, 400, { error: "密码至少需要 6 位" });
+      }
+      if (familyCode.length < 6) {
+        return json(response, 400, { error: "家庭连接码需要 6 到 8 位" });
+      }
+      if (database.accounts[username]) {
+        return json(response, 409, { error: "这个账号已经注册，请直接登录" });
+      }
+      const codeExists = Object.values(database.accounts).some(
+        (account) =>
+          account.role === "elder" &&
+          accountCodes(account).includes(familyCode)
+      );
+      if (role === "family" && !codeExists && !database.families[familyCode]?.snapshot) {
+        return json(response, 404, {
+          error: "没有找到这个家庭连接码对应的老人账号"
+        });
+      }
+      if (
+        role === "elder" &&
+        (codeExists || Boolean(database.families[familyCode]?.snapshot))
+      ) {
+        return json(response, 409, {
+          error: "这个连接码已经对应其他老人，请设置新的连接码"
+        });
+      }
+      const passwordRecord = await hashAccountPassword(password);
+      const account = {
+        id: randomUUID(),
+        username,
+        displayName: sanitizeDisplayName(body.displayName, username),
+        role,
+        familyCode,
+        linkedFamilyCodes: [familyCode],
+        ...passwordRecord,
+        createdAt: new Date().toISOString()
+      };
+      database.accounts[username] = account;
+      const token = issueSession(account.id);
+      await saveDatabase();
+      return json(response, 201, {
+        token,
+        account: publicAccount(account),
+        accounts: connectedAccounts(account),
+        snapshot: accountSnapshot(account)
+      });
+    }
+
+    if (url.pathname === "/api/auth/login" && request.method === "POST") {
+      const body = await readJson(request, 64 * 1024);
+      const username = normalizeUsername(body.username);
+      const account = database.accounts[username];
+      const valid =
+        account &&
+        (await verifyAccountPassword(String(body.password || ""), account));
+      if (!valid) {
+        return json(response, 401, { error: "账号或密码不正确" });
+      }
+      const token = issueSession(account.id);
+      await saveDatabase();
+      return json(response, 200, {
+        token,
+        account: publicAccount(account),
+        accounts: connectedAccounts(account),
+        snapshot: accountSnapshot(account)
+      });
+    }
+
+    if (url.pathname === "/api/auth/accounts" && request.method === "GET") {
+      const { account } = authenticatedAccount(request);
+      if (!account) return json(response, 401, { error: "请先登录" });
+      return json(response, 200, {
+        account: publicAccount(account),
+        accounts: connectedAccounts(account),
+        snapshot: accountSnapshot(account)
+      });
+    }
+
+    if (
+      url.pathname === "/api/auth/linked-account" &&
+      request.method === "POST"
+    ) {
+      const { account: currentAccount } = authenticatedAccount(request);
+      if (!currentAccount) return json(response, 401, { error: "请先登录" });
+      const body = await readJson(request, 128 * 1024);
+      const username = normalizeUsername(body.username);
+      const password = String(body.password || "");
+      const role = body.role === "elder" ? "elder" : "family";
+      if (!usernamePattern.test(username)) {
+        return json(response, 400, {
+          error: "账号需为 3 到 24 位中文、字母、数字或下划线"
+        });
+      }
+      if (password.length < 6) {
+        return json(response, 400, { error: "密码至少需要 6 位" });
+      }
+      if (database.accounts[username]) {
+        return json(response, 409, { error: "这个账号已经注册" });
+      }
+      if (role === "elder" && currentAccount.role !== "family") {
+        return json(response, 403, {
+          error: "只有家属账号可以新建老人档案"
+        });
+      }
+      const originalCodes = accountCodes(currentAccount);
+      const familyCode =
+        role === "family"
+          ? currentAccount.familyCode
+          : sanitizeFamilyCode(body.familyCode);
+      if (familyCode.length < 6) {
+        return json(response, 400, { error: "新老人档案需要家庭连接码" });
+      }
+      if (
+        role === "elder" &&
+        Object.values(database.accounts).some(
+          (account) =>
+            account.role === "elder" &&
+            accountCodes(account).includes(familyCode)
+        )
+      ) {
+        return json(response, 409, {
+          error: "这个连接码已经对应其他老人"
+        });
+      }
+      const passwordRecord = await hashAccountPassword(password);
+      const linkedCodes =
+        role === "family"
+          ? Array.from(new Set([...accountCodes(currentAccount), familyCode]))
+          : [familyCode];
+      const linkedAccount = {
+        id: randomUUID(),
+        username,
+        displayName: sanitizeDisplayName(body.displayName, username),
+        role,
+        familyCode,
+        linkedFamilyCodes: linkedCodes,
+        ...passwordRecord,
+        createdAt: new Date().toISOString()
+      };
+      database.accounts[username] = linkedAccount;
+      const familyGroupAccounts = Object.values(database.accounts).filter(
+        (account) =>
+          account.id === currentAccount.id ||
+          (account.role === "family" &&
+            accountCodes(account).some((code) => originalCodes.includes(code)))
+      );
+      for (const account of familyGroupAccounts) {
+        account.linkedFamilyCodes = Array.from(
+          new Set([...accountCodes(account), ...accountCodes(currentAccount), familyCode])
+        );
+      }
+      currentAccount.familyCode = currentAccount.familyCode || familyCode;
+      await saveDatabase();
+      return json(response, 201, {
+        account: publicAccount(linkedAccount),
+        accounts: connectedAccounts(currentAccount)
+      });
+    }
+
+    if (url.pathname === "/api/auth/switch" && request.method === "POST") {
+      const { account: currentAccount } = authenticatedAccount(request);
+      if (!currentAccount) return json(response, 401, { error: "请先登录" });
+      const body = await readJson(request, 64 * 1024);
+      const username = normalizeUsername(body.username);
+      const accountId = String(body.accountId || "");
+      const target =
+        database.accounts[username] ||
+        Object.values(database.accounts).find(
+          (account) => account.id === accountId
+        );
+      if (!target || !accountsShareFamily(currentAccount, target)) {
+        return json(response, 403, { error: "没有权限切换到该账号" });
+      }
+      const token = issueSession(target.id);
+      await saveDatabase();
+      return json(response, 200, {
+        token,
+        account: publicAccount(target),
+        accounts: connectedAccounts(target),
+        snapshot: accountSnapshot(target)
+      });
+    }
+
+    if (url.pathname === "/api/auth/logout" && request.method === "POST") {
+      const { token } = authenticatedAccount(request);
+      if (token) {
+        delete database.sessions[token];
+        await saveDatabase();
+      }
+      return json(response, 200, { ok: true });
+    }
+
+    if (
+      url.pathname === "/api/auth/verify-password" &&
+      request.method === "POST"
+    ) {
+      const { account: currentAccount } = authenticatedAccount(request);
+      if (!currentAccount) return json(response, 401, { error: "请先登录" });
+      const body = await readJson(request, 64 * 1024);
+      const target = Object.values(database.accounts).find(
+        (account) => account.id === String(body.accountId || "")
+      );
+      if (!target || !accountsShareFamily(currentAccount, target)) {
+        return json(response, 404, { error: "没有找到该账号" });
+      }
+      const valid = await verifyAccountPassword(
+        String(body.password || ""),
+        target
+      );
+      if (!valid) {
+        return json(response, 401, { error: "密码不正确" });
+      }
+      return json(response, 200, { ok: true });
+    }
+
+    if (url.pathname === "/api/auth/delete" && request.method === "POST") {
+      const { account: currentAccount } = authenticatedAccount(request);
+      if (!currentAccount) return json(response, 401, { error: "请先登录" });
+      const body = await readJson(request, 64 * 1024);
+      const accountId = String(body.accountId || "");
+      const target = Object.values(database.accounts).find(
+        (account) => account.id === accountId
+      );
+      if (!target || !accountsShareFamily(currentAccount, target)) {
+        return json(response, 404, { error: "没有找到可删除的账号" });
+      }
+      if (!(await verifyAccountPassword(String(body.password || ""), target))) {
+        return json(response, 401, { error: "密码不正确，账号尚未删除" });
+      }
+      if (target.role === "elder") {
+        const deletedCode = target.familyCode;
+        delete database.families[deletedCode];
+        for (const account of Object.values(database.accounts)) {
+          if (account.id === target.id || !accountCodes(account).includes(deletedCode)) {
+            continue;
+          }
+          const remainingCodes = accountCodes(account).filter(
+            (code) => code !== deletedCode
+          );
+          account.linkedFamilyCodes = remainingCodes;
+          if (account.familyCode === deletedCode) {
+            account.familyCode = remainingCodes[0] || "";
+          }
+        }
+      }
+      delete database.accounts[target.username];
+      for (const [token, session] of Object.entries(database.sessions)) {
+        if (session.accountId === target.id) delete database.sessions[token];
+      }
+      await saveDatabase();
+      return json(response, 200, { ok: true });
     }
 
     if (url.pathname === "/api/push/public-key" && request.method === "GET") {

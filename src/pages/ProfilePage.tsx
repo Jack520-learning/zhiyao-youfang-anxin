@@ -56,6 +56,7 @@ export function ProfilePage() {
   const navigate = useNavigate();
   const role = useAppStore((state) => state.role);
   const familyCode = useAppStore((state) => state.familyCode);
+  const sessionAccountId = useAppStore((state) => state.sessionAccountId);
   const profile = useAppStore((state) => state.profile);
   const preferences = useAppStore((state) => state.preferences);
   const consent = useAppStore((state) => state.consent);
@@ -72,8 +73,8 @@ export function ProfilePage() {
   const verifyCurrentPassword = useAppStore(
     (state) => state.verifyCurrentPassword
   );
-  const cancelCurrentAccount = useAppStore(
-    (state) => state.cancelCurrentAccount
+  const deleteLinkedAccount = useAppStore(
+    (state) => state.deleteLinkedAccount
   );
   const exportSnapshot = useAppStore((state) => state.exportSnapshot);
   const addAuditEvent = useAppStore((state) => state.addAuditEvent);
@@ -189,7 +190,20 @@ export function ProfilePage() {
     } else {
       await unsubscribeFromPush().catch(() => undefined);
     }
-    cancelCurrentAccount();
+    if (!sessionAccountId) {
+      setCancelBusy(false);
+      setCancelError("当前账号状态异常，请重新登录后重试");
+      return;
+    }
+    const deletion = await deleteLinkedAccount(
+      sessionAccountId,
+      cancelPassword
+    );
+    if (!deletion.ok) {
+      setCancelBusy(false);
+      setCancelError(deletion.error || "账号删除失败，请稍后重试");
+      return;
+    }
     setCancelPassword("");
     setCancelBusy(false);
     setCancelAccountOpen(false);

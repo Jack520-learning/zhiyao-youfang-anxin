@@ -67,8 +67,14 @@ export function AccountSwitcher({
     }
   ];
 
-  function switchTo(account: LocalAccount) {
-    if (account.id !== sessionAccountId) switchAccount(account.id);
+  async function switchTo(account: LocalAccount) {
+    if (account.id !== sessionAccountId) {
+      const result = await switchAccount(account.id);
+      if (!result.ok) {
+        setDeleteNotice(result.error || "账号切换失败");
+        return;
+      }
+    }
     onClose();
     navigate(account.role === "family" ? "/family" : "/");
   }
@@ -173,7 +179,7 @@ export function AccountSwitcher({
                         <button
                           type="button"
                           className="account-switch-main"
-                          onClick={() => switchTo(account)}
+                          onClick={() => void switchTo(account)}
                         >
                           <span>
                             <strong>{account.displayName}</strong>

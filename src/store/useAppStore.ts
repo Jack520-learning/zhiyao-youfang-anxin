@@ -7,6 +7,17 @@ import {
 } from "zustand/middleware";
 import { createInitialState } from "../data/seed";
 import { createPasswordRecord, verifyPassword } from "../lib/auth";
+import {
+  createServerLinkedAccount,
+  deleteServerAccount,
+  loginServerAccount,
+  logoutServerAccount,
+  registerServerAccount,
+  switchServerAccount,
+  verifyServerAccountPassword,
+  type AccountSessionResponse,
+  type ServerAccount
+} from "../lib/accountApi";
 import { createId } from "../lib/ids";
 import { nowIso } from "../lib/time";
 import {
@@ -15,6 +26,7 @@ import {
   getLinkedFamilyCodes,
   normalizeFamilyCode,
   saveActiveWorkspace,
+  workspaceFromCloud,
   workspaceKey,
   workspacePatch
 } from "../lib/workspaces";
@@ -103,6 +115,58 @@ function removeAccountWorkspaces(
   );
 }
 
+function accountFromServer(
+  serverAccount: ServerAccount,
+  existing?: LocalAccount,
+  token?: string
+): LocalAccount {
+  return {
+    id: existing?.id ?? `server-${serverAccount.id}`,
+    username: serverAccount.username,
+    displayName: serverAccount.displayName,
+    role: serverAccount.role,
+    familyCode: serverAccount.familyCode,
+    linkedFamilyCodes: serverAccount.linkedFamilyCodes,
+    serverAccountId: serverAccount.id,
+    sessionToken: token ?? existing?.sessionToken,
+    passwordHash: existing?.passwordHash ?? "",
+    passwordSalt: existing?.passwordSalt ?? "",
+    createdAt: serverAccount.createdAt
+  };
+}
+
+function mergeServerAccounts(
+  localAccounts: LocalAccount[],
+  serverAccounts: ServerAccount[],
+  activeServerAccountId: string,
+  token: string
+): LocalAccount[] {
+  const merged = localAccounts.map(normalizeAccount);
+  for (const serverAccount of serverAccounts) {
+    const index = merged.findIndex(
+      (account) =>
+        account.serverAccountId === serverAccount.id ||
+        account.username === serverAccount.username
+    );
+    const existing = index >= 0 ? merged[index] : undefined;
+    const next = accountFromServer(
+      serverAccount,
+      existing,
+      serverAccount.id === activeServerAccountId ? token : undefined
+    );
+    if (index >= 0) merged[index] = next;
+    else merged.push(next);
+  }
+  return merged;
+}
+
+function activeLocalAccount(
+  accounts: LocalAccount[],
+  accountId: string
+): LocalAccount | undefined {
+  return accounts.find((account) => account.id === accountId);
+}
+
 const indexedDbStorage: StateStorage = {
   getItem: async (name) => (await get<string>(name)) ?? null,
   setItem: async (name, value) => {
@@ -134,7 +198,9 @@ interface AppActions {
     username: string,
     password: string
   ) => Promise<{ ok: boolean; error?: string }>;
-  switchAccount: (accountId: string) => { ok: boolean; error?: string };
+  switchAccount: (
+    accountId: string
+  ) => Promise<{ ok: boolean; error?: string }>;
   verifyAccountPassword: (
     accountId: string,
     password: string
@@ -239,20 +305,39 @@ export const useAppStore = create<AppStore>()(
                 : "请输入老人端提供的 6 到 8 位家庭连接码"
           };
         }
+        let serverSession: AccountSessionResponse;
+        try {
+          serverSession = await registerServerAccount({
+            username: normalizedUsername,
+            password,
+            displayName: displayName.trim() || normalizedUsername,
+            role,
+            familyCode: cleanFamilyCode
+          });
+        } catch (error) {
+          return {
+            ok: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "无法连接账号服务，请稍后重试"
+          };
+        }
         const passwordRecord = await createPasswordRecord(password);
         const cleanDisplayName = displayName.trim() || normalizedUsername;
         const account: LocalAccount = {
-          id: createId("account"),
-          username: normalizedUsername,
-          displayName: cleanDisplayName,
-          role,
-          familyCode: cleanFamilyCode,
-          linkedFamilyCodes: [cleanFamilyCode],
+          ...accountFromServer(
+            serverSession.account,
+            undefined,
+            serverSession.token
+          ),
           ...passwordRecord,
-          createdAt: nowIso()
+          displayName: cleanDisplayName
         };
         const latest = getState();
-        const blankWorkspace = createBlankWorkspace(cleanFamilyCode);
+        const blankWorkspace = serverSession.snapshot
+          ? workspaceFromCloud(serverSession.snapshot)
+          : createBlankWorkspace(cleanFamilyCode);
         if (role === "elder") {
           blankWorkspace.profile = {
             ...blankWorkspace.profile,
@@ -271,7 +356,16 @@ export const useAppStore = create<AppStore>()(
         );
         setState((current) => ({
           ...workspacePatch(blankWorkspace),
-          accounts: [...current.accounts.map(normalizeAccount), account],
+          accounts: mergeServerAccounts(
+            current.accounts,
+            serverSession.accounts,
+            serverSession.account.id,
+            serverSession.token
+          ).map((item) =>
+            item.id === account.id
+              ? { ...item, ...passwordRecord, displayName: cleanDisplayName }
+              : item
+          ),
           workspaces,
           sessionAccountId: account.id,
           role,
@@ -342,51 +436,52 @@ export const useAppStore = create<AppStore>()(
             error: "这个连接码已经对应其他老人，请换一个连接码"
           };
         }
+        if (!currentAccount.sessionToken) {
+          return {
+            ok: false,
+            error: "账号会话已失效，请重新登录后再添加账号"
+          };
+        }
+        let serverResult: {
+          account: ServerAccount;
+          accounts: ServerAccount[];
+        };
+        try {
+          serverResult = await createServerLinkedAccount(
+            currentAccount.sessionToken,
+            {
+              username: normalizedUsername,
+              password,
+              displayName: displayName.trim() || normalizedUsername,
+              role,
+              familyCode: targetFamilyCode
+            }
+          );
+        } catch (error) {
+          return {
+            ok: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "账号添加失败，请稍后重试"
+          };
+        }
         const passwordRecord = await createPasswordRecord(password);
         const cleanDisplayName = displayName.trim() || normalizedUsername;
-        const originalCurrentLinks = getLinkedFamilyCodes(currentAccount);
-        const currentLinks = Array.from(
-          new Set([
-            ...originalCurrentLinks,
-            targetFamilyCode
-          ])
-        );
-        const account: LocalAccount = {
-          id: createId("account"),
-          username: normalizedUsername,
-          displayName: cleanDisplayName,
-          role,
-          familyCode: targetFamilyCode,
-          linkedFamilyCodes:
-            role === "family" ? currentLinks : [targetFamilyCode],
+        const account = {
+          ...accountFromServer(serverResult.account),
           ...passwordRecord,
-          createdAt: nowIso()
+          displayName: cleanDisplayName
         };
-        const accounts = state.accounts
-          .map(normalizeAccount)
-          .map((item) => {
-            if (item.id === currentAccount.id) {
-              return { ...item, linkedFamilyCodes: currentLinks };
-            }
-            const belongsToCurrentFamily =
-              item.role === "family" &&
-              getLinkedFamilyCodes(item).some((code) =>
-                originalCurrentLinks.includes(code)
-              );
-            if (role === "elder" && belongsToCurrentFamily) {
-              return {
-                ...item,
-                linkedFamilyCodes: Array.from(
-                  new Set([
-                    ...getLinkedFamilyCodes(item),
-                    ...currentLinks
-                  ])
-                )
-              };
-            }
-            return item;
-          })
-          .concat(account);
+        let accounts = mergeServerAccounts(
+          state.accounts,
+          serverResult.accounts,
+          currentAccount.serverAccountId || "",
+          currentAccount.sessionToken
+        );
+        if (!accounts.some((item) => item.id === account.id)) {
+          accounts = [...accounts, account];
+        }
         let workspaces = state.workspaces;
         if (role === "elder") {
           const blankWorkspace = createBlankWorkspace(targetFamilyCode);
@@ -415,57 +510,163 @@ export const useAppStore = create<AppStore>()(
       },
       loginAccount: async (username, password) => {
         const normalizedUsername = username.trim().toLowerCase();
-        const account = getState().accounts.find(
+        const state = getState();
+        const localAccount = state.accounts.find(
           (item) => item.username === normalizedUsername
         );
-        if (!account) return { ok: false, error: "账号或密码不正确" };
-        const valid = await verifyPassword(
-          password,
-          account.passwordHash,
-          account.passwordSalt
-        );
-        if (!valid) return { ok: false, error: "账号或密码不正确" };
-        const accounts = getState().accounts.map(normalizeAccount);
-        if (!accounts.find((item) => item.id === account.id)) {
-          return { ok: false, error: "账号或密码不正确" };
+        const localPasswordValid = localAccount
+          ? await verifyPassword(
+              password,
+              localAccount.passwordHash,
+              localAccount.passwordSalt
+            )
+          : false;
+        let serverSession: AccountSessionResponse | undefined;
+        let serverError = "";
+
+        try {
+          serverSession = await loginServerAccount(
+            normalizedUsername,
+            password
+          );
+        } catch (error) {
+          serverError =
+            error instanceof Error ? error.message : "无法连接账号服务";
         }
-        const current = getState();
-        const workspaces = saveActiveWorkspace(current);
+
+        if (!serverSession && localAccount && localPasswordValid) {
+          try {
+            serverSession = await registerServerAccount({
+              username: localAccount.username,
+              password,
+              displayName: localAccount.displayName,
+              role: localAccount.role,
+              familyCode: localAccount.familyCode
+            });
+          } catch {
+            // Existing local accounts remain usable while the account service is
+            // temporarily unavailable.
+          }
+        }
+
+        if (serverSession) {
+          const accounts = mergeServerAccounts(
+            state.accounts,
+            serverSession.accounts,
+            serverSession.account.id,
+            serverSession.token
+          );
+          const account = accounts.find(
+            (item) => item.serverAccountId === serverSession!.account.id
+          );
+          if (!account) return { ok: false, error: "账号数据不完整" };
+          const workspaces = saveActiveWorkspace(state);
+          const targetKey = workspaceKey(account.id, account.familyCode);
+          const existingWorkspace = workspaces[targetKey];
+          const targetWorkspace =
+            existingWorkspace ||
+            (serverSession.snapshot
+              ? workspaceFromCloud(serverSession.snapshot)
+              : createBlankWorkspace(account.familyCode));
+          setState({
+            ...workspacePatch(targetWorkspace),
+            accounts,
+            workspaces: {
+              ...workspaces,
+              [targetKey]: targetWorkspace
+            },
+            sessionAccountId: account.id,
+            role: account.role,
+            auditEvents: [
+              auditEvent(
+                "settings-updated",
+                `登录${account.role === "elder" ? "老人端" : "家属端"}账号`
+              ),
+              ...targetWorkspace.auditEvents
+            ].slice(0, 100)
+          });
+          return { ok: true };
+        }
+
+        if (localAccount && localPasswordValid) {
+          const workspaces = saveActiveWorkspace(state);
+          const targetKey = workspaceKey(
+            localAccount.id,
+            localAccount.familyCode
+          );
+          const targetWorkspace =
+            workspaces[targetKey] ??
+            createBlankWorkspace(localAccount.familyCode);
+          setState({
+            ...workspacePatch(targetWorkspace),
+            workspaces: {
+              ...workspaces,
+              [targetKey]: targetWorkspace
+            },
+            sessionAccountId: localAccount.id,
+            role: localAccount.role,
+            auditEvents: [
+              auditEvent("settings-updated", "使用本地账号登录"),
+              ...targetWorkspace.auditEvents
+            ].slice(0, 100)
+          });
+          return { ok: true };
+        }
+
+        return {
+          ok: false,
+          error: serverError || "账号或密码不正确"
+        };
+      },
+      switchAccount: async (accountId) => {
+        const state = getState();
+        const selectedAccount = state.accounts
+          .map(normalizeAccount)
+          .find((item) => item.id === accountId);
+        if (!selectedAccount) return { ok: false, error: "账号不存在" };
+        const currentAccount = activeLocalAccount(
+          state.accounts.map(normalizeAccount),
+          state.sessionAccountId || ""
+        );
+        let serverSession: AccountSessionResponse | undefined;
+        if (currentAccount?.sessionToken) {
+          try {
+            serverSession = await switchServerAccount(
+              currentAccount.sessionToken,
+              {
+                accountId: selectedAccount.serverAccountId,
+                username: selectedAccount.username
+              }
+            );
+          } catch {
+            // Local switching remains available as a temporary offline fallback.
+          }
+        }
+        let accounts = state.accounts.map(normalizeAccount);
+        let account = selectedAccount;
+        if (serverSession) {
+          accounts = mergeServerAccounts(
+            accounts,
+            serverSession.accounts,
+            serverSession.account.id,
+            serverSession.token
+          );
+          account =
+            accounts.find(
+              (item) => item.serverAccountId === serverSession!.account.id
+            ) || selectedAccount;
+        }
+        const workspaces = saveActiveWorkspace(state);
         const targetKey = workspaceKey(account.id, account.familyCode);
+        const existingWorkspace = workspaces[targetKey];
         const targetWorkspace =
-          workspaces[targetKey] ?? createBlankWorkspace(account.familyCode);
+          existingWorkspace ||
+          (serverSession?.snapshot
+            ? workspaceFromCloud(serverSession.snapshot)
+            : createBlankWorkspace(account.familyCode));
         setState({
           ...workspacePatch(targetWorkspace),
           accounts,
-          workspaces: {
-            ...workspaces,
-            [targetKey]: targetWorkspace
-          },
-          sessionAccountId: account.id,
-          role: account.role,
-          auditEvents: [
-            auditEvent(
-              "settings-updated",
-              `登录${account.role === "elder" ? "老人端" : "家属端"}账号`
-            ),
-            ...targetWorkspace.auditEvents
-          ].slice(0, 100)
-        });
-        return { ok: true };
-      },
-      switchAccount: (accountId) => {
-        const state = getState();
-        const account = state.accounts
-          .map(normalizeAccount)
-          .find((item) => item.id === accountId);
-        if (!account) return { ok: false, error: "账号不存在" };
-        const workspaces = saveActiveWorkspace(state);
-        const targetKey = workspaceKey(account.id, account.familyCode);
-        const targetWorkspace =
-          workspaces[targetKey] ?? createBlankWorkspace(account.familyCode);
-        setState({
-          ...workspacePatch(targetWorkspace),
-          accounts: state.accounts.map(normalizeAccount),
           workspaces: {
             ...workspaces,
             [targetKey]: targetWorkspace
@@ -485,15 +686,31 @@ export const useAppStore = create<AppStore>()(
         return { ok: true };
       },
       verifyAccountPassword: async (accountId, password) => {
-        const account = getState().accounts.find(
+        const state = getState();
+        const account = state.accounts.find(
           (item) => item.id === accountId
         );
         if (!account) return false;
-        return verifyPassword(
-          password,
-          account.passwordHash,
-          account.passwordSalt
+        const localValid =
+          Boolean(account.passwordHash) &&
+          (await verifyPassword(
+            password,
+            account.passwordHash,
+            account.passwordSalt
+          ));
+        if (localValid) return true;
+        const currentAccount = activeLocalAccount(
+          state.accounts,
+          state.sessionAccountId || ""
         );
+        if (!currentAccount?.sessionToken || !account.serverAccountId) {
+          return false;
+        }
+        return verifyServerAccountPassword({
+          token: currentAccount.sessionToken,
+          accountId: account.serverAccountId,
+          password
+        });
       },
       deleteLinkedAccount: async (accountId, password) => {
         const state = getState();
@@ -503,13 +720,35 @@ export const useAppStore = create<AppStore>()(
         if (!targetAccount) {
           return { ok: false, error: "找不到这个账号" };
         }
-        const valid = await verifyPassword(
-          password,
-          targetAccount.passwordHash,
-          targetAccount.passwordSalt
+        const currentAccount = activeLocalAccount(
+          state.accounts,
+          state.sessionAccountId || ""
         );
-        if (!valid) {
-          return { ok: false, error: "密码不正确，账号尚未删除" };
+        if (targetAccount.serverAccountId && currentAccount?.sessionToken) {
+          try {
+            await deleteServerAccount({
+              token: currentAccount.sessionToken,
+              accountId: targetAccount.serverAccountId,
+              password
+            });
+          } catch (error) {
+            return {
+              ok: false,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "账号删除失败，请稍后重试"
+            };
+          }
+        } else {
+          const valid = await verifyPassword(
+            password,
+            targetAccount.passwordHash,
+            targetAccount.passwordSalt
+          );
+          if (!valid) {
+            return { ok: false, error: "密码不正确，账号尚未删除" };
+          }
         }
 
         const latest = getState();
@@ -603,26 +842,31 @@ export const useAppStore = create<AppStore>()(
         });
         return { ok: true };
       },
-      logoutAccount: () =>
-        setState((state) => ({
-          workspaces: saveActiveWorkspace(state),
+      logoutAccount: () => {
+        const state = getState();
+        const account = activeLocalAccount(
+          state.accounts,
+          state.sessionAccountId || ""
+        );
+        if (account?.sessionToken) {
+          void logoutServerAccount(account.sessionToken).catch(() => undefined);
+        }
+        setState((current) => ({
+          workspaces: saveActiveWorkspace(current),
           sessionAccountId: undefined,
           auditEvents: [
             auditEvent("settings-updated", "退出当前账号，数据已保留"),
-            ...state.auditEvents
+            ...current.auditEvents
           ].slice(0, 100)
-        })),
+        }));
+      },
       verifyCurrentPassword: async (password) => {
         const state = getState();
         const account = state.accounts.find(
           (item) => item.id === state.sessionAccountId
         );
         if (!account) return false;
-        return verifyPassword(
-          password,
-          account.passwordHash,
-          account.passwordSalt
-        );
+        return state.verifyAccountPassword(account.id, password);
       },
       cancelCurrentAccount: () =>
         setState((state) => {
