@@ -29,7 +29,14 @@ import { findBestMedicine } from "../catalog/retrieval";
 import { useAppStore } from "../store/useAppStore";
 import type { IntakeDraft, Medication, RiskCheck } from "../types";
 
-type Phase = "upload" | "recognizing" | "review" | "result";
+type Phase = "upload" | "recognizing" | "unrecognized" | "review" | "result";
+
+interface AddMedicationPageProps {
+  embedded?: boolean;
+  captureOnOpen?: boolean;
+  manualOnOpen?: boolean;
+  onExit?: () => void;
+}
 
 function splitIngredients(value: string): string[] {
   return value
@@ -38,14 +45,24 @@ function splitIngredients(value: string): string[] {
     .filter(Boolean);
 }
 
-export function AddMedicationPage() {
+export function AddMedicationPage({
+  embedded = false,
+  captureOnOpen = false,
+  manualOnOpen = false,
+  onExit
+}: AddMedicationPageProps = {}) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const manualMode = searchParams.get("mode") === "manual";
-  const captureMode = searchParams.get("capture") === "1";
+  const manualMode = manualOnOpen || searchParams.get("mode") === "manual";
+  const captureMode =
+    captureOnOpen || searchParams.get("capture") === "1";
   const origin = searchParams.get("from");
   const backPath = origin === "chat" ? "/chat" : origin === "today" ? "/today" : "/medications";
   const backLabel = origin === "chat" ? "返回问药识药" : origin === "today" ? "返回今日" : "返回用药清单";
+  const exitPage = () => {
+    if (onExit) onExit();
+    else navigate(backPath);
+  };
   const existingDraft = useAppStore((state) => state.intakeDraft);
   const profile = useAppStore((state) => state.profile);
   const medications = useAppStore((state) => state.medications);
@@ -117,6 +134,8 @@ export function AddMedicationPage() {
         .then(async (response) => {
           if (!response.ok) return null;
           return (await response.json()) as {
+            isMedicine?: boolean | null;
+            rejectionReason?: string;
             candidates?: Array<{
               name?: string;
               confidence?: number;
@@ -166,6 +185,26 @@ export function AddMedicationPage() {
         catalogMatch && catalogMatch.score >= 0.58
           ? catalogMatch.medicine
           : undefined;
+      const medicalText = `${recognized.rawText} ${
+        vision?.summary || ""
+      } ${visionMedicine?.name || ""}`;
+      const hasMedicineSignal =
+        Boolean(medicine) ||
+        Boolean(visionName) ||
+        /(国药准字|说明书|处方|胶囊|片剂|颗粒|口服液|注射液|mg|毫克|g\/|ml)/i.test(
+          medicalText
+        );
+      if (vision?.isMedicine === false || !hasMedicineSignal) {
+        const unrecognized = createManualDraft(dataUrl);
+        setDraft(unrecognized);
+        saveIntakeDraft(unrecognized);
+        setError(
+          vision?.rejectionReason ||
+            "未识别到药物或与药物相关的包装、说明书。请重新拍照，或从相册选择清晰的药盒照片。"
+        );
+        setPhase("unrecognized");
+        return;
+      }
       const nextName =
         visionName ||
         (recognized.name.length >= 2 ? recognized.name : "") ||
@@ -267,21 +306,6 @@ export function AddMedicationPage() {
     }
   }
 
-  async function useDemoLabel() {
-    try {
-      const response = await fetch("/demo-label.svg");
-      const blob = await response.blob();
-      const file = new File([blob], "demo-label.svg", { type: "image/svg+xml" });
-      const dataUrl = await fileToCompressedDataUrl(file, 1800, 0.92);
-      await processImage(dataUrl);
-    } catch {
-      setError("演示药盒载入失败，可以直接手动填写。");
-      const draft = createManualDraft();
-      setDraft(draft);
-      setPhase("review");
-    }
-  }
-
   function updateField<K extends keyof IntakeDraft>(field: K, value: IntakeDraft[K]) {
     setDraft((current) => {
       if (!current) return current;
@@ -375,14 +399,16 @@ export function AddMedicationPage() {
           `${draft.name}怎么吃，和现在的药一起用要注意什么`
         )}`
       );
+    } else if (embedded) {
+      onExit?.();
     } else {
       navigate(`/medications/${medication.id}`);
     }
   }
 
   return (
-    <div className="page">
-      <button type="button" className="btn btn-ghost" onClick={() => navigate(backPath)}>
+    <div className={embedded ? "embedded-add-medication" : "page"}>
+      <button type="button" className="btn btn-ghost" onClick={exitPage}>
         <ArrowLeft size={19} aria-hidden="true" />
         {backLabel}
       </button>
@@ -394,6 +420,8 @@ export function AddMedicationPage() {
               ? "把药盒拍给我看"
               : phase === "recognizing"
                 ? "正在识别，请稍等"
+                  : phase === "unrecognized"
+                    ? "没有识别到药物"
                 : phase === "review"
                   ? "请您核对这几项"
                   : "这次安全核查结果"}
@@ -403,6 +431,8 @@ export function AddMedicationPage() {
               ? "拍药盒、说明书或处方单都可以。看不清的地方，我会请您重新确认。"
               : phase === "recognizing"
                 ? "图片已经保存在本机。识别完成后，原图和字段都会保留。"
+                  : phase === "unrecognized"
+                    ? "这张照片不是药品，或药名没有拍清楚。"
                 : phase === "review"
                   ? "低置信或空白的字段会标出来。确认前不会加入当前用药。"
                   : "系统已经对当前用药、过敏史和演示规则完成交叉核对。"}
@@ -439,10 +469,6 @@ export function AddMedicationPage() {
                   onChange={(event) => onFileChange(event.target.files?.[0])}
                 />
               </label>
-              <button type="button" className="btn btn-large" onClick={useDemoLabel}>
-                <Sparkles size={21} aria-hidden="true" />
-                使用演示药盒
-              </button>
               <button
                 type="button"
                 className="btn btn-large"
@@ -455,9 +481,6 @@ export function AddMedicationPage() {
                 手动输入药名
               </button>
             </div>
-            <span className="field-hint">
-              演示药盒会触发“华法林 + 阿司匹林”高危提示，适合完整讲解安全边界。
-            </span>
           </div>
         </section>
       ) : null}
@@ -480,6 +503,49 @@ export function AddMedicationPage() {
           {draft?.imageDataUrl ? (
             <img className="preview-image" src={draft.imageDataUrl} alt="已保存的药盒原图" />
           ) : null}
+        </section>
+      ) : null}
+
+      {phase === "unrecognized" ? (
+        <section className="card card-pad unrecognized-medication">
+          <span className="upload-icon">
+            <ShieldAlert size={34} aria-hidden="true" />
+          </span>
+          <h2>未识别到药物</h2>
+          <p>
+            {error ||
+              "请重新拍摄药盒正面、说明书或处方单，确保药名、规格和用法清晰可见。"}
+          </p>
+          <div className="header-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setCameraOpen(true)}
+            >
+              <Camera size={20} aria-hidden="true" />
+              重新拍照识别
+            </button>
+            <label className="btn upload-label">
+              <FileImage size={20} aria-hidden="true" />
+              从相册重新选择
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => onFileChange(event.target.files?.[0])}
+              />
+            </label>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                setDraft(createManualDraft());
+                setError("");
+                setPhase("review");
+              }}
+            >
+              手动输入药名
+            </button>
+          </div>
         </section>
       ) : null}
 
@@ -696,7 +762,10 @@ export function AddMedicationPage() {
       ) : null}
       <CameraCaptureModal
         open={cameraOpen}
-        onClose={() => setCameraOpen(false)}
+        onClose={() => {
+          setCameraOpen(false);
+          if (embedded && phase === "upload") onExit?.();
+        }}
         onCapture={(imageDataUrl) => {
           setCameraOpen(false);
           void processImage(imageDataUrl);

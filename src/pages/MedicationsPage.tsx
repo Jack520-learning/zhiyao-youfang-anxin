@@ -9,6 +9,8 @@ import {
   Trash2
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { AddMedicationPage } from "./AddMedicationPage";
 import { useAppStore } from "../store/useAppStore";
 
 export function MedicationsPage() {
@@ -19,6 +21,7 @@ export function MedicationsPage() {
   const deleteMedication = useAppStore((state) => state.deleteMedication);
   const updateMedication = useAppStore((state) => state.updateMedication);
   const readOnly = role === "family";
+  const [addMode, setAddMode] = useState<"photo" | "manual" | null>(null);
 
   function removeMedication(id: string, name: string) {
     if (
@@ -47,7 +50,7 @@ export function MedicationsPage() {
             <button
               className="btn btn-primary btn-large"
               type="button"
-              onClick={() => navigate("/add-medication?capture=1")}
+              onClick={() => setAddMode("photo")}
             >
               <Camera size={21} aria-hidden="true" />
               拍照加药
@@ -55,7 +58,7 @@ export function MedicationsPage() {
             <button
               className="btn btn-large"
               type="button"
-              onClick={() => navigate("/add-medication?mode=manual")}
+              onClick={() => setAddMode("manual")}
             >
               <Pill size={21} aria-hidden="true" />
               输入药名加药
@@ -64,7 +67,15 @@ export function MedicationsPage() {
         ) : null}
       </header>
 
-      {!medications.length ? (
+      {addMode ? (
+        <AddMedicationPage
+          key={addMode}
+          embedded
+          captureOnOpen={addMode === "photo"}
+          manualOnOpen={addMode === "manual"}
+          onExit={() => setAddMode(null)}
+        />
+      ) : !medications.length ? (
         <section className="card card-pad empty-medication-state">
           <span className="upload-icon">
             <Pill size={32} aria-hidden="true" />
@@ -79,7 +90,7 @@ export function MedicationsPage() {
               <button
                 className="btn btn-primary"
                 type="button"
-                onClick={() => navigate("/add-medication?capture=1")}
+                onClick={() => setAddMode("photo")}
               >
                 <Camera size={19} aria-hidden="true" />
                 拍照添加
@@ -87,7 +98,7 @@ export function MedicationsPage() {
               <button
                 className="btn"
                 type="button"
-                onClick={() => navigate("/add-medication?mode=manual")}
+                onClick={() => setAddMode("manual")}
               >
                 <Pill size={19} aria-hidden="true" />
                 输入药名添加

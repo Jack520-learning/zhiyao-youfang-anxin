@@ -2221,6 +2221,32 @@ img {
   line-height: 1.65;
 }
 
+.embedded-add-medication {
+  display: grid;
+  gap: 18px;
+}
+
+.embedded-add-medication > .page-header {
+  margin-bottom: 4px;
+}
+
+.unrecognized-medication {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  text-align: center;
+}
+
+.unrecognized-medication h2 {
+  font-size: calc(24px * var(--font-scale));
+}
+
+.unrecognized-medication p {
+  max-width: 700px;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
 .health-profile-backdrop {
   align-items: center;
 }

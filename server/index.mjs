@@ -327,7 +327,7 @@ async function callVisionIdentification(imageDataUrl, mode) {
           content: [
             {
               type: "text",
-              text: `请识别照片中的${subject}。输出 JSON：{"candidates":[{"name":"名称","confidence":0到1,"visibleFeatures":["可见特征"]}],"medicine":{"name":"包装上的完整药名","genericName":"通用名","activeIngredient":"有效成分","dosage":"包装上可见的规格和单次用量","price":"优先读取包装或价签价格；药名明确但未标价时，给出中国常见零售范围‘约¥X-Y/盒或支（市场参考）’；无法判断时写‘需以药房价格为准’","dosageForm":"剂型","strength":"规格","frequency":"包装明确写出的频次，否则留空","relation":"饭前/饭后/随餐/睡前，包装明确写出才填","instructions":"仅摘录包装可见说明"},"summary":"不超过120字的谨慎结论","cautions":["需要人工核实的点"]}。中药材形态相似时不要给单一确定结论；药品必须优先读取包装文字。价格估算必须明确写“市场参考”，不得说成实际售价；其他看不清的信息不要猜测。`
+              text: `请识别照片中的${subject}。输出 JSON：{"isMedicine":true或false,"rejectionReason":"照片不是药品、药盒、说明书或处方单时说明原因","candidates":[{"name":"名称","confidence":0到1,"visibleFeatures":["可见特征"]}],"medicine":{"name":"包装上的完整药名","genericName":"通用名","activeIngredient":"有效成分","dosage":"包装上可见的规格和单次用量","price":"优先读取包装或价签价格；药名明确但未标价时，给出中国常见零售范围‘约¥X-Y/盒或支（市场参考）’；无法判断时写‘需以药房价格为准’","dosageForm":"剂型","strength":"规格","frequency":"包装明确写出的频次，否则留空","relation":"饭前/饭后/随餐/睡前，包装明确写出才填","instructions":"仅摘录包装可见说明"},"summary":"不超过120字的谨慎结论","cautions":["需要人工核实的点"]}。只有照片确实包含药品、药盒、说明书或处方单时才将 isMedicine 设为 true；无关图片必须设为 false。中药材形态相似时不要给单一确定结论；药品必须优先读取包装文字。价格估算必须明确写“市场参考”，不得说成实际售价；其他看不清的信息不要猜测。`
             },
             {
               type: "image_url",
@@ -345,6 +345,12 @@ async function callVisionIdentification(imageDataUrl, mode) {
   const content = payload.choices?.[0]?.message?.content;
   const parsed = parseModelJson(content);
   return {
+    isMedicine:
+      typeof parsed.isMedicine === "boolean" ? parsed.isMedicine : null,
+    rejectionReason:
+      typeof parsed.rejectionReason === "string"
+        ? parsed.rejectionReason.slice(0, 160)
+        : "",
     candidates: Array.isArray(parsed.candidates)
       ? parsed.candidates
           .filter((item) => item && typeof item.name === "string")
