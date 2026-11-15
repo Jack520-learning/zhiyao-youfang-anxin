@@ -211,6 +211,7 @@ export function ChatPage() {
   );
   const [composerSkill, setComposerSkill] = useState<ComposerSkill>();
   const [answerMode, setAnswerMode] = useState<AnswerMode>("safety");
+  const [skillMenuOpen, setSkillMenuOpen] = useState(false);
   const [thinkingLabel, setThinkingLabel] = useState("正在思考并组织回答…");
   const [conversationToDelete, setConversationToDelete] = useState<{
     id: string;
@@ -787,6 +788,15 @@ export function ChatPage() {
     (left, right) =>
       new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
   );
+  const selectedSkill = composerSkills.find(
+    (skill) => skill.id === composerSkill
+  );
+  const answerModeLabel =
+    answerMode === "quick"
+      ? "快速回答"
+      : answerMode === "detailed"
+        ? "详细解释"
+        : "安全问药";
 
   function renderMessage(message: ChatMessage) {
     return (
@@ -1041,104 +1051,126 @@ export function ChatPage() {
                   }
                 }}
               />
-            {composerSkill ? (
-              <div className="ai-active-skill">
-                <span>
-                  当前技能：
-                  <strong>
-                    {composerSkills.find((item) => item.id === composerSkill)?.label}
-                  </strong>
-                </span>
+            <div className="ai-composer-actions">
+              <div className="ai-composer-leading">
+                <button
+                  className="ai-round-tool"
+                  type="button"
+                  aria-label="开始新对话"
+                  title="新对话"
+                  onClick={startNewConversation}
+                >
+                  <Plus size={21} aria-hidden="true" />
+                </button>
                 <button
                   type="button"
-                  onClick={() =>
-                    navigate(
-                      composerSkills.find((item) => item.id === composerSkill)
-                        ?.researchPath || "/chat"
-                    )
-                  }
+                  className={`ai-mic-button ${speech.listening ? "listening" : ""}`}
+                  aria-label="按住说话，松开结束"
+                  disabled={!speech.supported || speech.processing}
+                  onContextMenu={(event) => event.preventDefault()}
+                  onPointerDown={(event) => {
+                    if (event.button !== 0 || speech.listening) return;
+                    event.preventDefault();
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    speech.start();
+                  }}
+                  onPointerUp={speech.stop}
+                  onPointerCancel={speech.stop}
                 >
-                  {composerSkills.find((item) => item.id === composerSkill)
-                    ?.researchLabel || "深度研究"}
-                  <ExternalLink size={14} aria-hidden="true" />
+                  {speech.processing ? (
+                    <LoaderCircle size={20} className="spin" aria-hidden="true" />
+                  ) : (
+                    <Mic size={21} aria-hidden="true" />
+                  )}
                 </button>
               </div>
-            ) : null}
-            <div className="ai-composer-actions">
-              <div className="ai-tool-group">
-                <button className="ai-tool-button new-chat" type="button" onClick={startNewConversation}>
-                  <Plus size={21} aria-hidden="true" />
-                  <span>新对话</span>
-                </button>
-                {composerSkills.map((skill) => {
-                  const Icon = skill.icon;
-                  return (
-                    <button
-                      className={`ai-tool-button ${
-                        composerSkill === skill.id ? "active" : ""
-                      }`}
-                      type="button"
-                      aria-pressed={composerSkill === skill.id}
-                      key={skill.id}
-                      onClick={() => {
-                        if (skill.id === "photo") {
-                          setComposerSkill("photo");
-                          startCameraScan();
-                          return;
-                        }
-                        setComposerSkill((current) =>
-                          current === skill.id ? undefined : skill.id
-                        );
-                      }}
-                    >
-                      <Icon size={21} aria-hidden="true" />
-                      <span>
-                        {skill.id === "photo" && photoBusy
-                          ? photoProgress || "识药中"
-                          : skill.label}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              <span className="ai-composer-spacer" />
+
               <div className="ai-send-group">
-                <label className="ai-answer-mode">
-                  <span className="sr-only">选择回答方式</span>
-                  <select
-                    value={answerMode}
-                    onChange={(event) =>
-                      setAnswerMode(event.target.value as AnswerMode)
-                    }
-                    aria-label="选择回答方式"
+                <div className="ai-skill-picker">
+                  <button
+                    className="ai-skill-trigger"
+                    type="button"
+                    aria-expanded={skillMenuOpen}
+                    aria-haspopup="menu"
+                    onClick={() => setSkillMenuOpen((value) => !value)}
                   >
-                    <option value="safety">安全问药</option>
-                    <option value="quick">快速回答</option>
-                    <option value="detailed">详细解释</option>
-                  </select>
-                  <ChevronDown size={16} aria-hidden="true" />
-                </label>
-                <button
-                type="button"
-                className={`ai-mic-button ${speech.listening ? "listening" : ""}`}
-                aria-label="按住说话，松开结束"
-                disabled={!speech.supported || speech.processing}
-                onContextMenu={(event) => event.preventDefault()}
-                onPointerDown={(event) => {
-                  if (event.button !== 0 || speech.listening) return;
-                  event.preventDefault();
-                  event.currentTarget.setPointerCapture(event.pointerId);
-                  speech.start();
-                }}
-                onPointerUp={speech.stop}
-                onPointerCancel={speech.stop}
-              >
-                {speech.processing ? (
-                  <LoaderCircle size={21} className="spin" aria-hidden="true" />
-                ) : (
-                  <Mic size={23} aria-hidden="true" />
-                )}
-                </button>
+                    <span>
+                      <strong>{selectedSkill?.label || "智能问药"}</strong>
+                      <small>{answerModeLabel}</small>
+                    </span>
+                    <ChevronDown size={17} aria-hidden="true" />
+                  </button>
+                  {skillMenuOpen ? (
+                    <div className="ai-skill-menu" role="menu">
+                      <p>技能</p>
+                      <button
+                        type="button"
+                        className={!composerSkill ? "active" : ""}
+                        onClick={() => {
+                          setComposerSkill(undefined);
+                          setSkillMenuOpen(false);
+                        }}
+                      >
+                        <Sparkles size={18} aria-hidden="true" />
+                        智能问药
+                      </button>
+                      {composerSkills.map((skill) => {
+                        const Icon = skill.icon;
+                        return (
+                          <button
+                            type="button"
+                            className={
+                              composerSkill === skill.id ? "active" : ""
+                            }
+                            key={skill.id}
+                            onClick={() => {
+                              setComposerSkill(skill.id);
+                              setSkillMenuOpen(false);
+                              if (skill.id === "photo") startCameraScan();
+                            }}
+                          >
+                            <Icon size={18} aria-hidden="true" />
+                            {skill.label}
+                          </button>
+                        );
+                      })}
+                      <span className="ai-skill-divider" />
+                      <p>回答方式</p>
+                      {(
+                        [
+                          ["safety", "安全问药"],
+                          ["quick", "快速回答"],
+                          ["detailed", "详细解释"]
+                        ] as Array<[AnswerMode, string]>
+                      ).map(([value, label]) => (
+                        <button
+                          type="button"
+                          className={answerMode === value ? "active" : ""}
+                          key={value}
+                          onClick={() => {
+                            setAnswerMode(value);
+                            setSkillMenuOpen(false);
+                          }}
+                        >
+                          <MessageCircleHeart size={18} aria-hidden="true" />
+                          {label}
+                        </button>
+                      ))}
+                      <span className="ai-skill-divider" />
+                      <button
+                        type="button"
+                        className="research"
+                        onClick={() => {
+                          setSkillMenuOpen(false);
+                          navigate(selectedSkill?.researchPath || "/catalog");
+                        }}
+                      >
+                        <ExternalLink size={18} aria-hidden="true" />
+                        {selectedSkill?.researchLabel || "深入研究药品"}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
                 {speech.listening ? (
                   <button
                     className="ai-send-button stop"

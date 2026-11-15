@@ -3729,36 +3729,115 @@ img {
   color: var(--ink);
 }
 
-.ai-answer-mode {
-  position: relative;
-  display: inline-flex;
+.ai-composer-leading {
+  display: flex;
   align-items: center;
-  color: var(--muted);
+  gap: 7px;
 }
 
-.ai-answer-mode select {
+.ai-round-tool {
+  display: grid;
+  width: 42px;
   height: 42px;
-  max-width: 124px;
-  appearance: none;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink);
+}
+
+.ai-round-tool:hover {
+  background: var(--surface-soft);
+}
+
+.ai-skill-picker {
+  position: relative;
+}
+
+.ai-skill-trigger {
+  display: flex;
+  min-width: 142px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 0 28px 0 10px;
+  border-radius: 13px;
+  padding: 5px 10px 5px 12px;
   background: var(--surface);
+  color: var(--muted);
+  text-align: left;
+}
+
+.ai-skill-trigger span,
+.ai-skill-trigger strong,
+.ai-skill-trigger small {
+  display: block;
+}
+
+.ai-skill-trigger strong {
   color: var(--ink);
   font-size: calc(12px * var(--font-scale));
-  font-weight: 650;
-  outline: 0;
 }
 
-.ai-answer-mode select:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(15, 107, 85, 0.1);
+.ai-skill-trigger small {
+  margin-top: 1px;
+  font-size: calc(10px * var(--font-scale));
 }
 
-.ai-answer-mode svg {
+.ai-skill-menu {
   position: absolute;
-  right: 8px;
-  pointer-events: none;
+  z-index: 90;
+  right: 0;
+  bottom: calc(100% + 10px);
+  display: grid;
+  width: 260px;
+  max-height: min(520px, 65dvh);
+  overflow-y: auto;
+  gap: 3px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 10px;
+  background: var(--surface);
+  box-shadow: 0 20px 54px rgba(20, 44, 36, 0.2);
+}
+
+.ai-skill-menu p {
+  padding: 7px 9px 3px;
+  color: var(--muted);
+  font-size: calc(11px * var(--font-scale));
+  font-weight: 750;
+}
+
+.ai-skill-menu button {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 9px;
+  border: 0;
+  border-radius: 10px;
+  padding: 7px 9px;
+  background: transparent;
+  color: var(--ink);
+  font-size: calc(13px * var(--font-scale));
+  text-align: left;
+}
+
+.ai-skill-menu button:hover,
+.ai-skill-menu button.active {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.ai-skill-menu button.research {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.ai-skill-divider {
+  height: 1px;
+  margin: 5px 2px;
+  background: var(--line);
 }
 
 .ai-mic-button {
@@ -3941,15 +4020,22 @@ img {
     gap: 5px;
   }
 
-  .ai-answer-mode select {
-    max-width: 88px;
-    padding-left: 7px;
-    padding-right: 24px;
+  .ai-skill-trigger {
+    min-width: 112px;
+    gap: 5px;
+    padding: 5px 7px;
+  }
+
+  .ai-skill-trigger strong {
     font-size: calc(10px * var(--font-scale));
   }
 
-  .ai-answer-mode svg {
-    right: 6px;
+  .ai-skill-trigger small {
+    font-size: calc(9px * var(--font-scale));
+  }
+
+  .ai-skill-menu {
+    width: min(280px, calc(100vw - 28px));
   }
 
   .ai-mic-button,
