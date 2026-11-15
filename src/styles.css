@@ -3654,6 +3654,94 @@ img {
   padding: 8px 24px;
 }
 
+.chat-messages .message.assistant .message-bubble {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  padding: 8px 0 12px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.chat-messages .message.user .message-bubble {
+  margin-left: auto;
+  border: 0;
+  border-radius: 18px;
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.answer-search-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 2px;
+  color: var(--muted);
+  font-size: calc(12px * var(--font-scale));
+}
+
+.assistant-markdown {
+  color: var(--ink);
+  font-size: calc(16px * var(--font-scale));
+  line-height: 1.85;
+}
+
+.assistant-markdown p {
+  margin: 0 0 12px;
+  white-space: pre-wrap;
+}
+
+.assistant-markdown h4 {
+  margin: 18px 0 8px;
+  font-size: calc(18px * var(--font-scale));
+  line-height: 1.45;
+}
+
+.assistant-markdown ol,
+.assistant-markdown ul {
+  display: grid;
+  gap: 7px;
+  margin: 8px 0 14px;
+  padding-left: 24px;
+}
+
+.assistant-markdown code {
+  border-radius: 6px;
+  padding: 2px 6px;
+  background: var(--surface-soft);
+  color: var(--primary);
+  font-size: 0.92em;
+}
+
+.assistant-markdown blockquote {
+  margin: 12px 0;
+  border-left: 4px solid var(--amber);
+  border-radius: 0 10px 10px 0;
+  padding: 10px 14px;
+  background: var(--amber-soft);
+  color: var(--ink);
+}
+
+.answer-followups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.answer-followups button {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 0 13px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: calc(13px * var(--font-scale));
+}
+
 .ai-composer-wrap {
   flex: 0 0 auto;
   padding: 0;
@@ -3782,9 +3870,9 @@ img {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
-  margin-top: 4px;
-  border-top: 1px solid var(--line);
-  padding-top: 8px;
+  margin-top: 0;
+  border-top: 0;
+  padding-top: 0;
 }
 
 .ai-active-skill {

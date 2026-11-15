@@ -1,6 +1,7 @@
 import {
   BookOpenText,
   Camera,
+  ChevronRight,
   CheckCircle2,
   ChevronDown,
   CircleHelp,
@@ -15,13 +16,14 @@ import {
   PanelLeftOpen,
   Plus,
   Send,
+  Search,
   ShieldCheck,
   Sparkles,
   Square,
   Trash2,
   Volume2
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { RiskBadge } from "../components/RiskBadge";
 import { SourcesBlock } from "../components/SourcesBlock";
@@ -169,6 +171,101 @@ function herbSkillAnswer(
 
 function wait(milliseconds: number) {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+function renderInlineMarkdown(text: string): ReactNode[] {
+  return text
+    .split(/(\*\*[^*]+\*\*|`[^`]+`)/g)
+    .filter(Boolean)
+    .map((part, index) => {
+      if (part.startsWith("**") && part.endsWith("**")) {
+        return <strong key={index}>{part.slice(2, -2)}</strong>;
+      }
+      if (part.startsWith("`") && part.endsWith("`")) {
+        return <code key={index}>{part.slice(1, -1)}</code>;
+      }
+      return <span key={index}>{part}</span>;
+    });
+}
+
+function AssistantMarkdown({ content }: { content: string }) {
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const blocks: ReactNode[] = [];
+  let listItems: string[] = [];
+  let listType: "ul" | "ol" | null = null;
+  let paragraph: string[] = [];
+
+  const flushParagraph = () => {
+    if (!paragraph.length) return;
+    blocks.push(
+      <p key={`p-${blocks.length}`}>
+        {renderInlineMarkdown(paragraph.join("\n"))}
+      </p>
+    );
+    paragraph = [];
+  };
+  const flushList = () => {
+    if (!listItems.length || !listType) return;
+    const List = listType;
+    blocks.push(
+      <List key={`list-${blocks.length}`}>
+        {listItems.map((item, index) => (
+          <li key={index}>{renderInlineMarkdown(item)}</li>
+        ))}
+      </List>
+    );
+    listItems = [];
+    listType = null;
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+    const trimmed = line.trim();
+    const ordered = trimmed.match(/^\d+\.\s+(.+)$/);
+    const bullet = trimmed.match(/^[-*]\s+(.+)$/);
+    const heading = trimmed.match(/^#{1,4}\s+(.+)$/);
+    const bracketHeading = trimmed.match(/^【(.+)】$/);
+    const quote = trimmed.match(/^>\s?(.+)$/);
+
+    if (!trimmed) {
+      flushParagraph();
+      flushList();
+      continue;
+    }
+    if (heading || bracketHeading) {
+      flushParagraph();
+      flushList();
+      blocks.push(
+        <h4 key={`h-${blocks.length}`}>
+          {renderInlineMarkdown(heading?.[1] || bracketHeading?.[1] || "")}
+        </h4>
+      );
+      continue;
+    }
+    if (quote) {
+      flushParagraph();
+      flushList();
+      blocks.push(
+        <blockquote key={`quote-${blocks.length}`}>
+          {renderInlineMarkdown(quote[1])}
+        </blockquote>
+      );
+      continue;
+    }
+    if (ordered || bullet) {
+      flushParagraph();
+      const nextType = ordered ? "ol" : "ul";
+      if (listType && listType !== nextType) flushList();
+      listType = nextType;
+      listItems.push((ordered?.[1] || bullet?.[1] || "").trim());
+      continue;
+    }
+    flushList();
+    paragraph.push(trimmed);
+  }
+  flushParagraph();
+  flushList();
+  return <div className="assistant-markdown">{blocks}</div>;
 }
 
 export function ChatPage() {
@@ -803,7 +900,21 @@ export function ChatPage() {
         <div className="message-role">
           {message.role === "assistant" ? "智药有方" : "您"}
         </div>
-        <div className="message-bubble">{message.content}</div>
+        {message.role === "assistant" && message.riskCheck ? (
+          <div className="answer-search-meta">
+            <Search size={15} aria-hidden="true" />
+            核对 {message.riskCheck.medicationSnapshot.length} 种药物，参考{" "}
+            {Math.max(1, message.riskCheck.sourceIds.length)} 份资料
+            <ChevronRight size={14} aria-hidden="true" />
+          </div>
+        ) : null}
+        <div className="message-bubble">
+          {message.role === "assistant" ? (
+            <AssistantMarkdown content={message.content} />
+          ) : (
+            message.content
+          )}
+        </div>
         {message.imageDataUrls?.length ? (
           <div className="message-image-grid">
             {message.imageDataUrls.map((image, index) => (
@@ -822,6 +933,24 @@ export function ChatPage() {
             voiceMode={preferences.voiceMode}
             customVoiceId={preferences.customVoiceId}
           />
+        ) : null}
+        {message.role === "assistant" && message.riskCheck ? (
+          <div className="answer-followups">
+            <button
+              type="button"
+              onClick={() => void submitQuestion("请继续说明这个药怎么吃，以及有哪些注意事项")}
+            >
+              继续问怎么吃
+              <ChevronRight size={15} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => void submitQuestion("请核对我现在吃的药有没有重复成分或相互作用")}
+            >
+              核对我现在的药
+              <ChevronRight size={15} aria-hidden="true" />
+            </button>
+          </div>
         ) : null}
       </article>
     );
