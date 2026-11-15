@@ -179,6 +179,9 @@ export function ImpactPage() {
           <button className="btn btn-primary" type="button" onClick={() => navigate("/chat")}>
             进入 AI 问药
           </button>
+          <button className="btn" type="button" onClick={() => navigate("/evaluation")}>
+            打开质量评估
+          </button>
           <button className="btn" type="button" onClick={() => navigate("/family")}>
             查看家庭协同
           </button>

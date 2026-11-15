@@ -4048,6 +4048,112 @@ img {
   font-weight: 700;
 }
 
+.evaluation-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 13px;
+  margin-bottom: 16px;
+}
+
+.evaluation-scenarios,
+.evaluation-review,
+.evaluation-method {
+  margin-top: 16px;
+}
+
+.evaluation-table-wrap {
+  overflow-x: auto;
+}
+
+.evaluation-table {
+  width: 100%;
+  min-width: 680px;
+  border-collapse: collapse;
+}
+
+.evaluation-table th,
+.evaluation-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 11px 10px;
+  color: var(--muted);
+  font-size: calc(13px * var(--font-scale));
+  text-align: left;
+  vertical-align: top;
+}
+
+.evaluation-table th {
+  color: var(--ink);
+  font-weight: 750;
+}
+
+.evaluation-table td strong,
+.evaluation-table td small {
+  display: block;
+}
+
+.evaluation-table td strong {
+  color: var(--ink);
+}
+
+.evaluation-table td small {
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+.evaluation-result {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: calc(11px * var(--font-scale));
+  font-weight: 750;
+}
+
+.evaluation-result.pass {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.evaluation-result.fail {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.evaluation-review-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.evaluation-review-grid article {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  background: var(--surface-soft);
+}
+
+.evaluation-review-grid span {
+  color: var(--primary);
+  font-size: calc(11px * var(--font-scale));
+  font-weight: 750;
+}
+
+.evaluation-review-grid strong {
+  color: var(--ink);
+  font-size: calc(14px * var(--font-scale));
+}
+
+.evaluation-review-grid small {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.evaluation-review-grid b {
+  color: var(--amber);
+  font-size: calc(11px * var(--font-scale));
+}
+
 .catalog-search {
   margin-bottom: 16px;
 }
@@ -4426,6 +4532,14 @@ img {
 
   .impact-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .evaluation-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .evaluation-review-grid {
+    grid-template-columns: 1fr;
   }
 
   .impact-value-list,

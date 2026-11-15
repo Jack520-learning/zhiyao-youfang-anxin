@@ -25,6 +25,11 @@ const EmergencyCardPage = lazy(() =>
     default: module.EmergencyCardPage
   }))
 );
+const EvaluationPage = lazy(() =>
+  import("./pages/EvaluationPage").then((module) => ({
+    default: module.EvaluationPage
+  }))
+);
 const FamilyPage = lazy(() =>
   import("./pages/FamilyPage").then((module) => ({
     default: module.FamilyPage
@@ -115,6 +120,7 @@ export default function App() {
         <Route path="herbs/:id" element={loadRoute(<HerbDetailPage />)} />
         <Route path="multi-drug" element={loadRoute(<MultiDrugPage />)} />
         <Route path="impact" element={loadRoute(<ImpactPage />)} />
+        <Route path="evaluation" element={loadRoute(<EvaluationPage />)} />
         <Route path="medications" element={loadRoute(<MedicationsPage />)} />
         <Route
           path="medications/:id"

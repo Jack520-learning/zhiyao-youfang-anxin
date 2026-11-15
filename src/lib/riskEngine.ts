@@ -41,6 +41,25 @@ function medicationText(medication: Medication): string {
   );
 }
 
+const allergyGroups = [
+  ["青霉素", "阿莫西林", "氨苄西林", "哌拉西林", "青霉素v"],
+  ["头孢", "头孢氨苄", "头孢克肟", "头孢呋辛", "头孢地尼"],
+  ["磺胺", "磺胺甲噁唑", "复方磺胺甲噁唑"],
+  ["阿司匹林", "乙酰水杨酸"]
+];
+
+function allergyMatchesText(allergy: string, text: string): boolean {
+  const normalizedAllergy = normalize(allergy);
+  if (!normalizedAllergy) return false;
+  if (text.includes(normalizedAllergy)) return true;
+  const group = allergyGroups.find((terms) =>
+    terms.some((term) => normalizedAllergy.includes(normalize(term)))
+  );
+  return Boolean(
+    group?.some((term) => text.includes(normalize(term)))
+  );
+}
+
 export function findSource(sourceId: string): KnowledgeSource | undefined {
   return knowledge.sources.find((source) => source.id === sourceId);
 }
@@ -117,7 +136,7 @@ export function checkNewMedication(
   }
 
   const allergy = profile.allergies.find((item) =>
-    medicationText(candidate).includes(normalize(item))
+    allergyMatchesText(item, medicationText(candidate))
   );
   if (allergy) {
     return makeCheck(
