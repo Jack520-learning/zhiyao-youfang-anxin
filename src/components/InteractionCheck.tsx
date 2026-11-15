@@ -75,7 +75,7 @@ export function InteractionCheck({
           </div>
         ) : (
           <div className="notice" style={{ marginTop: 14 }}>
-            当前演示知识库未命中已知相互作用。这不代表绝对安全，未收录药物、中药和保健品仍需让医生或药师核对。
+            当前知识库未命中已知相互作用。这不代表绝对安全，未收录药物、中药和保健品仍需让医生或药师核对。
           </div>
         )
       ) : null}

@@ -23,7 +23,7 @@ function answerHerbQuestion(herbName: string, question: string, hasHighRiskMedic
     return `结论：不能仅凭“${herbName}”名称给您推荐自行用量。\n\n原因：中药用量需要结合品种、炮制方法、年龄、体重、肝肾功能、疾病和正在服用的药物。\n\n下一步：请让中医师或药师根据具体情况开具和核对，不要按短视频或网传配方自行加量。`;
   }
   if (/一起吃|同服|相互作用|西药|能不能配/.test(normalized)) {
-    return `结论：${hasHighRiskMedication ? "您当前使用了需要重点关注出血或慢病风险的处方药，不能自行把中药叠加进去。" : "当前演示知识库不足以判断这组中西药组合是否安全。"}\n\n原因：药材成分复杂，保健品、饮片和中成药的规格也可能不同。\n\n下一步：把药材实物、包装和全部西药清单交给医生或药师核对；如出现出血、严重头晕或呼吸困难，立即就医。`;
+    return `结论：${hasHighRiskMedication ? "您当前使用了需要重点关注出血或慢病风险的处方药，不能自行把中药叠加进去。" : "当前知识库不足以判断这组中西药组合是否安全。"}\n\n原因：药材成分复杂，保健品、饮片和中成药的规格也可能不同。\n\n下一步：把药材实物、包装和全部西药清单交给医生或药师核对；如出现出血、严重头晕或呼吸困难，立即就医。`;
   }
   return `结论：请先阅读这款药材页面中的传统功用、安全提醒和辨识要点。\n\n下一步：不要用单一症状自行确定体质，也不要把它替代处方药。需要个体化建议时，请让中医师或药师查看实物。`;
 }
@@ -104,7 +104,7 @@ export function HerbDetailPage() {
       </button>
       <header className="page-header">
         <div>
-          <p className="eyebrow">中草药百科 · 演示资料</p>
+          <p className="eyebrow">中草药百科 · 整理资料</p>
           <h1 className="page-title">{herb.name}</h1>
           <p className="page-description">
             {herb.nature} · {herb.flavor} · 归{herb.meridians.join("、")}经

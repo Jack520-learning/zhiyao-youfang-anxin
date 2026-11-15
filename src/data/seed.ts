@@ -32,7 +32,7 @@ export function createInitialState(options?: {
   const auditEvent: AuditEvent = {
     id: createId("audit"),
     type: "settings-updated",
-    summary: "载入安全用药演示档案",
+    summary: "载入安全用药档案",
     createdAt
   };
 

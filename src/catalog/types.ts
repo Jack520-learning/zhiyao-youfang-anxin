@@ -63,7 +63,7 @@ export type IdentificationResult = {
   confidence: number;
   evidenceText: string;
   labelSummary?: VisibleInstructionSummary | null;
-  mode: "live" | "demo";
+  mode: "live" | "local";
   message: string;
   errorCode?: IdentificationErrorCode;
 };
@@ -97,7 +97,7 @@ export type Guidance = {
   personalWarnings: string[];
   redFlags: string[];
   sourceLabels: string[];
-  mode: "live" | "demo";
+  mode: "live" | "local";
 };
 
 export type AdviseRequest = {

@@ -72,7 +72,7 @@ async function getVapidKeys() {
 
 const vapid = await getVapidKeys();
 webpush.setVapidDetails(
-  `mailto:${process.env.VAPID_CONTACT || "demo@example.com"}`,
+  `mailto:${process.env.VAPID_CONTACT || "admin@localhost"}`,
   vapid.publicKey,
   vapid.privateKey
 );
@@ -320,14 +320,14 @@ async function callVisionIdentification(imageDataUrl, mode) {
         {
           role: "system",
           content:
-            "你是谨慎的图文识别器。只根据照片中可见的形态或文字提出候选名称，不诊断、不推荐剂量、不提供处方。看不清时降低置信度并明确说明。必须输出 JSON。"
+            "你是谨慎的图文识别器。只根据照片中可见的形态或文字识别每一个独立对象，不诊断、不推荐剂量、不提供处方。一张照片有多盒或多瓶不同药物时，必须逐项输出，不能合并，也不能只返回最清楚的一种。看不清时降低置信度并明确说明。必须输出 JSON。"
         },
         {
           role: "user",
           content: [
             {
               type: "text",
-              text: `请识别照片中的${subject}。输出 JSON：{"isMedicine":true或false,"rejectionReason":"照片不是药品、药盒、说明书或处方单时说明原因","candidates":[{"name":"名称","confidence":0到1,"visibleFeatures":["可见特征"]}],"medicine":{"name":"包装上的完整药名","genericName":"通用名","activeIngredient":"有效成分","dosage":"包装上可见的规格和单次用量","price":"优先读取包装或价签价格；药名明确但未标价时，给出中国常见零售范围‘约¥X-Y/盒或支（市场参考）’；无法判断时写‘需以药房价格为准’","dosageForm":"剂型","strength":"规格","frequency":"包装明确写出的频次，否则留空","relation":"饭前/饭后/随餐/睡前，包装明确写出才填","instructions":"仅摘录包装可见说明"},"summary":"不超过120字的谨慎结论","cautions":["需要人工核实的点"]}。只有照片确实包含药品、药盒、说明书或处方单时才将 isMedicine 设为 true；无关图片必须设为 false。中药材形态相似时不要给单一确定结论；药品必须优先读取包装文字。价格估算必须明确写“市场参考”，不得说成实际售价；其他看不清的信息不要猜测。`
+              text: `请逐项识别照片中的所有${subject}，不同包装、不同颜色或不同药名分别作为独立条目。输出 JSON：{"isMedicine":true或false,"rejectionReason":"照片不是药品、药盒、说明书或处方单时说明原因","candidates":[{"name":"名称","confidence":0到1,"visibleFeatures":["可见特征"]}],"medicines":[{"position":"例如：上/中/下或左/右","name":"包装上的完整药名","genericName":"通用名","activeIngredient":"有效成分","dosage":"包装上可见的规格和单次用量","price":"优先读取包装或价签价格；药名明确但未标价时，给出中国常见零售范围‘约¥X-Y/盒或支（市场参考）’；无法判断时写‘需以药房价格为准’","dosageForm":"剂型","strength":"规格","frequency":"包装明确写出的频次，否则留空","relation":"饭前/饭后/随餐/睡前，包装明确写出才填","instructions":"仅摘录该药品包装可见说明","confidence":0到1,"visibleFeatures":["用于区分该药品的可见特征"]}],"summary":"不超过120字的谨慎结论","cautions":["需要人工核实的点"]}。medicines 必须包含所有可辨识的不同对象，通常为1到10项；不要只填第一种。相同药品重复出现只输出一次。中药材形态相似时不要给单一确定结论；药品必须优先读取每个包装的文字。价格估算必须明确写“市场参考”，不得说成实际售价；其他看不清的信息不要猜测。`
             },
             {
               type: "image_url",
@@ -344,6 +344,52 @@ async function callVisionIdentification(imageDataUrl, mode) {
   const payload = await response.json();
   const content = payload.choices?.[0]?.message?.content;
   const parsed = parseModelJson(content);
+  const parsedMedicines = Array.isArray(parsed.medicines)
+    ? parsed.medicines
+    : parsed.medicine && typeof parsed.medicine === "object"
+      ? [parsed.medicine]
+      : [];
+  const medicines = parsedMedicines
+    .filter((item) => item && typeof item.name === "string" && item.name.trim())
+    .slice(0, 10)
+    .map((item) => ({
+      position: String(item.position || "").slice(0, 30),
+      name: String(item.name || "").slice(0, 50),
+      genericName: String(item.genericName || "").slice(0, 50),
+      activeIngredient: String(item.activeIngredient || "").slice(0, 80),
+      dosage: String(item.dosage || "").slice(0, 80),
+      price: String(item.price || "").slice(0, 40),
+      dosageForm: String(item.dosageForm || "").slice(0, 40),
+      strength: String(item.strength || "").slice(0, 80),
+      frequency: String(item.frequency || "").slice(0, 40),
+      relation: String(item.relation || "").slice(0, 30),
+      instructions: String(item.instructions || "").slice(0, 500),
+      confidence:
+        typeof item.confidence === "number"
+          ? Math.max(0, Math.min(1, item.confidence))
+          : 0,
+      visibleFeatures: Array.isArray(item.visibleFeatures)
+        ? item.visibleFeatures
+            .filter((value) => typeof value === "string")
+            .slice(0, 6)
+        : []
+    }));
+  const candidateMap = new Map();
+  for (const candidate of Array.isArray(parsed.candidates)
+    ? parsed.candidates
+    : []) {
+    if (!candidate || typeof candidate.name !== "string") continue;
+    candidateMap.set(candidate.name.slice(0, 40), candidate);
+  }
+  for (const medicine of medicines) {
+    if (!candidateMap.has(medicine.name)) {
+      candidateMap.set(medicine.name, {
+        name: medicine.name,
+        confidence: medicine.confidence,
+        visibleFeatures: medicine.visibleFeatures
+      });
+    }
+  }
   return {
     isMedicine:
       typeof parsed.isMedicine === "boolean" ? parsed.isMedicine : null,
@@ -351,48 +397,28 @@ async function callVisionIdentification(imageDataUrl, mode) {
       typeof parsed.rejectionReason === "string"
         ? parsed.rejectionReason.slice(0, 160)
         : "",
-    candidates: Array.isArray(parsed.candidates)
-      ? parsed.candidates
-          .filter((item) => item && typeof item.name === "string")
-          .slice(0, 5)
-          .map((item) => ({
-            name: item.name.slice(0, 40),
-            confidence:
-              typeof item.confidence === "number"
-                ? Math.max(0, Math.min(1, item.confidence))
-                : 0,
-            visibleFeatures: Array.isArray(item.visibleFeatures)
-              ? item.visibleFeatures
-                  .filter((value) => typeof value === "string")
-                  .slice(0, 5)
-              : []
-          }))
-      : [],
+    candidates: Array.from(candidateMap.values())
+      .filter((item) => item && typeof item.name === "string")
+      .slice(0, 10)
+      .map((item) => ({
+        name: item.name.slice(0, 40),
+        confidence:
+          typeof item.confidence === "number"
+            ? Math.max(0, Math.min(1, item.confidence))
+            : 0,
+        visibleFeatures: Array.isArray(item.visibleFeatures)
+          ? item.visibleFeatures
+              .filter((value) => typeof value === "string")
+              .slice(0, 5)
+          : []
+      })),
     summary:
       typeof parsed.summary === "string" ? parsed.summary.slice(0, 300) : "",
     cautions: Array.isArray(parsed.cautions)
       ? parsed.cautions.filter((value) => typeof value === "string").slice(0, 5)
       : [],
-    medicine:
-      parsed.medicine && typeof parsed.medicine === "object"
-        ? {
-            name: String(parsed.medicine.name || "").slice(0, 50),
-            genericName: String(parsed.medicine.genericName || "").slice(0, 50),
-            activeIngredient: String(
-              parsed.medicine.activeIngredient || ""
-            ).slice(0, 80),
-            dosage: String(parsed.medicine.dosage || "").slice(0, 80),
-            price: String(parsed.medicine.price || "").slice(0, 40),
-            dosageForm: String(parsed.medicine.dosageForm || "").slice(0, 40),
-            strength: String(parsed.medicine.strength || "").slice(0, 80),
-            frequency: String(parsed.medicine.frequency || "").slice(0, 40),
-            relation: String(parsed.medicine.relation || "").slice(0, 30),
-            instructions: String(parsed.medicine.instructions || "").slice(
-              0,
-              500
-            )
-          }
-        : undefined,
+    medicines,
+    medicine: medicines[0],
     mode: "live"
   };
 }
@@ -1106,7 +1132,7 @@ const server = createServer(async (request, response) => {
       if (!hasAiKey()) {
         return json(response, 503, {
           error:
-            "AI 识图服务尚未配置。可以按名称搜索中药材，或使用页面中的示例。"
+            "AI 识图服务尚未配置。可以改用名称搜索或手动录入。"
         });
       }
       const result = await callVisionIdentification(

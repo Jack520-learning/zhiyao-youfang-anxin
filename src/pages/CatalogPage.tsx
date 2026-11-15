@@ -36,7 +36,7 @@ export function CatalogPage() {
         </div>
         <span className="chip">
           <BookOpenText size={15} aria-hidden="true" />
-          {medicines.length} 种演示药品
+          {medicines.length} 种常用药品
         </span>
       </header>
 
@@ -74,7 +74,7 @@ export function CatalogPage() {
           >
             <span className="catalog-card-top">
               <span className="catalog-category">{medicine.category}</span>
-              <span className="demo-status">待专业复核</span>
+              <span className="review-status">待专业复核</span>
             </span>
             <strong>{medicine.displayName}</strong>
             <span>{medicine.activeIngredient} · {medicine.dosageForm}</span>
@@ -90,7 +90,7 @@ export function CatalogPage() {
 
       <div className="notice" style={{ marginTop: 16 }}>
         <ShieldCheck size={20} aria-hidden="true" />
-        当前药品资料来自竞赛演示整理，尚未完成药师逐条复核。实际使用以手中批准说明书、处方和医生意见为准。
+        当前药品资料整理自公开说明书常见表述，尚未完成药师逐条复核。实际使用以手中批准说明书、处方和医生意见为准。
       </div>
     </div>
   );

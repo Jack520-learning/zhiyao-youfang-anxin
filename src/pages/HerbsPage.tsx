@@ -45,7 +45,7 @@ export function HerbsPage() {
       if (!response.ok) {
         throw new Error(
           payload.error ||
-            "AI 识图服务暂未配置，请使用药材名称搜索或示例药材。"
+            "AI 识图服务暂未配置，请使用药材名称搜索或手动输入。"
         );
       }
       const names = (payload.candidates || [])
@@ -109,7 +109,7 @@ export function HerbsPage() {
         </div>
         <span className="chip">
           <Leaf size={15} aria-hidden="true" />
-          {herbs.length} 种演示药材
+          {herbs.length} 种常用药材
         </span>
       </header>
 
@@ -129,7 +129,7 @@ export function HerbsPage() {
             {busy ? "AI 正在辨识" : "拍照识别药材"}
           </button>
           <span className="field-hint">
-            拍照识别依赖 AI 视觉服务；未配置时会保留搜索和示例药材流程。
+            拍照识别支持一张照片中的多种药材；服务暂不可用时可继续按名称搜索。
           </span>
         </div>
 
@@ -194,7 +194,7 @@ export function HerbsPage() {
       </div>
 
       {!visible.length ? (
-        <div className="notice warm">暂未找到这份演示药材资料，请不要仅凭照片自行服用。</div>
+        <div className="notice warm">暂未找到这份药材资料，请不要仅凭照片自行服用。</div>
       ) : null}
 
       <div className="notice" style={{ marginTop: 16 }}>

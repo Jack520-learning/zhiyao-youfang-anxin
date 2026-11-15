@@ -42,6 +42,10 @@ import {
 import { findBestMedicine } from "../catalog/retrieval";
 import { buildLocalGuidance } from "../catalog/guidance";
 import { searchHerbs } from "../catalog/herbs";
+import {
+  buildDraftsFromVision,
+  type VisionIdentification
+} from "../lib/vision";
 import { preloadSpeech, speakText, stopSpeaking } from "../lib/speech";
 import { useQwenSpeechRecognition } from "../lib/qwenSpeech";
 import { nowIso } from "../lib/time";
@@ -596,15 +600,7 @@ export function ChatPage() {
       })
         .then(async (response) => {
           if (!response.ok) return null;
-          return (await response.json()) as {
-            candidates?: Array<{
-              name: string;
-              confidence?: number;
-              visibleFeatures?: string[];
-            }>;
-            summary?: string;
-            cautions?: string[];
-          };
+          return (await response.json()) as VisionIdentification;
         })
         .catch(() => null);
       try {
@@ -615,190 +611,235 @@ export function ChatPage() {
         draft = createManualDraft(imageDataUrl);
       }
       const vision = await visionPromise;
-      const visionName = vision?.candidates?.[0]?.name?.trim();
-      if (
-        visionName &&
-        (!draft.name ||
-          draft.name.length < 3 ||
-          draft.lowConfidenceFields.includes("name"))
-      ) {
-        draft = {
-          ...draft,
-          name: visionName,
-          confidence: Math.max(
-            draft.confidence,
-            Math.min(0.9, vision?.candidates?.[0]?.confidence ?? 0.6)
-          ),
-          lowConfidenceFields: draft.lowConfidenceFields.filter(
-            (field) => field !== "name"
-          )
-        };
-      }
-      const bestCatalogMatch = draft.name ? findBestMedicine(draft.name) : null;
-      const catalogMatch =
-        bestCatalogMatch && bestCatalogMatch.score >= 0.6
-          ? bestCatalogMatch.medicine
-          : undefined;
-      if (catalogMatch) {
-        draft = {
-          ...draft,
-          name: draft.name || catalogMatch.displayName,
-          genericName: draft.genericName || catalogMatch.activeIngredient,
-          ingredientsText:
-            draft.ingredientsText || catalogMatch.activeIngredient,
-          dosage: draft.dosage,
-          frequency: draft.frequency || "每日 1 次",
-          relation:
-            draft.relation ||
-            (/餐后|饭后|随餐/.test(catalogMatch.timing)
-              ? "饭后"
-              : "按说明书"),
-          instructions:
-            draft.instructions ||
-            `${catalogMatch.howToTake} ${catalogMatch.keyWarnings[0]}`,
-          confidence: Math.max(draft.confidence, 0.8)
-        };
-      }
-
-      const compactText = `${draft.name}${draft.rawText}`.replace(/\s+/g, "");
-      const learned = medications.find((medication) =>
-        [medication.name, medication.genericName, ...medication.ingredients]
-          .filter(Boolean)
-          .some((term) => compactText.includes(term.replace(/\s+/g, "")))
-      );
-      if (learned) {
-        draft = {
-          ...draft,
-          name: learned.name,
-          genericName: learned.genericName,
-          ingredientsText: learned.ingredients.join("、"),
-          dosage: draft.dosage || learned.dosage,
-          frequency: draft.frequency || learned.frequency,
-          times: draft.times.length ? draft.times : learned.times,
-          relation: draft.relation || learned.relation,
-          instructions: draft.instructions || learned.instructions,
-          price: draft.price || learned.price,
-          confidence: Math.max(draft.confidence, learned.confidence),
-          lowConfidenceFields: draft.lowConfidenceFields.filter(
-            (field) =>
-              !["name", "dosage", "frequency", "relation"].includes(field)
-          )
-        };
-      }
-      saveIntakeDraft(draft);
-      setConversationMedicineContext(draft, targetConversationId);
-      const createdAt = nowIso();
-      const candidate = {
-        id: createId("med"),
-        name: draft.name,
-        genericName: draft.genericName,
-        ingredients: draft.ingredientsText
-          .split(/[、,，/\s]+/)
-          .filter(Boolean),
-        dosage: draft.dosage,
-        frequency: draft.frequency,
-        times: draft.times,
-        relation: draft.relation,
-        instructions: draft.instructions,
-        price: draft.price,
-        startDate: dateKey(),
-        status: "pending" as const,
-        reminderEnabled: true,
-        source: {
-          type: "medicine-label" as const,
-          title: "问药页拍摄并识别的药盒",
-          capturedAt: createdAt,
-          imageDataUrl,
-          confirmed: false
-        },
-        confidence: draft.confidence,
-        createdAt,
-        updatedAt: createdAt
-      };
       const activeMedications = medications.filter(
         (medication) => medication.status === "active"
       );
-      const catalogResponse = catalogMatch
-        ? answerFromDrugCatalog(
-            `${catalogMatch.displayName} 请给出使用方法、危害、注意事项和当前同服风险`,
-            profile,
-            activeMedications.map((medication) => medication.name),
-            currentCatalogCompanionSlugs(
-              activeMedications.map(
-                (medication) =>
-                  medication.genericName || medication.name
-              )
-            )
-          )
-        : null;
-      const catalogGuidance = catalogMatch
-        ? buildLocalGuidance({
-            medicineSlug: catalogMatch.slug,
-            companionSlugs: currentCatalogCompanionSlugs(
-              activeMedications.map(
-                (medication) =>
-                  medication.genericName || medication.name
-              )
-            ),
-            healthContext: [
-              ...(profile.age >= 65 ? (["older"] as const) : []),
-              ...(profile.conditions.some((item) => /肾/.test(item))
-                ? (["kidney"] as const)
-                : []),
-              ...(profile.conditions.some((item) => /肝/.test(item))
-                ? (["liver"] as const)
-                : [])
-            ]
-          })
-        : null;
-      const unknownCheck = checkNewMedication(candidate, medications, profile);
-      const preliminaryCheck = checkNewMedication(
-        {
-          ...candidate,
-          source: { ...candidate.source, confirmed: true }
-        },
-        medications,
-        profile
+      const companionSlugs = currentCatalogCompanionSlugs(
+        activeMedications.map(
+          (medication) => medication.genericName || medication.name
+        )
       );
+      const healthContext = [
+        ...(profile.age >= 65 ? (["older"] as const) : []),
+        ...(profile.conditions.some((item) => /肾/.test(item))
+          ? (["kidney"] as const)
+          : []),
+        ...(profile.conditions.some((item) => /肝/.test(item))
+          ? (["liver"] as const)
+          : [])
+      ];
+      const recognizedDrafts = buildDraftsFromVision(
+        imageDataUrl,
+        draft,
+        vision
+      );
+      if (!recognizedDrafts.some((item) => item.name.trim())) {
+        throw new Error("未识别到明确药物");
+      }
+      const photoResults = recognizedDrafts.map((recognizedDraft) => {
+        let nextDraft = recognizedDraft;
+        const compactText = `${nextDraft.name}${nextDraft.rawText}`.replace(
+          /\s+/g,
+          ""
+        );
+        const learned = medications.find((medication) =>
+          [medication.name, medication.genericName, ...medication.ingredients]
+            .filter(Boolean)
+            .some((term) =>
+              compactText.includes(term.replace(/\s+/g, ""))
+            )
+        );
+        if (learned) {
+          nextDraft = {
+            ...nextDraft,
+            name: nextDraft.name || learned.name,
+            genericName: nextDraft.genericName || learned.genericName,
+            ingredientsText:
+              nextDraft.ingredientsText || learned.ingredients.join("、"),
+            dosage: nextDraft.dosage || learned.dosage,
+            frequency: nextDraft.frequency || learned.frequency,
+            times: nextDraft.times.length ? nextDraft.times : learned.times,
+            relation: nextDraft.relation || learned.relation,
+            instructions:
+              nextDraft.instructions || learned.instructions,
+            price: nextDraft.price || learned.price,
+            confidence: Math.max(nextDraft.confidence, learned.confidence)
+          };
+        }
+        const bestCatalogMatch = nextDraft.name
+          ? findBestMedicine(nextDraft.name)
+          : null;
+        const catalogMatch =
+          bestCatalogMatch && bestCatalogMatch.score >= 0.6
+            ? bestCatalogMatch.medicine
+            : undefined;
+        if (catalogMatch) {
+          nextDraft = {
+            ...nextDraft,
+            name: nextDraft.name || catalogMatch.displayName,
+            genericName:
+              nextDraft.genericName || catalogMatch.activeIngredient,
+            ingredientsText:
+              nextDraft.ingredientsText || catalogMatch.activeIngredient,
+            frequency: nextDraft.frequency || "每日 1 次",
+            relation:
+              nextDraft.relation ||
+              (/餐后|饭后|随餐/.test(catalogMatch.timing)
+                ? "饭后"
+                : "按说明书"),
+            instructions:
+              nextDraft.instructions ||
+              `${catalogMatch.howToTake} ${catalogMatch.keyWarnings[0]}`,
+            confidence: Math.max(nextDraft.confidence, 0.8)
+          };
+        }
+        const createdAt = nowIso();
+        const candidate = {
+          id: createId("med"),
+          name: nextDraft.name,
+          genericName: nextDraft.genericName,
+          ingredients: nextDraft.ingredientsText
+            .split(/[、,，/\s]+/)
+            .filter(Boolean),
+          dosage: nextDraft.dosage,
+          frequency: nextDraft.frequency,
+          times: nextDraft.times,
+          relation: nextDraft.relation,
+          instructions: nextDraft.instructions,
+          price: nextDraft.price,
+          startDate: dateKey(),
+          status: "pending" as const,
+          reminderEnabled: true,
+          source: {
+            type: "medicine-label" as const,
+            title: "问药页拍摄并识别的药盒",
+            capturedAt: createdAt,
+            imageDataUrl,
+            confirmed: false
+          },
+          confidence: nextDraft.confidence,
+          createdAt,
+          updatedAt: createdAt
+        };
+        const catalogResponse = catalogMatch
+          ? answerFromDrugCatalog(
+              `${catalogMatch.displayName} 请给出使用方法、危害、注意事项和当前同服风险`,
+              profile,
+              activeMedications.map((medication) => medication.name),
+              companionSlugs
+            )
+          : null;
+        const catalogGuidance = catalogMatch
+          ? buildLocalGuidance({
+              medicineSlug: catalogMatch.slug,
+              companionSlugs,
+              healthContext
+            })
+          : null;
+        const unknownCheck = checkNewMedication(
+          candidate,
+          medications,
+          profile
+        );
+        const preliminaryCheck = checkNewMedication(
+          {
+            ...candidate,
+            source: { ...candidate.source, confirmed: true }
+          },
+          medications,
+          profile
+        );
+        const riskCheck =
+          catalogResponse?.riskCheck ??
+          (["high", "medium", "emergency"].includes(
+            preliminaryCheck.level
+          )
+            ? {
+                ...preliminaryCheck,
+                title: `初步发现：${preliminaryCheck.title}`,
+                summary: `${preliminaryCheck.summary} 目前基于图像提取的识别字段。`
+              }
+            : unknownCheck);
+        const priceText =
+          nextDraft.price ||
+          "暂无可靠价格数据，请以药房价格或购买记录为准";
+        const body =
+          catalogMatch && catalogGuidance
+            ? [
+                buildAutomaticMedicineReport(
+                  catalogMatch,
+                  catalogGuidance
+                ),
+                `图片参考价格：${priceText}`
+              ].join("\n\n")
+            : [
+                `识别可信度：${Math.round(nextDraft.confidence * 100)}%`,
+                nextDraft.ingredientsText
+                  ? `主要成分：${nextDraft.ingredientsText}`
+                  : "",
+                nextDraft.dosage ? `图片中剂量：${nextDraft.dosage}` : "",
+                nextDraft.frequency
+                  ? `图片中次数：${nextDraft.frequency}`
+                  : "",
+                nextDraft.relation
+                  ? `图片中服用时间：${nextDraft.relation}`
+                  : "",
+                `参考价格：${priceText}`,
+                riskCheck.summary,
+                riskCheck.nextStep
+              ]
+                .filter(Boolean)
+                .join("\n");
+        return {
+          draft: nextDraft,
+          riskCheck,
+          learned,
+          body
+        };
+      });
+      const severityRank: Record<RiskCheck["level"], number> = {
+        low: 0,
+        unknown: 1,
+        medium: 2,
+        high: 3,
+        emergency: 4
+      };
+      const primaryResult = [...photoResults].sort(
+        (left, right) =>
+          severityRank[right.riskCheck.level] -
+          severityRank[left.riskCheck.level]
+      )[0];
       const riskCheck =
-        catalogResponse?.riskCheck ??
-        (["high", "medium", "emergency"].includes(preliminaryCheck.level)
+        photoResults.length > 1
           ? {
-              ...preliminaryCheck,
-              title: `初步发现：${preliminaryCheck.title}`,
-              summary: `${preliminaryCheck.summary} 目前基于图像提取的识别字段。`
+              ...primaryResult.riskCheck,
+              title: `一次识别 ${photoResults.length} 种药物，最高风险：${primaryResult.riskCheck.title}`,
+              summary: `本次共识别 ${photoResults.length} 种药物，下面分别给出每种药物的用法、注意事项、价格线索和风险提示。`
             }
-          : unknownCheck);
-      const priceText =
-        draft.price || "暂无可靠价格数据，请以药房价格或购买记录为准";
-      const content = catalogMatch && catalogGuidance
-        ? [
-            buildAutomaticMedicineReport(catalogMatch, catalogGuidance),
-            "",
-            `图片参考价格：${priceText}`,
-            vision?.summary ? `AI 图片摘要：${vision.summary}` : "",
-            ...(vision?.cautions || []).map((item) => `AI 提示：${item}`),
-            learned ? `已复用您上次确认的“${learned.name}”资料。` : ""
-          ]
-            .filter(Boolean)
-            .join("\n")
-        : [
-            `识别结果：${draft.name || "药名暂未识别"}`,
-            `识别可信度：${Math.round(draft.confidence * 100)}%`,
-            draft.ingredientsText
-              ? `主要成分：${draft.ingredientsText}`
-              : "",
-            draft.dosage ? `图片中剂量：${draft.dosage}` : "",
-            draft.frequency ? `图片中次数：${draft.frequency}` : "",
-            draft.relation ? `图片中服用时间：${draft.relation}` : "",
-            `参考价格：${priceText}`,
-            vision?.summary ? `AI 图片摘要：${vision.summary}` : "",
-            ...(vision?.cautions || []).map((item) => `AI 提示：${item}`),
-            riskCheck.summary,
-            riskCheck.nextStep
-          ]
-            .filter(Boolean)
-            .join("\n");
+          : primaryResult.riskCheck;
+      saveIntakeDraft(photoResults[0].draft);
+      setConversationMedicineContext(
+        photoResults[0].draft,
+        targetConversationId
+      );
+      const content = [
+        photoResults.length > 1
+          ? `## 识别到 ${photoResults.length} 种药物`
+          : "",
+        ...photoResults.flatMap((result, index) => [
+          photoResults.length > 1
+            ? `### ${index + 1}. ${result.draft.name}`
+            : "",
+          result.body,
+          result.learned
+            ? `已复用您上次确认的“${result.learned.name}”资料。`
+            : ""
+        ]),
+        vision?.summary ? `### 图片整体说明\n${vision.summary}` : "",
+        ...(vision?.cautions || []).map((item) => `> 注意：${item}`)
+      ]
+        .filter(Boolean)
+        .join("\n\n");
       addChatMessage({
         id: createId("chat"),
         role: "assistant",
@@ -819,9 +860,11 @@ export function ChatPage() {
             ]
       );
       setPhotoNotice(
-        catalogMatch
-          ? `AI 已识别“${catalogMatch.displayName}”，并自动结合使用说明、危害、注意事项和当前用药给出完整参考。`
-          : `${draft.name || "药品"}已完成图像分析；名称不够确定时建议补拍说明书正面。`
+        photoResults.length > 1
+          ? `AI 已识别 ${photoResults.length} 种药物：${photoResults
+              .map((result) => result.draft.name)
+              .join("、")}。每种药物的用法和风险已分别列出。`
+          : `AI 已完成“${photoResults[0].draft.name}”的图像分析；名称不够确定时建议补拍说明书正面。`
       );
     } catch {
       addChatMessage({

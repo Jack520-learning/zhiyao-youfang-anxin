@@ -244,7 +244,7 @@ export function AuthGate() {
           </button>
         </form>
         <p className="auth-footnote">
-          本地演示账号采用加盐密码摘要。家庭连接码用于连接老人与家属，请只告诉可信任的家人。
+          本地账号密码采用加盐摘要保存。家庭连接码用于连接老人与家属，请只告诉可信任的家人。
         </p>
       </section>
     </main>

@@ -107,7 +107,7 @@ export function MedicationsPage() {
           </span>
           <h2>还没有添加自己的药品</h2>
           <p>
-            系统不会自动放入演示药物。请按照医生处方或您实际在用的药，
+            系统不会自动放入默认药物。请按照医生处方或您实际在用的药，
             使用页面上方入口添加。
           </p>
           <div className="empty-medication-guidance">

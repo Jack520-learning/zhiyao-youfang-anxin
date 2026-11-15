@@ -99,7 +99,7 @@ export function buildAutomaticMedicineReport(
     ? guidance.interactions.map(
         (item) => `${item.title}：${item.action}`
       )
-    : ["当前演示知识库未命中已知同服风险，但不代表绝对安全。"];
+    : ["当前知识库未命中已知同服风险，但不代表绝对安全。"];
 
   return [
     `识别结果：${medicine.displayName}`,

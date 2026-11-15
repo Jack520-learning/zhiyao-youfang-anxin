@@ -172,6 +172,6 @@ export function buildLocalGuidance(request: AdviseRequest): Guidance | null {
     personalWarnings,
     redFlags: drugSpecificRedFlags(medicine),
     sourceLabels: [medicine.sourceTitle, medicine.sourceNote],
-    mode: "demo",
+    mode: "local",
   };
 }

@@ -43,7 +43,7 @@ describe("combined medicine catalog", () => {
       healthContext: ["older"],
       question: "能一起吃吗？"
     });
-    expect(guidance?.mode).toBe("demo");
+    expect(guidance?.mode).toBe("local");
     expect(guidance?.interactions[0]?.severity).toBe("high");
   });
 

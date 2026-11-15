@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   ClipboardList,
   LoaderCircle,
-  Plus,
   Printer,
   ShieldAlert,
   Trash2
@@ -90,13 +89,6 @@ export function MultiDrugPage() {
     }
   }
 
-  function addExample() {
-    const additions = ["鱼油", "银杏叶制品", "三七"];
-    setManualText((current) =>
-      [current, ...additions.filter((item) => !current.includes(item))].join("\n")
-    );
-  }
-
   const print = () => {
     document.body.classList.add("printing-reconciliation");
     window.print();
@@ -149,10 +141,6 @@ export function MultiDrugPage() {
             >
               {busy ? <LoaderCircle size={20} className="spin" /> : <Camera size={20} />}
               拍照添加多种药
-            </button>
-            <button className="btn" type="button" onClick={addExample}>
-              <Plus size={19} aria-hidden="true" />
-              加入中药/保健品示例
             </button>
           </div>
           {notice ? <div className="notice" style={{ marginTop: 12 }}>{notice}</div> : null}
@@ -252,7 +240,7 @@ export function MultiDrugPage() {
           </div>
         ) : names.length ? (
           <div className="notice" style={{ marginTop: 14 }}>
-            当前演示规则未发现重复成分、同类重复或已知相互作用。这不代表绝对安全，中药、保健品和未收录药物仍需专业核对。
+            当前安全规则未发现重复成分、同类重复或已知相互作用。这不代表绝对安全，中药、保健品和未收录药物仍需专业核对。
           </div>
         ) : null}
 

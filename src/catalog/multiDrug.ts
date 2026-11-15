@@ -70,7 +70,7 @@ export function reconcileEntry(name: string): ReconciledEntry {
     rawName: clean,
     kind: "unknown",
     label: clean,
-    detail: "当前演示知识库未完全匹配",
+        detail: "当前知识库未完全匹配",
     confidence: 0
   };
 }

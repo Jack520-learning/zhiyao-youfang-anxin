@@ -1,8 +1,8 @@
 import type { Medicine } from "./types";
 
-const sourceTitle = "公开药品说明书常见表述（竞赛演示整理）";
+const sourceTitle = "公开药品说明书常见表述（公开说明书资料整理）";
 const sourceNote =
-  "本条为参赛原型使用的演示数据，包装规格和说明书版本可能不同。实际用药必须以手中批准说明书、医生或药师意见为准。";
+  "本条为公开资料整理结果，包装规格和说明书版本可能不同。实际用药必须以手中批准说明书、医生或药师意见为准。";
 
 type MedicineDraft = Omit<
   Medicine,
@@ -13,7 +13,7 @@ type MedicineDraft = Omit<
   | "knowledgeVersion"
   | "reviewStatus"
 > & {
-  reviewStatus: "demo";
+  reviewStatus: "pending_review";
 };
 
 const medicineDrafts: MedicineDraft[] = [
@@ -44,7 +44,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "ibuprofen",
@@ -73,7 +73,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "ibuprofen-granules",
@@ -105,7 +105,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "aspirin",
@@ -134,7 +134,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "warfarin",
@@ -163,7 +163,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "amlodipine",
@@ -192,7 +192,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "valsartan",
@@ -221,7 +221,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "metformin",
@@ -250,7 +250,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "atorvastatin",
@@ -279,7 +279,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "omeprazole",
@@ -308,7 +308,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "clopidogrel",
@@ -337,7 +337,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "loratadine",
@@ -366,7 +366,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "cetirizine",
@@ -395,7 +395,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "montmorillonite",
@@ -424,7 +424,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "nitroglycerin",
@@ -453,7 +453,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "amoxicillin",
@@ -482,7 +482,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "compound-cold",
@@ -511,7 +511,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "ibuprofen-tablets",
@@ -543,7 +543,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "amoxicillin-granules",
@@ -573,7 +573,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "metformin-sr",
@@ -603,7 +603,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "nifedipine-cr",
@@ -633,7 +633,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "losartan",
@@ -662,7 +662,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "metoprolol-sr",
@@ -692,7 +692,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "gliclazide-mr",
@@ -722,7 +722,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "cefixime-tablets",
@@ -751,7 +751,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "cefuroxime-axetil-tablets",
@@ -780,7 +780,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "cefdinir-capsules",
@@ -809,7 +809,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "cefalexin-capsules",
@@ -838,7 +838,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
   {
     slug: "cefaclor-capsules",
@@ -867,7 +867,7 @@ const medicineDrafts: MedicineDraft[] = [
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   },
 ];
 
@@ -984,7 +984,7 @@ const dailyMedicineSeeds: DailyMedicineSeed[] = [
   ["单硝酸异山梨酯片", "单硝酸异山梨酯", "片剂", "心血管药", "出现明显低血压或晕厥应停止活动并就医。"],
   ["盐酸维拉帕米片", "维拉帕米", "片剂", "心血管药", "可能影响心率，与其他心血管药合用需医生核对。"],
   ["盐酸胺碘酮片", "胺碘酮", "片剂", "抗心律失常药", "需定期监测心率、甲状腺和肺功能，不可自行停药。"],
-  ["华法林钠片复方核对项", "华法林", "片剂", "抗凝药", "仅作为核对示例，真实华法林以处方包装为准。"],
+  ["华法林钠片复方核对项", "华法林", "片剂", "抗凝药", "作为核对项，真实华法林以处方包装为准。"],
   ["碳酸氢钠片", "碳酸氢钠", "片剂", "消化用药", "长期使用需医生评估，心肾功能异常者慎用。"],
   ["口服补液盐III", "口服补液盐", "散剂", "补液用药", "必须按说明准确兑水，严重脱水需及时就医。"],
   ["右旋糖酐铁片", "右旋糖酐铁", "片剂", "补铁药", "不要与茶、咖啡同服，并注意与其他药物间隔。"],
@@ -1048,7 +1048,7 @@ const dailyMedicineDrafts: MedicineDraft[] = dailyMedicineSeeds.map(
     },
     sourceTitle,
     sourceNote,
-    reviewStatus: "demo",
+    reviewStatus: "pending_review",
   })
 );
 

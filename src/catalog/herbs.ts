@@ -10,7 +10,7 @@ export interface HerbEntry {
   safety: string[];
   identification: string[];
   sourceTitle: string;
-  reviewStatus: "demo-pending-review";
+  reviewStatus: "pending_review";
 }
 
 export const herbs: HerbEntry[] = [
@@ -32,8 +32,8 @@ export const herbs: HerbEntry[] = [
       "果实多呈纺锤形或椭圆形，表面红色或暗红色。",
       "果皮柔韧，内部有多数细小种子。"
     ],
-    sourceTitle: "《中华人民共和国药典》2020年版一部（演示整理，待复核）",
-    reviewStatus: "demo-pending-review"
+    sourceTitle: "《中华人民共和国药典》2020年版一部（公开资料整理，待专业复核）",
+    reviewStatus: "pending_review"
   },
   {
     id: "chrysanthemum",
@@ -53,8 +53,8 @@ export const herbs: HerbEntry[] = [
       "头状花序，舌状花与管状花排列成盘状。",
       "不同产地的花朵大小、颜色和气味会有差异。"
     ],
-    sourceTitle: "《中华人民共和国药典》2020年版一部（演示整理，待复核）",
-    reviewStatus: "demo-pending-review"
+    sourceTitle: "《中华人民共和国药典》2020年版一部（公开资料整理，待专业复核）",
+    reviewStatus: "pending_review"
   },
   {
     id: "astragalus",
@@ -74,8 +74,8 @@ export const herbs: HerbEntry[] = [
       "根圆柱形，表面淡棕黄色或淡棕褐色，有纵皱纹。",
       "断面可见放射状纹理，质地较韧。"
     ],
-    sourceTitle: "《中华人民共和国药典》2020年版一部（演示整理，待复核）",
-    reviewStatus: "demo-pending-review"
+    sourceTitle: "《中华人民共和国药典》2020年版一部（公开资料整理，待专业复核）",
+    reviewStatus: "pending_review"
   },
   {
     id: "angelica",
@@ -95,8 +95,8 @@ export const herbs: HerbEntry[] = [
       "根略呈圆柱形，根头肥大，有环纹。",
       "香气浓郁，断面黄白色或淡黄棕色。"
     ],
-    sourceTitle: "《中华人民共和国药典》2020年版一部（演示整理，待复核）",
-    reviewStatus: "demo-pending-review"
+    sourceTitle: "《中华人民共和国药典》2020年版一部（公开资料整理，待专业复核）",
+    reviewStatus: "pending_review"
   },
   {
     id: "ginseng",
@@ -117,8 +117,8 @@ export const herbs: HerbEntry[] = [
       "主根呈纺锤形或圆柱形，表面有纵皱纹和横向皮孔。",
       "须根有细小疣状突起，人工种植品与野生品外观差异较大。"
     ],
-    sourceTitle: "《中华人民共和国药典》2020年版一部（演示整理，待复核）",
-    reviewStatus: "demo-pending-review"
+    sourceTitle: "《中华人民共和国药典》2020年版一部（公开资料整理，待专业复核）",
+    reviewStatus: "pending_review"
   },
   {
     id: "tangerine-peel",
@@ -138,8 +138,8 @@ export const herbs: HerbEntry[] = [
       "常呈不规则片状，外表面橙红色或棕褐色。",
       "有细密凹下的油点，气味芳香。"
     ],
-    sourceTitle: "《中华人民共和国药典》2020年版一部（演示整理，待复核）",
-    reviewStatus: "demo-pending-review"
+    sourceTitle: "《中华人民共和国药典》2020年版一部（公开资料整理，待专业复核）",
+    reviewStatus: "pending_review"
   },
   {
     id: "honeysuckle",
@@ -159,8 +159,8 @@ export const herbs: HerbEntry[] = [
       "花蕾呈棒状，上粗下细，表面黄白色或绿白色。",
       "花冠筒状，先端开口，气味清香。"
     ],
-    sourceTitle: "《中华人民共和国药典》2020年版一部（演示整理，待复核）",
-    reviewStatus: "demo-pending-review"
+    sourceTitle: "《中华人民共和国药典》2020年版一部（公开资料整理，待专业复核）",
+    reviewStatus: "pending_review"
   },
   {
     id: "poria",
@@ -180,8 +180,8 @@ export const herbs: HerbEntry[] = [
       "多呈类球形、椭圆形或不规则块状，外皮棕褐色。",
       "断面白色或淡红色，质地坚实，部分可见细小裂隙。"
     ],
-    sourceTitle: "《中华人民共和国药典》2020年版一部（演示整理，待复核）",
-    reviewStatus: "demo-pending-review"
+    sourceTitle: "《中华人民共和国药典》2020年版一部（公开资料整理，待专业复核）",
+    reviewStatus: "pending_review"
   },
   {
     id: "chinese-yam",
@@ -201,8 +201,8 @@ export const herbs: HerbEntry[] = [
       "根茎圆柱形，表面黄白色或淡黄色，有纵皱纹。",
       "断面白色，颗粒状，质坚脆。"
     ],
-    sourceTitle: "《中华人民共和国药典》2020年版一部（演示整理，待复核）",
-    reviewStatus: "demo-pending-review"
+    sourceTitle: "《中华人民共和国药典》2020年版一部（公开资料整理，待专业复核）",
+    reviewStatus: "pending_review"
   },
   {
     id: "notoginseng",
@@ -223,8 +223,8 @@ export const herbs: HerbEntry[] = [
       "主根呈类圆锥形或圆柱形，表面灰褐色或灰黄色。",
       "断面粉白色或灰白色，常见放射状纹理。"
     ],
-    sourceTitle: "《中华人民共和国药典》2020年版一部（演示整理，待复核）",
-    reviewStatus: "demo-pending-review"
+    sourceTitle: "《中华人民共和国药典》2020年版一部（公开资料整理，待专业复核）",
+    reviewStatus: "pending_review"
   },
   {
     id: "salvia",
@@ -244,8 +244,8 @@ export const herbs: HerbEntry[] = [
       "根茎短粗，根数条，表面棕红色或暗棕红色。",
       "断面疏松，部分可见黄白色木部。"
     ],
-    sourceTitle: "《中华人民共和国药典》2020年版一部（演示整理，待复核）",
-    reviewStatus: "demo-pending-review"
+    sourceTitle: "《中华人民共和国药典》2020年版一部（公开资料整理，待专业复核）",
+    reviewStatus: "pending_review"
   },
   {
     id: "licorice",
@@ -265,8 +265,8 @@ export const herbs: HerbEntry[] = [
       "根呈圆柱形，表面红棕色或灰棕色。",
       "断面略显纤维性，味甜而特殊。"
     ],
-    sourceTitle: "《中华人民共和国药典》2020年版一部（演示整理，待复核）",
-    reviewStatus: "demo-pending-review"
+    sourceTitle: "《中华人民共和国药典》2020年版一部（公开资料整理，待专业复核）",
+    reviewStatus: "pending_review"
   }
 ];
 

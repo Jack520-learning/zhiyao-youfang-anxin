@@ -40,6 +40,8 @@ import type {
 } from "../types";
 
 const STORAGE_NAME = "zhiyao-youfang-anxin-app-state";
+const legacyDefaultMedicationSource =
+  "\u6f14\u793a\u5904\u65b9\uff08\u5df2\u786e\u8ba4\uff09";
 
 function auditEvent(
   type: AuditEvent["type"],
@@ -183,7 +185,6 @@ interface AppActions {
     metadata?: AuditEvent["metadata"]
   ) => void;
   markSynced: (revision?: number) => void;
-  resetDemo: () => void;
   clearAllData: () => Promise<void>;
   exportSnapshot: () => string;
   getCloudSnapshot: () => CloudSnapshot;
@@ -991,31 +992,6 @@ export const useAppStore = create<AppStore>()(
           lastSyncedAt: nowIso(),
           cloudRevision
         }),
-      resetDemo: () => {
-        const current = getState();
-        const replacement = createInitialState({
-          role: current.role,
-          familyCode: current.familyCode
-        });
-        const resetWorkspace = captureWorkspace(replacement);
-        setState({
-          ...replacement,
-          role: current.role,
-          familyCode: current.familyCode,
-          accounts: current.accounts,
-          workspaces: current.sessionAccountId
-            ? {
-                ...current.workspaces,
-                [workspaceKey(
-                  current.sessionAccountId,
-                  current.familyCode
-                )]: resetWorkspace
-              }
-            : current.workspaces,
-          sessionAccountId: current.sessionAccountId,
-          hydrated: true
-        });
-      },
       clearAllData: async () => {
         await indexedDbStorage.removeItem(STORAGE_NAME);
         const currentRole = getState().role;
@@ -1027,7 +1003,7 @@ export const useAppStore = create<AppStore>()(
           ...replacement,
           role: currentRole,
           auditEvents: [
-            auditEvent("data-deleted", "删除本地演示档案")
+            auditEvent("data-deleted", "删除本地用药档案")
           ],
           hydrated: true
         });
@@ -1201,7 +1177,7 @@ export const useAppStore = create<AppStore>()(
           medications: (saved.medications ?? current.medications)
             .filter(
               (medication) =>
-                medication.source?.title !== "演示处方（已确认）"
+                medication.source?.title !== legacyDefaultMedicationSource
             )
             .map((medication) => ({
               ...medication,

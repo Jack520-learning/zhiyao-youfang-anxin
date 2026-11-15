@@ -26,7 +26,11 @@ import {
   validateTimes
 } from "../lib/dosage";
 import { dateKey, nowIso } from "../lib/time";
-import { findBestMedicine } from "../catalog/retrieval";
+import {
+  buildDraftsFromVision,
+  getVisionMedicines,
+  type VisionIdentification
+} from "../lib/vision";
 import { useAppStore } from "../store/useAppStore";
 import type { IntakeDraft, Medication, RiskCheck } from "../types";
 
@@ -85,6 +89,10 @@ export function AddMedicationPage({
         ? undefined
         : existingDraft
   );
+  const [detectedDrafts, setDetectedDrafts] = useState<IntakeDraft[]>(() =>
+    existingDraft ? [existingDraft] : []
+  );
+  const [activeDraftIndex, setActiveDraftIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState("");
   const [error, setError] = useState("");
@@ -134,28 +142,7 @@ export function AddMedicationPage({
       })
         .then(async (response) => {
           if (!response.ok) return null;
-          return (await response.json()) as {
-            isMedicine?: boolean | null;
-            rejectionReason?: string;
-            candidates?: Array<{
-              name?: string;
-              confidence?: number;
-            }>;
-            medicine?: {
-              name?: string;
-              genericName?: string;
-              activeIngredient?: string;
-              dosage?: string;
-              price?: string;
-              dosageForm?: string;
-              strength?: string;
-              frequency?: string;
-              relation?: string;
-              instructions?: string;
-            };
-            summary?: string;
-            cautions?: string[];
-          };
+          return (await response.json()) as VisionIdentification;
         })
         .catch(() => null);
 
@@ -174,30 +161,20 @@ export function AddMedicationPage({
       setProgress(0.68);
       setProgressLabel("AI 正在读取药名、成分、剂量和价格");
       const vision = await visionPromise;
-      const visionMedicine = vision?.medicine;
-      const visionName =
-        visionMedicine?.name?.trim() ||
-        vision?.candidates?.[0]?.name?.trim() ||
-        "";
-      const catalogMatch = findBestMedicine(
-        visionName || recognized.name
-      );
-      const medicine =
-        catalogMatch && catalogMatch.score >= 0.58
-          ? catalogMatch.medicine
-          : undefined;
+      const visionMedicines = getVisionMedicines(vision);
       const medicalText = `${recognized.rawText} ${
         vision?.summary || ""
-      } ${visionMedicine?.name || ""}`;
+      } ${visionMedicines.map((item) => item.name).join(" ")}`;
       const hasMedicineSignal =
-        Boolean(medicine) ||
-        Boolean(visionName) ||
+        visionMedicines.length > 0 ||
         /(国药准字|说明书|处方|胶囊|片剂|颗粒|口服液|注射液|mg|毫克|g\/|ml)/i.test(
           medicalText
         );
       if (vision?.isMedicine === false || !hasMedicineSignal) {
         const unrecognized = createManualDraft(dataUrl);
         setDraft(unrecognized);
+        setDetectedDrafts([unrecognized]);
+        setActiveDraftIndex(0);
         saveIntakeDraft(unrecognized);
         setError(
           vision?.rejectionReason ||
@@ -206,73 +183,19 @@ export function AddMedicationPage({
         setPhase("unrecognized");
         return;
       }
-      const nextName =
-        visionName ||
-        (recognized.name.length >= 2 ? recognized.name : "") ||
-        medicine?.displayName ||
-        recognized.name;
-      const dosage =
-        visionMedicine?.dosage ||
-        recognized.dosage ||
-        visionMedicine?.strength ||
-        medicine?.strength ||
-        "";
-      const filledDraft: IntakeDraft = {
-        ...recognized,
-        name: nextName,
-        genericName:
-          visionMedicine?.genericName ||
-          recognized.genericName ||
-          medicine?.activeIngredient ||
-          "",
-        ingredientsText:
-          visionMedicine?.activeIngredient ||
-          recognized.ingredientsText ||
-          medicine?.activeIngredient ||
-          "",
-        dosage,
-        price: visionMedicine?.price || recognized.price || "",
-        frequency:
-          visionMedicine?.frequency ||
-          recognized.frequency ||
-          "每日 1 次",
-        relation:
-          visionMedicine?.relation ||
-          recognized.relation ||
-          (medicine && /餐后|饭后|随餐/.test(medicine.timing)
-            ? /随餐/.test(medicine.timing)
-              ? "随餐"
-              : "饭后"
-            : ""),
-        instructions:
-          visionMedicine?.instructions ||
-          recognized.instructions ||
-          medicine?.howToTake ||
-          "",
-        confidence: Math.max(
-          recognized.confidence,
-          vision?.candidates?.[0]?.confidence ?? 0,
-          medicine ? 0.82 : 0
-        ),
-        lowConfidenceFields: recognized.lowConfidenceFields.filter(
-          (field) => {
-            if (field === "name") return !nextName;
-            if (field === "dosage") return !dosage;
-            if (field === "ingredientsText") {
-              return !(
-                visionMedicine?.activeIngredient ||
-                recognized.ingredientsText ||
-                medicine
-              );
-            }
-            return false;
-          }
-        )
-      };
-      setDraft(filledDraft);
-      saveIntakeDraft(filledDraft);
+      const nextDrafts = buildDraftsFromVision(
+        dataUrl,
+        recognized,
+        vision
+      );
+      setDetectedDrafts(nextDrafts);
+      setActiveDraftIndex(0);
+      setDraft(nextDrafts[0]);
+      saveIntakeDraft(nextDrafts[0]);
       setProgress(1);
-      setProgressLabel("识别完成，请核对");
+      setProgressLabel(
+        `识别完成，共找到 ${nextDrafts.length} 种药物，请逐项核对`
+      );
       if (vision?.summary || vision?.cautions?.length) {
         setError(
           [
@@ -288,6 +211,8 @@ export function AddMedicationPage({
       console.error(recognitionError);
       const manual = createManualDraft(dataUrl);
       setDraft(manual);
+      setDetectedDrafts([manual]);
+      setActiveDraftIndex(0);
       saveIntakeDraft(manual);
       setError(
         "识别暂时没有完成。原图已经保存，请直接核对并填写药名、剂量和用法。"
@@ -308,16 +233,42 @@ export function AddMedicationPage({
   }
 
   function updateField<K extends keyof IntakeDraft>(field: K, value: IntakeDraft[K]) {
-    setDraft((current) => {
-      if (!current) return current;
-      return {
-        ...current,
-        [field]: value,
-        lowConfidenceFields: current.lowConfidenceFields.filter(
-          (item) => item !== String(field)
-        )
-      };
-    });
+    if (!draft) return;
+    const nextDraft = {
+      ...draft,
+      [field]: value,
+      lowConfidenceFields: draft.lowConfidenceFields.filter(
+        (item) => item !== String(field)
+      )
+    };
+    setDraft(nextDraft);
+    setDetectedDrafts((current) =>
+      current.length
+        ? current.map((item, index) =>
+            index === activeDraftIndex ? nextDraft : item
+          )
+        : [nextDraft]
+    );
+  }
+
+  function selectDetectedDraft(index: number) {
+    const selected = detectedDrafts[index];
+    if (!selected) return;
+    setActiveDraftIndex(index);
+    setDraft(selected);
+    saveIntakeDraft(selected);
+    setRiskCheck(undefined);
+    setCandidateMedication(undefined);
+    setPhase("review");
+  }
+
+  function startManualEntry() {
+    const manual = createManualDraft();
+    setDraft(manual);
+    setDetectedDrafts([manual]);
+    setActiveDraftIndex(0);
+    setError("");
+    setPhase("review");
   }
 
   function confirmRecognition() {
@@ -394,6 +345,24 @@ export function AddMedicationPage({
       updatedAt: createdAt
     };
     addMedication(medication, riskCheck);
+    if (detectedDrafts.length > 1) {
+      const remainingDrafts = detectedDrafts.filter(
+        (_item, index) => index !== activeDraftIndex
+      );
+      if (remainingDrafts.length) {
+        setDetectedDrafts(remainingDrafts);
+        setActiveDraftIndex(0);
+        setDraft(remainingDrafts[0]);
+        saveIntakeDraft(remainingDrafts[0]);
+        setRiskCheck(undefined);
+        setCandidateMedication(undefined);
+        setError(
+          `“${draft.name}”已加入用药清单。还有 ${remainingDrafts.length} 种药物需要核对。`
+        );
+        setPhase("review");
+        return;
+      }
+    }
     if (destination === "chat") {
       navigate(
         `/chat?q=${encodeURIComponent(
@@ -438,7 +407,7 @@ export function AddMedicationPage({
                     ? "这张照片不是药品，或药名没有拍清楚。"
                 : phase === "review"
                   ? "低置信或空白的字段会标出来。确认前不会加入当前用药。"
-                  : "系统已经对当前用药、过敏史和演示规则完成交叉核对。"}
+                  : "系统已经对当前用药、过敏史和安全规则完成交叉核对。"}
           </p>
         </div>
       </header>
@@ -475,11 +444,7 @@ export function AddMedicationPage({
               <button
                 type="button"
                 className="btn btn-large"
-                onClick={() => {
-                  setDraft(createManualDraft());
-                  setError("");
-                  setPhase("review");
-                }}
+                onClick={startManualEntry}
               >
                 手动输入药名
               </button>
@@ -492,7 +457,7 @@ export function AddMedicationPage({
         <section className="card card-pad" style={{ display: "grid", gap: 20 }}>
           <div className="notice">
             <LoaderCircle size={22} className="spin" aria-hidden="true" />
-            本地识别引擎正在处理图片，不依赖外部 OCR 服务。
+            正在同时进行文字识别和药物图像分析，请稍等。
           </div>
           <div>
             <div className="section-heading">
@@ -540,11 +505,7 @@ export function AddMedicationPage({
             <button
               type="button"
               className="btn"
-              onClick={() => {
-                setDraft(createManualDraft());
-                setError("");
-                setPhase("review");
-              }}
+              onClick={startManualEntry}
             >
               手动输入药名
             </button>
@@ -577,6 +538,31 @@ export function AddMedicationPage({
             </p>
           </aside>
           <section className="card card-pad">
+            {detectedDrafts.length > 1 ? (
+              <div className="multi-recognition-picker">
+                <div className="section-heading">
+                  <div>
+                    <h2>识别到 {detectedDrafts.length} 种药物</h2>
+                    <p>请逐个核对，已核对的药物会依次加入用药清单。</p>
+                  </div>
+                  <span className="chip">{activeDraftIndex + 1} / {detectedDrafts.length}</span>
+                </div>
+                <div className="multi-recognition-list">
+                  {detectedDrafts.map((item, index) => (
+                    <button
+                      type="button"
+                      className={index === activeDraftIndex ? "active" : ""}
+                      key={`${item.name}-${index}`}
+                      onClick={() => selectDetectedDraft(index)}
+                    >
+                      <span>{index + 1}</span>
+                      <strong>{item.name || "待填写药名"}</strong>
+                      <small>{Math.round(item.confidence * 100)}%</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             {error ? (
               <div className="notice warm" style={{ marginBottom: 18 }}>
                 <ShieldAlert size={21} aria-hidden="true" />

@@ -196,9 +196,9 @@ export function checkNewMedication(
     {
       level: "low",
       title: "当前已确认资料中未发现已知冲突",
-      summary: "系统已完成当前清单、过敏史和演示规则的交叉核对，但这不等于绝对安全。",
+      summary: "系统已完成当前清单、过敏史和安全规则的交叉核对，但这不等于绝对安全。",
       nextStep: "请继续按处方或说明书使用；若资料不完整，先补充后再确认。",
-      reasons: ["未命中演示高危规则", "未发现重复成分或档案过敏项"],
+      reasons: ["未命中当前高危规则", "未发现重复成分或档案过敏项"],
       sourceIds: ["src-no-evidence"],
       involvedMedicationIds: [candidate.id]
     },
@@ -232,7 +232,7 @@ export function handleMissedDose(
       level: "unknown",
       title: "先不要自行补服或加倍",
       summary:
-        "当前演示知识库没有覆盖这款药的具体漏服规则，不能替您决定补不补。",
+        "当前知识库没有覆盖这款药的具体漏服规则，不能替您决定补不补。",
       nextStep:
         "请查看处方或说明书上的漏服说明；找不到时联系开药医生或药师。",
       reasons: ["缺少经确认的漏服规则"],
@@ -486,7 +486,7 @@ export function answerWithRules(
       stages: [
         { id: "intent", label: "理解用药问题", status: "done" },
         { id: "profile", label: "核对当前用药与身体档案", status: "done" },
-        { id: "rag", label: "检索可追溯的演示资料", status: "done" },
+        { id: "rag", label: "检索可追溯的资料", status: "done" },
         { id: "risk", label: "生成分级回答", status: "done" }
       ],
       mode: "rules"
@@ -502,7 +502,7 @@ export function answerWithRules(
           "仅凭头晕不能判断是哪种药造成的。请先确认有没有胸痛、呼吸困难、意识不清或突然口角歪斜。",
         nextStep:
           "如果出现上述情况，立即使用 SOS；如果没有，可以记录发生时间和最近一次服药，再联系医生或药师。",
-        reasons: ["症状不能直接归因于药物", "演示知识库未覆盖该具体症状"],
+      reasons: ["症状不能直接归因于药物", "当前知识库未覆盖该具体症状"],
         sourceIds: ["src-emergency", "src-no-evidence"],
         involvedMedicationIds: currentMedications.map((medication) => medication.id)
       },
@@ -526,10 +526,10 @@ export function answerWithRules(
       level: "unknown",
       title: "资料不足，先不要按猜测处理",
       summary:
-        "资料不足：当前演示知识库没有找到足以回答这个问题的可靠资料，因此不会生成具体剂量、停药或补服建议。",
+        "资料不足：当前知识库没有找到足以回答这个问题的可靠资料，因此不会生成具体剂量、停药或补服建议。",
       nextStep:
         "请补充药盒或说明书照片，或联系医生、药师确认。您也可以查看当前用药清单继续核对。",
-      reasons: ["未检索到匹配知识条目", "演示知识库覆盖范围有限"],
+      reasons: ["未检索到匹配知识条目", "当前知识库覆盖范围有限"],
       sourceIds: ["src-no-evidence"],
       involvedMedicationIds: currentMedications.map((medication) => medication.id)
     },

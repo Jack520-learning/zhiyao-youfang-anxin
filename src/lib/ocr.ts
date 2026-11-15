@@ -71,7 +71,7 @@ function extractName(text: string): string {
     .filter(Boolean);
   const candidates = lines.filter(
     (line) =>
-      !/(演示|标签|规格|每日|每天|每次|饭前|饭后|餐前|餐后|睡前|仅用于)/.test(
+      !/(标签|规格|每日|每天|每次|饭前|饭后|餐前|餐后|睡前|仅用于)/.test(
         line
       )
   );

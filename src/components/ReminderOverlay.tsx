@@ -19,21 +19,12 @@ export function ReminderOverlay() {
     profile.timeZone
   );
   const [dismissedDoseId, setDismissedDoseId] = useState("");
-  const [demoOpen, setDemoOpen] = useState(false);
-
-  useEffect(() => {
-    const listener = () => setDemoOpen(true);
-    window.addEventListener("demo-reminder", listener);
-    return () => window.removeEventListener("demo-reminder", listener);
-  }, []);
 
   const minutesFromNow = nextDose
     ? (new Date(nextDose.scheduledAt).getTime() - Date.now()) / 60000
     : Number.POSITIVE_INFINITY;
   const due = Boolean(nextDose && minutesFromNow <= 15 && minutesFromNow >= -90);
-  const open = Boolean(
-    nextDose && (demoOpen || (due && dismissedDoseId !== nextDose.doseId))
-  );
+  const open = Boolean(nextDose && due && dismissedDoseId !== nextDose.doseId);
   const reminderKey = nextDose?.doseId ?? "";
 
   useEffect(() => {
@@ -59,7 +50,6 @@ export function ReminderOverlay() {
   if (role !== "elder" || !open || !nextDose) return null;
 
   function closeTemporarily() {
-    setDemoOpen(false);
     setDismissedDoseId(nextDose!.doseId);
   }
 

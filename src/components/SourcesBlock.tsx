@@ -20,7 +20,7 @@ export function SourcesBlock({ sourceIds }: { sourceIds: string[] }) {
           </strong>
           <span>{source.excerpt}</span>
           {!source.reviewed ? (
-            <span>演示规则，尚未完成医药专业审核</span>
+            <span>整理资料，尚未完成医药专业审核</span>
           ) : null}
         </div>
       ))}

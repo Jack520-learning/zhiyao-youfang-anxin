@@ -297,7 +297,7 @@ export function HomePage() {
             {nextDose.medication.dosage ? `，${nextDose.medication.dosage}` : ""}
           </h2>
           <p>
-            依据：{nextDose.medication.source.title}。这是一份比赛演示档案，请勿用于真实医疗决策。
+            依据：{nextDose.medication.source.title}。请以手中药品说明书、医生处方或药师意见为准。
           </p>
           <div className="hero-actions">
             <button

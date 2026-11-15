@@ -13,7 +13,6 @@ import {
   Play,
   Phone,
   Plus,
-  RotateCcw,
   Save,
   ShieldCheck,
   Trash2,
@@ -70,7 +69,6 @@ export function ProfilePage() {
   );
   const logoutAccount = useAppStore((state) => state.logoutAccount);
   const setFamilyCode = useAppStore((state) => state.setFamilyCode);
-  const resetDemo = useAppStore((state) => state.resetDemo);
   const verifyCurrentPassword = useAppStore(
     (state) => state.verifyCurrentPassword
   );
@@ -156,10 +154,10 @@ export function ProfilePage() {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `智药有方-演示档案-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.download = `智药有方-用药档案-${new Date().toISOString().slice(0, 10)}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
-    addAuditEvent("data-exported", "导出本地演示档案");
+    addAuditEvent("data-exported", "导出本地用药档案");
     setToast("档案已经导出");
   }
 
@@ -897,19 +895,6 @@ export function ProfilePage() {
                 <Download size={19} aria-hidden="true" />
                 导出档案
               </button>
-              <button
-                className="btn"
-                type="button"
-                onClick={() => {
-                  if (window.confirm("恢复演示档案会覆盖当前记录，继续吗？")) {
-                    resetDemo();
-                    setToast("演示档案已恢复");
-                  }
-                }}
-              >
-                <RotateCcw size={19} aria-hidden="true" />
-                恢复演示
-              </button>
               <button className="btn" type="button" onClick={logout}>
                 <LogOut size={19} aria-hidden="true" />
                 退出当前账号
@@ -1010,7 +995,7 @@ export function ProfilePage() {
         </div>
         <span className="chip">
           <ShieldCheck size={15} aria-hidden="true" />
-          演示环境
+          安全用药
         </span>
       </header>
 
@@ -1032,7 +1017,7 @@ export function ProfilePage() {
             </button>
           </div>
           <label className="field" style={{ marginTop: 14 }}>
-            <span className="field-label">加入其他演示家庭</span>
+            <span className="field-label">加入其他家庭</span>
             <input className="input" value={codeInput} onChange={(event) => setCodeInput(event.target.value)} />
           </label>
           <button className="btn btn-primary" type="button" style={{ marginTop: 10 }} onClick={changeFamilyCode}>
@@ -1040,7 +1025,7 @@ export function ProfilePage() {
             保存家庭连接码
           </button>
           <p className="field-hint" style={{ marginTop: 12 }}>
-            原型使用连接码而非正式账号认证，正式部署前必须替换为登录与细粒度授权。
+            家庭连接码只用于关联已授权的老人与家属，请只告诉可信任的家人。
           </p>
         </section>
 
@@ -1293,22 +1278,13 @@ export function ProfilePage() {
                   : "开启通知"}
             </button>
           </div>
-          <button
-            className="btn btn-ghost"
-            type="button"
-            style={{ width: "100%", marginTop: 4 }}
-            onClick={() => window.dispatchEvent(new Event("demo-reminder"))}
-          >
-            <BellRing size={19} aria-hidden="true" />
-            预览全屏提醒
-          </button>
         </section>
       </div>
 
       <section className="card card-pad" style={{ marginTop: 16 }}>
         <div className="section-heading">
           <div>
-            <h2>数据和演示操作</h2>
+            <h2>数据管理</h2>
             <p>本地数据会持久保存，删除会同时尝试清理云端摘要。</p>
           </div>
           <ShieldCheck size={23} color="var(--primary)" aria-hidden="true" />
@@ -1317,19 +1293,6 @@ export function ProfilePage() {
           <button className="btn" type="button" onClick={downloadData}>
             <Download size={19} aria-hidden="true" />
             导出档案
-          </button>
-          <button
-            className="btn"
-            type="button"
-            onClick={() => {
-              if (window.confirm("恢复演示档案会覆盖当前药物、提醒和风险记录，继续吗？")) {
-                resetDemo();
-                setToast("演示档案已恢复");
-              }
-            }}
-          >
-            <RotateCcw size={19} aria-hidden="true" />
-            恢复演示数据
           </button>
           <button
             className="btn btn-danger"
