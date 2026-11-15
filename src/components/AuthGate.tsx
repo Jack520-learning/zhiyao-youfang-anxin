@@ -72,7 +72,7 @@ export function AuthGate() {
           <Pill size={38} aria-hidden="true" />
         </span>
         <p className="eyebrow">智药有方 · 安心药伴</p>
-        <h1>智药有方，安心用药</h1>
+        <h1>智药有方 · 安心药伴</h1>
         <p>
           帮老人看懂药、按时服药，遇到用药风险及时提醒家人。登录后继续使用上次保存的用药档案。
         </p>

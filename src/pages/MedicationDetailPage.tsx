@@ -2,13 +2,15 @@ import {
   ArrowLeft,
   BellRing,
   Camera,
+  CircleCheck,
   Clock3,
   FileCheck2,
+  LoaderCircle,
   Pill,
   ShieldCheck,
   Trash2
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { DosageFormSafetyNotice } from "../components/DosageFormSafetyNotice";
 import { RiskBadge } from "../components/RiskBadge";
@@ -42,6 +44,11 @@ export function MedicationDetailPage() {
   const [frequency, setFrequency] = useState(medication?.frequency ?? "每日 1 次");
   const [times, setTimes] = useState(medication?.times ?? ["08:00"]);
   const [doseError, setDoseError] = useState("");
+  const [checkingRisk, setCheckingRisk] = useState(false);
+  const [checkedRisk, setCheckedRisk] = useState<
+    ReturnType<typeof answerWithRules>["riskCheck"]
+  >();
+  const riskResultRef = useRef<HTMLElement>(null);
 
   if (!medication) {
     return (
@@ -56,19 +63,31 @@ export function MedicationDetailPage() {
     );
   }
 
-  const latestRisk = riskChecks.find((riskCheck) =>
+  const latestRisk = checkedRisk ?? riskChecks.find((riskCheck) =>
     riskCheck.involvedMedicationIds.includes(medication.id)
   );
 
   function runSafetyCheck() {
     const currentMedication = medication;
     if (!currentMedication) return;
+    setCheckingRisk(true);
     const result = answerWithRules(
       `${currentMedication.name} 和当前这些药一起用要注意什么`,
-      medications.filter((item) => item.status === "active"),
+      medications.filter(
+        (item) =>
+          item.status === "active" || item.id === currentMedication.id
+      ),
       profile
     );
     addRiskCheck(result.riskCheck);
+    setCheckedRisk(result.riskCheck);
+    setCheckingRisk(false);
+    window.setTimeout(() => {
+      riskResultRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+    }, 80);
   }
 
   function saveCorrection() {
@@ -205,6 +224,7 @@ export function MedicationDetailPage() {
                     <option value="随餐">随餐</option>
                     <option value="睡前">睡前</option>
                     <option value="按需">按需</option>
+                    <option value="按说明书">说明书未注明</option>
                   </select>
                 </label>
                 <label className="field">
@@ -263,9 +283,28 @@ export function MedicationDetailPage() {
                   {humanizeRelation(medication.relation)}，{medication.dosage}。具体用法以已确认的处方或说明书为准。
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 16 }}>
-                  <button className="btn btn-primary" type="button" onClick={runSafetyCheck}>
-                    <ShieldCheck size={19} aria-hidden="true" />
-                    检查当前用药风险
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    disabled={checkingRisk}
+                    onClick={runSafetyCheck}
+                  >
+                    {checkingRisk ? (
+                      <LoaderCircle
+                        size={19}
+                        className="spin"
+                        aria-hidden="true"
+                      />
+                    ) : checkedRisk ? (
+                      <CircleCheck size={19} aria-hidden="true" />
+                    ) : (
+                      <ShieldCheck size={19} aria-hidden="true" />
+                    )}
+                    {checkingRisk
+                      ? "正在检查"
+                      : checkedRisk
+                        ? "重新检查风险"
+                        : "检查当前用药风险"}
                   </button>
                   {role === "elder" ? (
                     <>
@@ -279,6 +318,19 @@ export function MedicationDetailPage() {
                     </>
                   ) : null}
                 </div>
+                {checkedRisk ? (
+                  <div
+                    className={`risk-check-feedback ${checkedRisk.level}`}
+                    aria-live="polite"
+                  >
+                    <RiskBadge level={checkedRisk.level} />
+                    <div>
+                      <strong>检查完成：{checkedRisk.title}</strong>
+                      <p>{checkedRisk.summary}</p>
+                      <span>{checkedRisk.nextStep}</span>
+                    </div>
+                  </div>
+                ) : null}
               </>
             )}
           </section>
@@ -325,7 +377,10 @@ export function MedicationDetailPage() {
             </div>
           </section>
 
-          <section className="card card-pad">
+          <section
+            className="card card-pad risk-result-card"
+            ref={riskResultRef}
+          >
             <div className="section-heading">
               <div>
                 <h2>最近一次风险核查</h2>
