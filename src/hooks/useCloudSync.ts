@@ -11,6 +11,7 @@ export function useCloudSync() {
   const [status, setStatus] = useState<SyncStatus>("idle");
   const [connectionTick, setConnectionTick] = useState(0);
   const lastFamilyUpdateRef = useRef("");
+  const lastElderContactUpdateRef = useRef("");
   const hydrated = useAppStore((state) => state.hydrated);
   const sessionAccountId = useAppStore((state) => state.sessionAccountId);
   const role = useAppStore((state) => state.role);
@@ -70,6 +71,50 @@ export function useCloudSync() {
     familyAlerts,
     connectionTick
   ]);
+
+  // Emergency contacts are the one health-adjacent field that caregivers may
+  // update. Elder devices listen for those edits while remaining the writer for
+  // medications, profile details and the rest of the archive.
+  useEffect(() => {
+    if (!hydrated || !sessionAccountId || !familyCode || role !== "elder") {
+      lastElderContactUpdateRef.current = "";
+      return;
+    }
+
+    let cancelled = false;
+    lastElderContactUpdateRef.current = "";
+
+    async function loadEmergencyContacts() {
+      try {
+        const snapshot = await fetchFamilySnapshot(familyCode);
+        if (cancelled || !snapshot) return;
+        if (snapshot.updatedAt !== lastElderContactUpdateRef.current) {
+          lastElderContactUpdateRef.current = snapshot.updatedAt;
+          useAppStore
+            .getState()
+            .mergeFamilyEmergencyContacts(snapshot.emergencyContacts);
+        }
+      } catch {
+        // The regular writer reports connection status.
+      }
+    }
+
+    void loadEmergencyContacts();
+    const source = new EventSource(
+      `/api/family/${encodeURIComponent(familyCode.toUpperCase())}/events`
+    );
+    source.onmessage = () => {
+      void loadEmergencyContacts();
+    };
+    const interval = window.setInterval(() => {
+      void loadEmergencyContacts();
+    }, 30_000);
+    return () => {
+      cancelled = true;
+      source.close();
+      window.clearInterval(interval);
+    };
+  }, [hydrated, sessionAccountId, role, familyCode, connectionTick]);
 
   // The family device is a reader. Polling depends only on the connection and
   // family code; merging snapshots must not restart the interval or make the

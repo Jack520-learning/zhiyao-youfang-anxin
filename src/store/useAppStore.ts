@@ -156,6 +156,7 @@ interface AppActions {
   updateConsent: (consent: Partial<ConsentSettings>) => void;
   updatePreferences: (preferences: Partial<AppPreferences>) => void;
   updateEmergencyContacts: (contacts: EmergencyContact[]) => void;
+  mergeFamilyEmergencyContacts: (contacts: EmergencyContact[]) => void;
   addFamilyAlert: (alert: FamilyAlert) => void;
   markFamilyAlertHandled: (id: string) => void;
   saveIntakeDraft: (draft: IntakeDraft) => void;
@@ -764,6 +765,19 @@ export const useAppStore = create<AppStore>()(
             ...state.auditEvents
           ].slice(0, 100)
         })),
+      mergeFamilyEmergencyContacts: (emergencyContacts) =>
+        setState((state) => {
+          if (
+            JSON.stringify(state.emergencyContacts) ===
+            JSON.stringify(emergencyContacts)
+          ) {
+            return {};
+          }
+          return {
+            emergencyContacts,
+            lastSyncedAt: nowIso()
+          };
+        }),
       addFamilyAlert: (alert) =>
         setState((state) => ({
           familyAlerts: pruneHandledAlerts([

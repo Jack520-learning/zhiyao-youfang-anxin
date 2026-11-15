@@ -111,6 +111,10 @@ export function ProfilePage() {
   }, [familyCode]);
 
   useEffect(() => {
+    setContactDraft(contacts.map((contact) => ({ ...contact })));
+  }, [contacts]);
+
+  useEffect(() => {
     if (!preferences.soundEnabled) {
       setSpeechPlayback("idle");
       return;
@@ -368,7 +372,7 @@ export function ProfilePage() {
       <div className="section-heading">
         <div>
           <h2>紧急联系人</h2>
-          <p>这里的修改会保存到家庭档案，并同步给已连接家属端。</p>
+          <p>紧急联系人会在老人端和已授权家属端之间实时同步。</p>
         </div>
         <Phone size={22} color="var(--primary)" aria-hidden="true" />
       </div>
