@@ -442,7 +442,7 @@ export function ProfilePage() {
             <p className="eyebrow">我的</p>
             <h1 className="page-title">{profile.name}，这里只有常用设置</h1>
             <p className="page-description">
-              常用的放在外面，不常用的收起来。看不清、听不见时都可以改用大按钮和语音。
+              常用在外，其余收起；看不清或听不见可用大字和语音。
             </p>
           </div>
         </header>
@@ -865,7 +865,7 @@ export function ProfilePage() {
           <p className="eyebrow">授权 · 家属权限</p>
           <h1 className="page-title">只查看被授权的摘要</h1>
           <p className="page-description">
-            本地数据会持久保存，并同步到同一家庭连接码的设备。老人可以随时缩小共享范围或叫停通知。
+            只显示老人授权摘要，不展示完整对话与隐私日志。
           </p>
         </div>
         <span className="chip">

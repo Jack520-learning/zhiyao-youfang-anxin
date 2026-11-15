@@ -2244,6 +2244,11 @@ img {
   width: 100%;
 }
 
+.profile-page .page-header .page-description {
+  max-width: none;
+  white-space: nowrap;
+}
+
 .home-search-lower {
   margin-top: 22px;
 }
