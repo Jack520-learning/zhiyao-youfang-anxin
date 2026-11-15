@@ -217,6 +217,113 @@ function accountSnapshot(account) {
   return database.families[account.familyCode]?.snapshot || null;
 }
 
+const mcpTools = [
+  {
+    name: "get_active_medications",
+    description: "读取老人当前正在使用的药物、剂量、服用时间和提醒状态。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        familyCode: { type: "string", description: "老人家庭连接码" }
+      },
+      required: ["familyCode"]
+    }
+  },
+  {
+    name: "get_medication_schedule",
+    description: "按时间排序返回当前所有服药计划。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        familyCode: { type: "string", description: "老人家庭连接码" }
+      },
+      required: ["familyCode"]
+    }
+  },
+  {
+    name: "get_family_risk_summary",
+    description: "读取最近风险核查、未处理求助和多次未确认服药摘要。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        familyCode: { type: "string", description: "老人家庭连接码" }
+      },
+      required: ["familyCode"]
+    }
+  },
+  {
+    name: "get_emergency_contacts",
+    description: "读取老人授权的紧急联系人列表。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        familyCode: { type: "string", description: "老人家庭连接码" }
+      },
+      required: ["familyCode"]
+    }
+  }
+];
+
+function mcpAuthorizedSnapshot(account, familyCode) {
+  const code = sanitizeFamilyCode(familyCode);
+  if (!code || !accountCodes(account).includes(code)) {
+    throw new Error("当前账号没有访问这个家庭的权限");
+  }
+  const snapshot = database.families[code]?.snapshot;
+  if (!snapshot) throw new Error("尚未找到这个家庭的老人用药摘要");
+  return snapshot;
+}
+
+function callMcpTool(account, name, args) {
+  const snapshot = mcpAuthorizedSnapshot(account, args?.familyCode);
+  if (name === "get_active_medications") {
+    return (snapshot.medications || [])
+      .filter((medication) => medication.status === "active")
+      .map((medication) => ({
+        name: medication.name,
+        genericName: medication.genericName,
+        dosage: medication.dosage,
+        frequency: medication.frequency,
+        times: medication.times,
+        relation: medication.relation,
+        reminderEnabled: medication.reminderEnabled,
+        instructions: medication.instructions
+      }));
+  }
+  if (name === "get_medication_schedule") {
+    return (snapshot.medications || [])
+      .filter((medication) => medication.status === "active")
+      .flatMap((medication) =>
+        (medication.times || []).map((time) => ({
+          time,
+          name: medication.name,
+          dosage: medication.dosage,
+          relation: medication.relation,
+          reminderEnabled: medication.reminderEnabled
+        }))
+      )
+      .sort((left, right) => left.time.localeCompare(right.time));
+  }
+  if (name === "get_family_risk_summary") {
+    const activeAlerts = pruneHandledAlerts(snapshot.familyAlerts || []);
+    const highRisks = (snapshot.riskChecks || []).filter(
+      (riskCheck) =>
+        riskCheck.level === "high" || riskCheck.level === "emergency"
+    );
+    return {
+      riskChecks: (snapshot.riskChecks || []).slice(0, 10),
+      activeAlerts,
+      highRiskCount: highRisks.length,
+      unhandledAlertCount: activeAlerts.filter((alert) => !alert.handledAt)
+        .length
+    };
+  }
+  if (name === "get_emergency_contacts") {
+    return snapshot.emergencyContacts || [];
+  }
+  throw new Error("未知的 MCP 工具");
+}
+
 function publicSnapshot(snapshot) {
   return {
     ...snapshot,
@@ -1181,6 +1288,114 @@ const server = createServer(async (request, response) => {
       }
       await saveDatabase();
       return json(response, 200, { ok: true });
+    }
+
+    if (url.pathname === "/api/mcp" && request.method === "POST") {
+      const { account } = authenticatedAccount(request);
+      if (!account) {
+        return json(response, 401, {
+          jsonrpc: "2.0",
+          id: null,
+          error: { code: -32001, message: "请先登录 MCP 工具服务" }
+        });
+      }
+      const body = await readJson(request, 256 * 1024);
+      const id = Object.prototype.hasOwnProperty.call(body, "id")
+        ? body.id
+        : undefined;
+      if (body?.jsonrpc !== "2.0" || typeof body?.method !== "string") {
+        return json(response, 400, {
+          jsonrpc: "2.0",
+          id: id ?? null,
+          error: { code: -32600, message: "无效的 JSON-RPC 请求" }
+        });
+      }
+      if (body.method === "notifications/initialized") {
+        response.writeHead(204);
+        response.end();
+        return;
+      }
+      if (id === undefined) {
+        response.writeHead(204);
+        response.end();
+        return;
+      }
+      if (body.method === "initialize") {
+        return json(response, 200, {
+          jsonrpc: "2.0",
+          id,
+          result: {
+            protocolVersion: "2025-03-26",
+            capabilities: { tools: { listChanged: false } },
+            serverInfo: {
+              name: "zhiyao-safe-medication",
+              version: "1.0.0"
+            }
+          }
+        });
+      }
+      if (body.method === "ping") {
+        return json(response, 200, {
+          jsonrpc: "2.0",
+          id,
+          result: {}
+        });
+      }
+      if (body.method === "tools/list") {
+        return json(response, 200, {
+          jsonrpc: "2.0",
+          id,
+          result: { tools: mcpTools }
+        });
+      }
+      if (body.method === "tools/call") {
+        const name = String(body.params?.name || "");
+        const args = body.params?.arguments;
+        if (!mcpTools.some((tool) => tool.name === name)) {
+          return json(response, 200, {
+            jsonrpc: "2.0",
+            id,
+            error: { code: -32602, message: "未知的工具名称" }
+          });
+        }
+        try {
+          const result = callMcpTool(account, name, args);
+          return json(response, 200, {
+            jsonrpc: "2.0",
+            id,
+            result: {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify(result, null, 2)
+                }
+              ],
+              structuredContent: result,
+              isError: false
+            }
+          });
+        } catch (error) {
+          return json(response, 200, {
+            jsonrpc: "2.0",
+            id,
+            result: {
+              content: [
+                {
+                  type: "text",
+                  text:
+                    error instanceof Error ? error.message : "MCP 工具执行失败"
+                }
+              ],
+              isError: true
+            }
+          });
+        }
+      }
+      return json(response, 200, {
+        jsonrpc: "2.0",
+        id,
+        error: { code: -32601, message: "不支持的方法" }
+      });
     }
 
     if (url.pathname === "/api/push/public-key" && request.method === "GET") {

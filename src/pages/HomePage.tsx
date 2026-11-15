@@ -19,6 +19,7 @@ import {
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { RiskBadge } from "../components/RiskBadge";
+import { ProactiveRiskPanel } from "../components/ProactiveRiskPanel";
 import { formatChineseDate, formatTime, getNextDose, getTodayDoses, humanizeRelation } from "../lib/time";
 import { speakText } from "../lib/speech";
 import { useQwenSpeechRecognition } from "../lib/qwenSpeech";
@@ -155,6 +156,7 @@ export function HomePage() {
             </p>
           </div>
         </header>
+        <ProactiveRiskPanel />
         <DiscomfortNotice
           status={concernStatus}
           contactName={firstContact?.name}
@@ -268,6 +270,8 @@ export function HomePage() {
           </span>
         </div>
       </header>
+
+      <ProactiveRiskPanel />
 
       <DiscomfortNotice
         status={concernStatus}

@@ -134,6 +134,10 @@ AI_VISION_MODEL=your-vision-model
 https://zhiyao.com
 ```
 
+## Agent 与 MCP
+
+问药 Agent 使用可解释工具注册表执行药品检索、相互作用核查、个人档案读取和服药日程查询。服务端同时提供受账号会话保护的 MCP JSON-RPC 工具接口，详见 [`docs/MCP接口.md`](docs/MCP接口.md)。
+
 ## 安全边界
 
 - 不诊断疾病；

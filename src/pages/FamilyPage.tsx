@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { RiskBadge } from "../components/RiskBadge";
+import { ProactiveRiskPanel } from "../components/ProactiveRiskPanel";
 import { formatChineseDate, getTodayDoses } from "../lib/time";
 import { useAppStore } from "../store/useAppStore";
 import { updateFamilyAlertStatus } from "../lib/cloud";
@@ -96,6 +97,8 @@ export function FamilyPage() {
         </div>
         <span className="family-code">{familyCode}</span>
       </header>
+
+      <ProactiveRiskPanel limit={4} />
 
       <div className="family-grid">
         <section className="card metric">
