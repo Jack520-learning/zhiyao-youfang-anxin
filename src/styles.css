@@ -1238,6 +1238,68 @@ img {
   margin-top: 9px;
 }
 
+.dosage-safety-inline {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 10px;
+  border: 1px solid color-mix(in srgb, var(--amber) 38%, var(--line));
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--amber) 9%, var(--surface));
+  color: var(--muted);
+  font-size: calc(12px * var(--font-scale));
+  line-height: 1.5;
+}
+
+.dosage-safety-inline svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--amber);
+}
+
+.dosage-safety-inline strong {
+  flex: 0 0 auto;
+  color: var(--ink);
+}
+
+.dosage-safety-card {
+  display: grid;
+  gap: 16px;
+}
+
+.dosage-safety-card .section-heading {
+  margin-bottom: 0;
+}
+
+.dosage-safety-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dosage-safety-grid div {
+  display: grid;
+  min-height: 92px;
+  align-content: center;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  padding: 13px;
+  background: var(--surface-soft);
+}
+
+.dosage-safety-grid span {
+  color: var(--muted);
+  font-size: calc(13px * var(--font-scale));
+}
+
+.dosage-safety-grid strong {
+  color: var(--ink);
+  font-size: calc(17px * var(--font-scale));
+  line-height: 1.4;
+}
+
 .medication-side {
   display: flex;
   flex-wrap: wrap;
@@ -2394,6 +2456,212 @@ img {
   line-height: 1.65;
 }
 
+.emergency-card-page .page-header {
+  align-items: flex-start;
+}
+
+.emergency-card-sheet {
+  width: min(980px, 100%);
+  margin-top: 18px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: clamp(22px, 4vw, 42px);
+  background: #fffefa;
+  box-shadow: var(--shadow);
+  color: #17342b;
+}
+
+.emergency-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 2px solid #17342b;
+  padding-bottom: 18px;
+}
+
+.emergency-card-brand {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.emergency-card-brand > span {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 16px;
+  background: #0f6b55;
+  color: #fff;
+}
+
+.emergency-card-brand p {
+  margin: 0 0 3px;
+  color: #5e756c;
+  font-size: calc(12px * var(--font-scale));
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.emergency-card-brand h2 {
+  margin: 0;
+  color: #17342b;
+  font-size: calc(28px * var(--font-scale));
+  line-height: 1.2;
+}
+
+.emergency-card-updated {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+  text-align: right;
+}
+
+.emergency-card-updated strong {
+  font-size: calc(20px * var(--font-scale));
+}
+
+.emergency-card-updated span,
+.emergency-card-updated small {
+  color: #5e756c;
+  font-size: calc(12px * var(--font-scale));
+}
+
+.emergency-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.emergency-card-section {
+  min-width: 0;
+  border: 1px solid #cdd9d3;
+  border-radius: 14px;
+  padding: 16px;
+  background: #fff;
+}
+
+.emergency-card-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  color: #17342b;
+  font-size: calc(16px * var(--font-scale));
+}
+
+.emergency-card-section h3 svg {
+  flex: 0 0 auto;
+  color: #0f6b55;
+}
+
+.emergency-card-medications,
+.emergency-card-attention {
+  grid-column: 1 / -1;
+}
+
+.emergency-card-section ol,
+.emergency-card-section ul {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.emergency-card-section li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px dashed #d8e0dc;
+  padding-bottom: 8px;
+}
+
+.emergency-card-section li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.emergency-card-section li strong {
+  color: #17342b;
+  font-size: calc(14px * var(--font-scale));
+}
+
+.emergency-card-section li span {
+  color: #526a60;
+  font-size: calc(12px * var(--font-scale));
+  line-height: 1.5;
+  text-align: right;
+}
+
+.emergency-card-attention li {
+  align-items: flex-start;
+}
+
+.emergency-card-attention li span {
+  max-width: 72%;
+  text-align: left;
+}
+
+.emergency-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.emergency-card-tags strong {
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: #eef4f0;
+  color: #17342b;
+  font-size: calc(13px * var(--font-scale));
+}
+
+.emergency-card-tags strong.danger {
+  background: #fff0ec;
+  color: #8a2f20;
+}
+
+.emergency-card-contacts li {
+  align-items: center;
+}
+
+.emergency-card-contacts a {
+  color: #0f6b55;
+  font-size: calc(15px * var(--font-scale));
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.emergency-card-empty {
+  margin: 0;
+  color: #657a71;
+  font-size: calc(13px * var(--font-scale));
+  line-height: 1.6;
+}
+
+.emergency-card-foot {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 16px;
+  border-radius: 12px;
+  padding: 13px 15px;
+  background: #edf4f0;
+  color: #405a4f;
+  font-size: calc(12px * var(--font-scale));
+  line-height: 1.6;
+}
+
+.emergency-card-foot strong {
+  flex: 0 0 auto;
+  color: #17342b;
+}
+
 .embedded-add-medication {
   display: grid;
   gap: 18px;
@@ -2818,6 +3086,53 @@ img {
   .medication-side {
     grid-column: 1 / -1;
     justify-content: flex-end;
+  }
+
+  .dosage-safety-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dosage-safety-grid div {
+    min-height: 76px;
+  }
+
+  .dosage-safety-inline {
+    display: grid;
+    grid-template-columns: auto 1fr;
+  }
+
+  .dosage-safety-inline span {
+    grid-column: 1 / -1;
+  }
+
+  .emergency-card-head {
+    flex-direction: column;
+  }
+
+  .emergency-card-updated {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .emergency-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .emergency-card-medications,
+  .emergency-card-attention {
+    grid-column: auto;
+  }
+
+  .emergency-card-section li {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .emergency-card-section li span,
+  .emergency-card-attention li span {
+    max-width: none;
+    text-align: left;
   }
 
   .form-grid,
@@ -3350,6 +3665,52 @@ img {
   }
 }
 
+@media print {
+  body.printing-emergency-card {
+    background: #fff;
+  }
+
+  body.printing-emergency-card .side-panel,
+  body.printing-emergency-card .mobile-topbar,
+  body.printing-emergency-card .mobile-nav,
+  body.printing-emergency-card .sos-fab,
+  body.printing-emergency-card .sos-floating-button,
+  body.printing-emergency-card .speech-playback-dock,
+  body.printing-emergency-card .page-back,
+  body.printing-emergency-card .page-header {
+    display: none !important;
+  }
+
+  body.printing-emergency-card .app-main,
+  body.printing-emergency-card .page {
+    width: 100%;
+    max-width: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  body.printing-emergency-card .emergency-card-sheet {
+    width: 100%;
+    margin: 0;
+    border: 1.5px solid #17342b;
+    border-radius: 0;
+    padding: 22px;
+    background: #fff;
+    box-shadow: none;
+    break-inside: avoid;
+  }
+
+  body.printing-emergency-card .emergency-card-sheet * {
+    color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body.printing-emergency-card .emergency-card-contacts a {
+    color: #17342b;
+    text-decoration: none;
+  }
+}
+
 /* Unified AI assistant workspace */
 .ai-chat-header {
   display: flex;
@@ -3728,8 +4089,9 @@ img {
 .chat-scroll-bottom {
   position: absolute;
   z-index: 20;
-  right: 26px;
+  right: auto;
   bottom: 18px;
+  left: 50%;
   display: grid;
   width: 46px;
   height: 46px;
@@ -3739,6 +4101,7 @@ img {
   background: var(--surface);
   color: var(--ink);
   box-shadow: 0 8px 24px rgba(27, 58, 47, 0.16);
+  transform: translateX(-50%);
 }
 
 .chat-scroll-bottom:hover {

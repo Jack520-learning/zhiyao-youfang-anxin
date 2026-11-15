@@ -6,11 +6,13 @@ import {
   Clock3,
   Eye,
   Pill,
+  Printer,
   Trash2
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { AddMedicationPage } from "./AddMedicationPage";
+import { DosageFormSafetyNotice } from "../components/DosageFormSafetyNotice";
 import { useAppStore } from "../store/useAppStore";
 
 export function MedicationsPage() {
@@ -45,8 +47,9 @@ export function MedicationsPage() {
               : "每种药都能看到用法、来源和最近核查结果。看不清的字段可以随时纠正。"}
           </p>
         </div>
-        {!readOnly ? (
-          <div className="header-actions">
+        <div className="header-actions">
+          {!readOnly ? (
+            <>
             <button
               className="btn btn-primary btn-large"
               type="button"
@@ -63,8 +66,17 @@ export function MedicationsPage() {
               <Pill size={21} aria-hidden="true" />
               输入药名加药
             </button>
-          </div>
-        ) : null}
+            </>
+          ) : null}
+            <button
+              className="btn btn-large"
+              type="button"
+              onClick={() => navigate("/emergency-card")}
+            >
+              <Printer size={21} aria-hidden="true" />
+              个人急救卡
+            </button>
+        </div>
       </header>
 
       {addMode ? (
@@ -83,28 +95,8 @@ export function MedicationsPage() {
           <h2>还没有添加自己的药品</h2>
           <p>
             系统不会自动放入演示药物。请按照医生处方或您实际在用的药，
-            拍照或输入药名后再加入清单。
+            使用页面上方入口添加。
           </p>
-          {!readOnly ? (
-            <div className="header-actions">
-              <button
-                className="btn btn-primary"
-                type="button"
-                onClick={() => setAddMode("photo")}
-              >
-                <Camera size={19} aria-hidden="true" />
-                拍照添加
-              </button>
-              <button
-                className="btn"
-                type="button"
-                onClick={() => setAddMode("manual")}
-              >
-                <Pill size={19} aria-hidden="true" />
-                输入药名添加
-              </button>
-            </div>
-          ) : null}
         </section>
       ) : (
         <div className="medication-list">
@@ -144,6 +136,11 @@ export function MedicationsPage() {
                     </span>
                   ) : null}
                 </span>
+                <DosageFormSafetyNotice
+                  medicationName={medication.name}
+                  instructions={medication.instructions}
+                  compact
+                />
               </span>
               <span className="medication-side">
                 {!readOnly ? (

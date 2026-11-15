@@ -4,6 +4,7 @@ import { AddMedicationPage } from "./pages/AddMedicationPage";
 import { ChatPage } from "./pages/ChatPage";
 import { CatalogDetailPage } from "./pages/CatalogDetailPage";
 import { CatalogPage } from "./pages/CatalogPage";
+import { EmergencyCardPage } from "./pages/EmergencyCardPage";
 import { FamilyPage } from "./pages/FamilyPage";
 import { HomePage } from "./pages/HomePage";
 import { HerbDetailPage } from "./pages/HerbDetailPage";
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="multi-drug" element={<MultiDrugPage />} />
         <Route path="medications" element={<MedicationsPage />} />
         <Route path="medications/:id" element={<MedicationDetailPage />} />
+        <Route path="emergency-card" element={<EmergencyCardPage />} />
         <Route path="add-medication" element={<AddMedicationPage />} />
         <Route path="reminder/:id" element={<ReminderPage />} />
         <Route path="family" element={<FamilyPage />} />

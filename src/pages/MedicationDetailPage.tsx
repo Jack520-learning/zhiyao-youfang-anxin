@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { DosageFormSafetyNotice } from "../components/DosageFormSafetyNotice";
 import { RiskBadge } from "../components/RiskBadge";
 import { SourcesBlock } from "../components/SourcesBlock";
 import { answerWithRules } from "../lib/riskEngine";
@@ -281,6 +282,11 @@ export function MedicationDetailPage() {
               </>
             )}
           </section>
+
+          <DosageFormSafetyNotice
+            medicationName={medication.name}
+            instructions={medication.instructions}
+          />
 
           <section className="card card-pad">
             <div className="section-heading">

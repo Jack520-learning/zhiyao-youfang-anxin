@@ -14,6 +14,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { RiskBadge } from "../components/RiskBadge";
 import { SourcesBlock } from "../components/SourcesBlock";
 import { CameraCaptureModal } from "../components/CameraCaptureModal";
+import { DosageFormSafetyNotice } from "../components/DosageFormSafetyNotice";
 import { createManualDraft, recognizeMedicineImage } from "../lib/ocr";
 import { fileToCompressedDataUrl } from "../lib/image";
 import { createId } from "../lib/ids";
@@ -580,6 +581,11 @@ export function AddMedicationPage({
                 {error}
               </div>
             ) : null}
+            <DosageFormSafetyNotice
+              medicationName={draft.name}
+              instructions={`${draft.instructions} ${draft.dosage}`}
+              compact
+            />
             <div className="form-grid">
               <label className={`field full ${draft.lowConfidenceFields.includes("name") ? "low-confidence" : ""}`}>
                 <span className="field-label">药名 *</span>
