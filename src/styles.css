@@ -2365,6 +2365,8 @@ img {
 
 .auth-brand-panel {
   display: grid;
+  width: 100%;
+  min-width: 0;
   max-width: 680px;
   gap: 16px;
 }
@@ -2419,6 +2421,9 @@ img {
 
 .auth-card {
   position: relative;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 32px;
@@ -2443,6 +2448,7 @@ img {
 
 .auth-tabs {
   display: grid;
+  min-width: 0;
   grid-template-columns: 1fr 1fr;
   gap: 5px;
   margin-bottom: 20px;
@@ -2452,6 +2458,7 @@ img {
 }
 
 .auth-tabs button {
+  min-width: 0;
   min-height: 48px;
   border: 0;
   border-radius: 12px;
@@ -2470,7 +2477,13 @@ img {
 
 .auth-form {
   display: grid;
+  min-width: 0;
   gap: 14px;
+}
+
+.auth-form > *,
+.auth-field {
+  min-width: 0;
 }
 
 .auth-role-choice {
@@ -2536,6 +2549,8 @@ img {
 }
 
 .auth-field input {
+  width: 100%;
+  min-width: 0;
   min-height: 54px;
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -5393,6 +5408,140 @@ body[data-fixed-view="chat"] .app-main {
   );
 }
 
+/* Cross-device layout hardening */
+html,
+body,
+#root,
+.app-frame,
+.app-layout,
+.app-main,
+.page {
+  min-width: 0;
+  max-width: 100%;
+}
+
+html,
+body {
+  overflow-x: hidden;
+}
+
+@supports (overflow: clip) {
+  html,
+  body {
+    overflow-x: clip;
+  }
+}
+
+input,
+textarea,
+select,
+button,
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+}
+
+.page-title,
+.page-description,
+.settings-copy,
+.medication-info,
+.emergency-card-section,
+.linked-account-section {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.page-header > *,
+.section-heading > *,
+.settings-grid > *,
+.family-grid > *,
+.intake-layout > *,
+.form-grid > *,
+.header-actions > * {
+  min-width: 0;
+}
+
+.header-actions {
+  max-width: 100%;
+}
+
+.btn {
+  max-width: 100%;
+  white-space: normal;
+}
+
+@media (max-width: 840px) {
+  .mobile-topbar {
+    min-height: calc(66px + env(safe-area-inset-top));
+    padding-top: calc(8px + env(safe-area-inset-top));
+    padding-right: max(16px, env(safe-area-inset-right));
+    padding-left: max(16px, env(safe-area-inset-left));
+  }
+
+  .app-main {
+    padding-right: max(16px, env(safe-area-inset-right));
+    padding-bottom: calc(112px + env(safe-area-inset-bottom));
+    padding-left: max(16px, env(safe-area-inset-left));
+  }
+
+  .mobile-nav {
+    right: max(10px, env(safe-area-inset-right));
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: max(10px, env(safe-area-inset-left));
+  }
+}
+
+@media (max-width: 680px) {
+  .section-heading {
+    flex-wrap: wrap;
+  }
+
+  .header-actions > .btn {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .page-header {
+    gap: 14px;
+  }
+
+  .page-title {
+    font-size: clamp(
+      calc(28px * var(--font-scale)),
+      9vw,
+      calc(36px * var(--font-scale))
+    );
+  }
+
+  .modal-backdrop {
+    padding: 12px;
+  }
+
+  .modal {
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+    border-radius: 22px;
+  }
+
+  .account-switch-row,
+  .custom-voice-row,
+  .emergency-contact-row {
+    grid-template-columns: 1fr;
+  }
+
+  .account-delete-button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .emergency-contact-row .input:nth-of-type(3),
+  .emergency-contact-row .select {
+    grid-column: auto;
+  }
+}
+
 .chat-unified-shell > .page-header .page-description {
   max-width: 760px;
   margin-top: 6px;
@@ -5479,7 +5628,8 @@ body[data-fixed-view="chat"] .app-main {
 
 @media (max-width: 760px) {
   .auth-page {
-    width: min(100% - 24px, 520px);
+    width: calc(100% - 24px);
+    max-width: 520px;
     grid-template-columns: 1fr;
     align-content: start;
     gap: 20px;
@@ -5497,11 +5647,13 @@ body[data-fixed-view="chat"] .app-main {
   }
 
   .auth-brand-panel h1 {
+    max-width: 100%;
     font-size: clamp(
-      calc(32px * var(--font-scale)),
-      calc(10vw * var(--font-scale)),
-      calc(46px * var(--font-scale))
+      calc(30px * var(--font-scale)),
+      calc(8.8vw * var(--font-scale)),
+      calc(42px * var(--font-scale))
     );
+    overflow-wrap: anywhere;
   }
 
   .auth-brand-panel > p:not(.eyebrow) {
@@ -5514,6 +5666,8 @@ body[data-fixed-view="chat"] .app-main {
   }
 
   .auth-card {
+    width: 100%;
+    min-width: 0;
     border-radius: 24px;
     padding: 18px;
   }
