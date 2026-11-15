@@ -140,9 +140,9 @@ export function HomePage() {
   if (!nextDose) {
     return (
       <div className="page">
-        <button className="btn btn-ghost page-back" type="button" onClick={() => navigate("/")}>
+        <button className="btn btn-ghost page-back" type="button" onClick={() => navigate("/chat")}>
           <ArrowLeft size={19} aria-hidden="true" />
-          返回今日
+          返回问药识药
         </button>
         <header className="page-header">
           <div>
@@ -229,9 +229,9 @@ export function HomePage() {
 
   return (
     <div className="page">
-      <button className="btn btn-ghost page-back" type="button" onClick={() => navigate("/")}>
+      <button className="btn btn-ghost page-back" type="button" onClick={() => navigate("/chat")}>
         <ArrowLeft size={19} aria-hidden="true" />
-        返回今日
+        返回问药识药
       </button>
       <header className="page-header">
         <div>

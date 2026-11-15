@@ -33,7 +33,7 @@ export function ReminderPage() {
       <div className="page">
         <div className="card card-pad">
           <h1 className="page-title">没有找到这次提醒</h1>
-          <button className="btn btn-primary" type="button" onClick={() => navigate("/")}>
+          <button className="btn btn-primary" type="button" onClick={() => navigate("/today")}>
             返回首页
           </button>
         </div>
@@ -62,7 +62,7 @@ export function ReminderPage() {
 
   return (
     <div className="page">
-      <button className="btn btn-ghost" type="button" onClick={() => navigate("/")}>
+      <button className="btn btn-ghost" type="button" onClick={() => navigate("/today")}>
         <ArrowLeft size={19} aria-hidden="true" />
         返回今日
       </button>
@@ -100,7 +100,7 @@ export function ReminderPage() {
             className="btn btn-large"
             type="button"
             style={{ width: "100%", marginTop: 10 }}
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/today")}
           >
             <CircleHelp size={21} aria-hidden="true" />
             我不确定，先返回

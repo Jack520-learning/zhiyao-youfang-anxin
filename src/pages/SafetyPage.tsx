@@ -19,7 +19,7 @@ export function SafetyPage() {
       <button
         className="btn btn-ghost page-back"
         type="button"
-        onClick={() => navigate(role === "family" ? "/family" : "/")}
+        onClick={() => navigate(role === "family" ? "/family" : "/today")}
       >
         <ArrowLeft size={19} aria-hidden="true" />
         {role === "family" ? "返回家人概览" : "返回今日"}

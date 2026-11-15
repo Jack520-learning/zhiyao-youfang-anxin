@@ -22,6 +22,7 @@ export default function App() {
     <Routes>
       <Route element={<AppShell />}>
         <Route index element={<RoleHome />} />
+        <Route path="today" element={<HomePage />} />
         <Route path="home" element={<HomePage />} />
         <Route path="chat" element={<ChatPage />} />
         <Route path="catalog" element={<CatalogPage />} />

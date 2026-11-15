@@ -34,7 +34,7 @@ interface NavItem {
 
 const elderNav: NavItem[] = [
   { to: "/chat", label: "问药识药", icon: MessageCircleHeart },
-  { to: "/", label: "今日", icon: House, end: true },
+  { to: "/today", label: "今日", icon: House },
   { to: "/medications", label: "用药", icon: Pill },
   { to: "/profile", label: "我的", icon: UserRound }
 ];
