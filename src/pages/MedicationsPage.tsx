@@ -25,6 +25,12 @@ export function MedicationsPage() {
   const updateMedication = useAppStore((state) => state.updateMedication);
   const readOnly = role === "family";
   const [addMode, setAddMode] = useState<"photo" | "manual" | null>(null);
+  const [addSession, setAddSession] = useState(0);
+
+  function startAdding(mode: "photo" | "manual") {
+    setAddMode(mode);
+    setAddSession((current) => current + 1);
+  }
 
   function removeMedication(id: string, name: string) {
     if (
@@ -51,38 +57,44 @@ export function MedicationsPage() {
         <div className="header-actions">
           {!readOnly ? (
             <>
-            <button
-              className="btn btn-primary btn-large"
-              type="button"
-              onClick={() => setAddMode("photo")}
-            >
-              <Camera size={21} aria-hidden="true" />
-              拍照加药
-            </button>
-            <button
-              className="btn btn-large"
-              type="button"
-              onClick={() => setAddMode("manual")}
-            >
-              <Pill size={21} aria-hidden="true" />
-              输入药名加药
-            </button>
+              <button
+                className={`btn btn-large medication-action-button ${
+                  addMode === "photo" ? "btn-primary is-active" : ""
+                }`}
+                type="button"
+                aria-current={addMode === "photo" ? "step" : undefined}
+                onClick={() => startAdding("photo")}
+              >
+                <Camera size={21} aria-hidden="true" />
+                拍照加药
+              </button>
+              <button
+                className={`btn btn-large medication-action-button ${
+                  addMode === "manual" ? "btn-primary is-active" : ""
+                }`}
+                type="button"
+                aria-current={addMode === "manual" ? "step" : undefined}
+                onClick={() => startAdding("manual")}
+              >
+                <Pill size={21} aria-hidden="true" />
+                输入药名加药
+              </button>
             </>
           ) : null}
-            <button
-              className="btn btn-large"
-              type="button"
-              onClick={() => navigate("/emergency-card")}
-            >
-              <Printer size={21} aria-hidden="true" />
-              个人急救卡
-            </button>
+          <button
+            className="btn btn-large medication-action-button"
+            type="button"
+            onClick={() => navigate("/emergency-card")}
+          >
+            <Printer size={21} aria-hidden="true" />
+            个人急救卡
+          </button>
         </div>
       </header>
 
       {addMode ? (
         <AddMedicationPage
-          key={addMode}
+          key={`${addMode}-${addSession}`}
           embedded
           captureOnOpen={addMode === "photo"}
           manualOnOpen={addMode === "manual"}

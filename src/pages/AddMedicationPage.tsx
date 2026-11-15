@@ -415,7 +415,9 @@ export function AddMedicationPage({
       </button>
       <header className="page-header" style={{ marginTop: 16 }}>
         <div>
-          <p className="eyebrow">拍照加药 · 先核对再入档</p>
+          <p className="eyebrow">
+            {manualMode ? "输入药名加药" : "拍照加药"} · 先核对再入档
+          </p>
           <h1 className="page-title">
             {phase === "upload"
               ? "把药盒拍给我看"
