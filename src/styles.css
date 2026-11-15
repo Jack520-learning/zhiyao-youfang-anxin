@@ -2199,6 +2199,18 @@ img {
   width: 100%;
 }
 
+.voice-stop-button {
+  min-height: 42px;
+  margin-left: auto;
+  padding: 0 13px;
+  color: var(--red);
+  white-space: nowrap;
+}
+
+.voice-stop-button:disabled {
+  color: var(--muted);
+}
+
 .voice-clone-recorder {
   display: grid;
   gap: 12px;
@@ -3525,9 +3537,9 @@ img {
   flex-direction: column;
   gap: 14px;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   overflow: hidden auto;
-  padding: 18px clamp(18px, 3vw, 38px);
+  padding: 18px clamp(18px, 3vw, 38px) 48px;
   scrollbar-width: none;
 }
 

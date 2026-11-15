@@ -7,6 +7,7 @@ import {
   Eye,
   KeyRound,
   LockKeyhole,
+  LoaderCircle,
   LogOut,
   Pause,
   Play,
@@ -15,13 +16,14 @@ import {
   RotateCcw,
   Save,
   ShieldCheck,
+  Square,
   Trash2,
   Type,
   UserRound,
   Volume2,
   UsersRound
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   deleteCloudFamily,
@@ -85,6 +87,8 @@ export function ProfilePage() {
   const [cancelBusy, setCancelBusy] = useState(false);
   const [speechPlayback, setSpeechPlayback] =
     useState<SpeechPlaybackState>("idle");
+  const [speechLoading, setSpeechLoading] = useState(false);
+  const voicePreviewVersionRef = useRef(0);
   const [notificationState, setNotificationState] = useState<
     "idle" | "loading" | "granted" | "denied"
   >("idle");
@@ -209,16 +213,27 @@ export function ProfilePage() {
       setSpeechPlayback("speaking");
       return;
     }
-    const started = await testVoiceMode(
-      preferences.voiceMode,
-      preferences.customVoiceId
-    );
-    if (!started) {
-      setToast("当前浏览器没有可用的语音朗读功能");
-      setSpeechPlayback("idle");
-      return;
+    await previewVoice(preferences.voiceMode, preferences.customVoiceId);
+  }
+
+  async function previewVoice(mode: VoiceMode, customVoiceId?: string) {
+    const requestVersion = ++voicePreviewVersionRef.current;
+    stopSpeaking();
+    setSpeechPlayback("idle");
+    setSpeechLoading(true);
+    try {
+      const started = await testVoiceMode(mode, customVoiceId);
+      if (requestVersion !== voicePreviewVersionRef.current) return;
+      if (!started) {
+        setToast("当前浏览器没有可用的语音朗读功能");
+        return;
+      }
+      setSpeechPlayback("speaking");
+    } finally {
+      if (requestVersion === voicePreviewVersionRef.current) {
+        setSpeechLoading(false);
+      }
     }
-    setSpeechPlayback("speaking");
   }
 
   function addCustomVoice(voiceId: string, voiceName: string) {
@@ -233,6 +248,7 @@ export function ProfilePage() {
       voiceMode: "custom"
     });
     setToast("专属音色已创建并启用");
+    void previewVoice("custom", voiceId);
   }
 
   async function deleteCustomVoice(voiceId: string) {
@@ -573,12 +589,36 @@ export function ProfilePage() {
                   type="checkbox"
                   checked={preferences.soundEnabled}
                   onChange={(event) => {
-                    if (!event.target.checked) stopSpeaking();
+                    if (!event.target.checked) {
+                      voicePreviewVersionRef.current += 1;
+                      setSpeechLoading(false);
+                      stopSpeaking();
+                    }
                     updatePreferences({ soundEnabled: event.target.checked });
+                    if (event.target.checked) {
+                      void previewVoice(
+                        preferences.voiceMode,
+                        preferences.customVoiceId
+                      );
+                    }
                   }}
                 />
                 <span aria-hidden="true" />
               </label>
+              <button
+                className="btn voice-stop-button"
+                type="button"
+                disabled={!preferences.soundEnabled || speechPlayback === "idle"}
+                onClick={() => {
+                  voicePreviewVersionRef.current += 1;
+                  setSpeechLoading(false);
+                  stopSpeaking();
+                  setSpeechPlayback("idle");
+                }}
+              >
+                <Square size={16} aria-hidden="true" />
+                停止朗读
+              </button>
             </div>
             {preferences.soundEnabled ? (
               <div className="voice-settings">
@@ -599,6 +639,7 @@ export function ProfilePage() {
                         stopSpeaking();
                         updatePreferences({ voiceMode: option.value });
                         setSpeechPlayback("idle");
+                        void previewVoice(option.value);
                       }}
                     >
                       {option.label}
@@ -610,12 +651,16 @@ export function ProfilePage() {
                   type="button"
                   onClick={() => void toggleSpeechPlayback()}
                 >
-                  {speechPlayback === "speaking" ? (
+                  {speechLoading ? (
+                    <LoaderCircle size={18} className="spin" aria-hidden="true" />
+                  ) : speechPlayback === "speaking" ? (
                     <Pause size={18} aria-hidden="true" />
                   ) : (
                     <Play size={18} aria-hidden="true" />
                   )}
-                  {speechPlayback === "speaking"
+                  {speechLoading
+                    ? "正在准备试听"
+                    : speechPlayback === "speaking"
                     ? "暂停朗读"
                     : speechPlayback === "paused"
                       ? "继续朗读"
@@ -633,6 +678,7 @@ export function ProfilePage() {
                       voiceMode: "custom"
                     });
                     setSpeechPlayback("idle");
+                    void previewVoice("custom", voiceId);
                   }}
                   onDelete={deleteCustomVoice}
                 />
@@ -1128,12 +1174,36 @@ export function ProfilePage() {
                 type="checkbox"
                 checked={preferences.soundEnabled}
                 onChange={(event) => {
-                  if (!event.target.checked) stopSpeaking();
+                  if (!event.target.checked) {
+                    voicePreviewVersionRef.current += 1;
+                    setSpeechLoading(false);
+                    stopSpeaking();
+                  }
                   updatePreferences({ soundEnabled: event.target.checked });
+                  if (event.target.checked) {
+                    void previewVoice(
+                      preferences.voiceMode,
+                      preferences.customVoiceId
+                    );
+                  }
                 }}
               />
               <span aria-hidden="true" />
             </label>
+            <button
+              className="btn voice-stop-button"
+              type="button"
+              disabled={!preferences.soundEnabled || speechPlayback === "idle"}
+              onClick={() => {
+                voicePreviewVersionRef.current += 1;
+                setSpeechLoading(false);
+                stopSpeaking();
+                setSpeechPlayback("idle");
+              }}
+            >
+              <Square size={16} aria-hidden="true" />
+              停止朗读
+            </button>
           </div>
           {preferences.soundEnabled ? (
             <div className="voice-settings family-voice-settings">
@@ -1154,6 +1224,7 @@ export function ProfilePage() {
                       stopSpeaking();
                       updatePreferences({ voiceMode: option.value });
                       setSpeechPlayback("idle");
+                      void previewVoice(option.value);
                     }}
                   >
                     {option.label}
@@ -1165,12 +1236,16 @@ export function ProfilePage() {
                 type="button"
                 onClick={() => void toggleSpeechPlayback()}
               >
-                {speechPlayback === "speaking" ? (
+                {speechLoading ? (
+                  <LoaderCircle size={18} className="spin" aria-hidden="true" />
+                ) : speechPlayback === "speaking" ? (
                   <Pause size={18} aria-hidden="true" />
                 ) : (
                   <Play size={18} aria-hidden="true" />
                 )}
-                {speechPlayback === "speaking"
+                {speechLoading
+                  ? "正在准备试听"
+                  : speechPlayback === "speaking"
                   ? "暂停朗读"
                   : speechPlayback === "paused"
                     ? "继续朗读"
@@ -1188,6 +1263,7 @@ export function ProfilePage() {
                     voiceMode: "custom"
                   });
                   setSpeechPlayback("idle");
+                  void previewVoice("custom", voiceId);
                 }}
                 onDelete={deleteCustomVoice}
               />

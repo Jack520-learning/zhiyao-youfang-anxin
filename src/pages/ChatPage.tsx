@@ -1143,18 +1143,6 @@ export function ChatPage() {
                   </article>
                 ) : null}
               </div>
-              <div className="chat-suggestions">
-                {sampleQuestions.slice(0, 3).map((question) => (
-                  <button
-                    className="suggestion-chip"
-                    type="button"
-                    key={question}
-                    onClick={() => void submitQuestion(question)}
-                  >
-                    {question}
-                  </button>
-                ))}
-              </div>
             </>
           )}
         </div>

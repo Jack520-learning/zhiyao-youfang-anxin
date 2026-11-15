@@ -166,6 +166,7 @@ export type SpeechPlaybackState = "idle" | "speaking" | "paused";
 
 let preferredVoiceMode: VoiceMode = "warm";
 let currentAudio: HTMLAudioElement | null = null;
+let speechRequestVersion = 0;
 
 function scoreVoice(voice: SpeechSynthesisVoice, mode: VoiceMode): number {
   const name = voice.name.toLowerCase();
@@ -245,13 +246,19 @@ export function speakText(
   if (!enabled || !text.trim()) return Promise.resolve(false);
   stopSpeaking();
   preferredVoiceMode = voiceMode;
-  return playServerVoice(text, voiceMode, customVoiceId);
+  return playServerVoice(
+    text,
+    voiceMode,
+    customVoiceId,
+    speechRequestVersion
+  );
 }
 
 async function playServerVoice(
   text: string,
   voiceMode: VoiceMode,
-  customVoiceId?: string
+  customVoiceId: string | undefined,
+  requestVersion: number
 ): Promise<boolean> {
   try {
     const response = await fetch("/api/tts", {
@@ -265,6 +272,7 @@ async function playServerVoice(
     });
     if (!response.ok) throw new Error("服务端语音合成不可用");
     const payload = (await response.json()) as { audioUrl?: string };
+    if (requestVersion !== speechRequestVersion) return false;
     if (!payload.audioUrl) throw new Error("没有返回音频");
     const audio = new Audio(payload.audioUrl);
     currentAudio = audio;
@@ -277,6 +285,7 @@ async function playServerVoice(
     await audio.play();
     return true;
   } catch {
+    if (requestVersion !== speechRequestVersion) return false;
     return speakWithBrowser(text, voiceMode);
   }
 }
@@ -344,6 +353,7 @@ export function resumeSpeaking(): boolean {
 }
 
 export function stopSpeaking() {
+  speechRequestVersion += 1;
   if (currentAudio) {
     currentAudio.pause();
     currentAudio.currentTime = 0;
