@@ -81,7 +81,6 @@ export function VoiceCloneRecorder({
 }) {
   const [recording, setRecording] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState("");
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -150,7 +149,6 @@ export function VoiceCloneRecorder({
       recorder.start(250);
       elapsedRef.current = 0;
       startedAtRef.current = performance.now();
-      setSeconds(0);
       setRecording(true);
       timerRef.current = window.setInterval(() => {
         const analyserNode = analyserRef.current;
@@ -168,7 +166,6 @@ export function VoiceCloneRecorder({
         }
         elapsedRef.current =
           (performance.now() - startedAtRef.current) / 1000;
-        setSeconds(Math.min(20, Math.floor(elapsedRef.current)));
         if (elapsedRef.current >= 20) stop();
       }, 250);
     } catch {
@@ -185,7 +182,6 @@ export function VoiceCloneRecorder({
     setRecording(false);
     if (timerRef.current) window.clearInterval(timerRef.current);
     elapsedRef.current = (performance.now() - startedAtRef.current) / 1000;
-    setSeconds(Math.min(20, Math.floor(elapsedRef.current)));
     if (elapsedRef.current < 5) {
       recorderRef.current.onstop = null;
       recorderRef.current.stop();
@@ -223,7 +219,7 @@ export function VoiceCloneRecorder({
       if (!response.ok || !payload.voiceId) {
         throw new Error(payload.error || "专属音色创建失败");
       }
-      onCreated(payload.voiceId, `我的专属音色 ${new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`);
+      onCreated(payload.voiceId, `我的专属音色 ${customVoices.length + 1}`);
     } catch (uploadError) {
       setError(
         uploadError instanceof Error
@@ -297,7 +293,7 @@ export function VoiceCloneRecorder({
           ) : (
             <Mic size={19} aria-hidden="true" />
           )}
-          {recording ? `结束录音 ${seconds} 秒` : "开始录制声音"}
+          {recording ? "结束录音" : "开始录制声音"}
         </button>
         {processing ? (
           <span className="voice-record-status">

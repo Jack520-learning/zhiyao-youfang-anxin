@@ -356,6 +356,14 @@ export function testVoiceMode(
   mode: VoiceMode,
   customVoiceId?: string
 ): Promise<boolean> {
+  if (mode === "custom" && customVoiceId) {
+    return speakText(
+      "您好，这是您的专属健康助手。我会用您熟悉的声音，清楚、温和地为您朗读用药信息。",
+      true,
+      mode,
+      customVoiceId
+    );
+  }
   return speakText(
     mode === "warm"
       ? "您好，我会用温和清楚的声音陪您核对用药。"

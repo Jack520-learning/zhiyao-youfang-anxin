@@ -791,7 +791,7 @@ export const useAppStore = create<AppStore>()(
             ...saved.preferences,
             voiceMode:
               saved.preferences?.voiceMode ?? current.preferences.voiceMode,
-            customVoices:
+            customVoices: (
               saved.preferences?.customVoices ??
               (saved.preferences?.customVoiceId
                 ? [
@@ -802,7 +802,11 @@ export const useAppStore = create<AppStore>()(
                       createdAt: nowIso()
                     }
                   ]
-                : current.preferences.customVoices),
+                : current.preferences.customVoices)
+            ).map((voice, index) => ({
+              ...voice,
+              name: `我的专属音色 ${index + 1}`
+            })),
             fontScale:
               saved.preferences?.fontScale ?? current.preferences.fontScale
           },
