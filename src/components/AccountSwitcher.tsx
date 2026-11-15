@@ -26,6 +26,9 @@ export function AccountSwitcher({
   const accounts = useAppStore((state) => state.accounts);
   const sessionAccountId = useAppStore((state) => state.sessionAccountId);
   const switchAccount = useAppStore((state) => state.switchAccount);
+  const verifyAccountPassword = useAppStore(
+    (state) => state.verifyAccountPassword
+  );
   const deleteLinkedAccount = useAppStore(
     (state) => state.deleteLinkedAccount
   );
@@ -88,6 +91,14 @@ export function AccountSwitcher({
     setDeleteError("");
     const wasCurrent = deleteTarget.id === sessionAccountId;
     try {
+      const passwordValid = await verifyAccountPassword(
+        deleteTarget.id,
+        deletePassword
+      );
+      if (!passwordValid) {
+        setDeleteError("密码不正确，账号尚未删除");
+        return;
+      }
       if (deleteTarget.role === "elder") {
         await deleteCloudFamily(deleteTarget.familyCode);
       } else if (wasCurrent) {

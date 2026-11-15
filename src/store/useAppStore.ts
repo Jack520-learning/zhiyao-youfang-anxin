@@ -133,6 +133,10 @@ interface AppActions {
     password: string
   ) => Promise<{ ok: boolean; error?: string }>;
   switchAccount: (accountId: string) => { ok: boolean; error?: string };
+  verifyAccountPassword: (
+    accountId: string,
+    password: string
+  ) => Promise<boolean>;
   deleteLinkedAccount: (
     accountId: string,
     password: string
@@ -477,6 +481,17 @@ export const useAppStore = create<AppStore>()(
           ].slice(0, 100)
         });
         return { ok: true };
+      },
+      verifyAccountPassword: async (accountId, password) => {
+        const account = getState().accounts.find(
+          (item) => item.id === accountId
+        );
+        if (!account) return false;
+        return verifyPassword(
+          password,
+          account.passwordHash,
+          account.passwordSalt
+        );
       },
       deleteLinkedAccount: async (accountId, password) => {
         const state = getState();
