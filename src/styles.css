@@ -2154,6 +2154,75 @@ img {
   line-height: 1.5;
 }
 
+.voice-settings {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.voice-mode-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.voice-mode-options button {
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface);
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.voice-mode-options button.active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.voice-playback-button {
+  width: 100%;
+}
+
+.family-voice-settings {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.empty-medication-state {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.empty-medication-state h2 {
+  font-size: calc(22px * var(--font-scale));
+}
+
+.empty-medication-state p {
+  max-width: 620px;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.health-profile-backdrop {
+  align-items: center;
+}
+
+.health-profile-card {
+  width: min(680px, calc(100vw - 28px));
+  max-height: min(760px, calc(100dvh - 28px));
+  overflow-y: auto;
+}
+
+.health-profile-card h2 {
+  margin-top: 4px;
+}
+
 .account-switcher {
   width: min(520px, calc(100vw - 28px));
 }

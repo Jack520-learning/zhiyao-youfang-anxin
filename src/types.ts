@@ -108,6 +108,7 @@ export interface ElderProfile {
   conditions: string[];
   allergies: string[];
   timeZone: string;
+  healthProfileCompleted: boolean;
   visionPreference: "standard" | "large" | "extra-large";
   voiceEnabled: boolean;
 }
@@ -164,6 +165,7 @@ export interface IntakeDraft {
 export interface AppPreferences {
   notificationsEnabled: boolean;
   soundEnabled: boolean;
+  voiceMode: "warm" | "clear";
   highContrast: boolean;
   fontScale: "standard" | "large" | "extra-large";
 }

@@ -8,6 +8,8 @@ import {
   KeyRound,
   LockKeyhole,
   LogOut,
+  Pause,
+  Play,
   Phone,
   Plus,
   RotateCcw,
@@ -27,7 +29,14 @@ import {
   syncCloudSnapshot,
   updateFamilyEmergencyContacts
 } from "../lib/cloud";
-import { speakText } from "../lib/speech";
+import {
+  getSpeechPlaybackState,
+  pauseSpeaking,
+  resumeSpeaking,
+  stopSpeaking,
+  testVoiceMode,
+  type SpeechPlaybackState
+} from "../lib/speech";
 import { useAppStore } from "../store/useAppStore";
 import type { EmergencyContact } from "../types";
 
@@ -63,6 +72,8 @@ export function ProfilePage() {
   const [cancelPassword, setCancelPassword] = useState("");
   const [cancelError, setCancelError] = useState("");
   const [cancelBusy, setCancelBusy] = useState(false);
+  const [speechPlayback, setSpeechPlayback] =
+    useState<SpeechPlaybackState>("idle");
   const [notificationState, setNotificationState] = useState<
     "idle" | "loading" | "granted" | "denied"
   >("idle");
@@ -81,6 +92,18 @@ export function ProfilePage() {
     const timer = window.setTimeout(() => setToast(""), 2600);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  useEffect(() => {
+    if (!preferences.soundEnabled) {
+      setSpeechPlayback("idle");
+      return;
+    }
+    const timer = window.setInterval(
+      () => setSpeechPlayback(getSpeechPlaybackState()),
+      250
+    );
+    return () => window.clearInterval(timer);
+  }, [preferences.soundEnabled]);
 
   async function copyCode() {
     try {
@@ -156,6 +179,30 @@ export function ProfilePage() {
     navigate("/");
   }
 
+  function toggleSpeechPlayback() {
+    if (!preferences.soundEnabled) {
+      setToast("请先打开语音朗读");
+      return;
+    }
+    if (speechPlayback === "speaking") {
+      pauseSpeaking();
+      setSpeechPlayback("paused");
+      return;
+    }
+    if (speechPlayback === "paused") {
+      resumeSpeaking();
+      setSpeechPlayback("speaking");
+      return;
+    }
+    const started = testVoiceMode(preferences.voiceMode);
+    if (!started) {
+      setToast("当前浏览器没有可用的语音朗读功能");
+      setSpeechPlayback("idle");
+      return;
+    }
+    setSpeechPlayback("speaking");
+  }
+
   function changeFamilyCode() {
     const clean = codeInput.trim().toUpperCase();
     if (!clean) {
@@ -180,6 +227,7 @@ export function ProfilePage() {
     updateProfile({
       name: healthDraft.name.trim(),
       age,
+      healthProfileCompleted: true,
       conditions: healthDraft.conditions
         .split(/[、,，]/)
         .map((item) => item.trim())
@@ -448,25 +496,74 @@ export function ProfilePage() {
             </label>
           </section>
 
-          <section className="card card-pad elder-setting-row">
-            <span className="quick-action-icon">
-              <Volume2 size={25} aria-hidden="true" />
-            </span>
-            <span className="settings-copy">
-              <strong>语音朗读</strong>
-              <span>让回答和提醒读给您听</span>
-            </span>
-            <label className="switch">
-              <span className="sr-only">语音朗读</span>
-              <input
-                type="checkbox"
-                checked={preferences.soundEnabled}
-                onChange={(event) =>
-                  updatePreferences({ soundEnabled: event.target.checked })
-                }
-              />
-              <span aria-hidden="true" />
-            </label>
+          <section className="card card-pad">
+            <div className="elder-setting-row" style={{ padding: 0 }}>
+              <span className="quick-action-icon">
+                <Volume2 size={25} aria-hidden="true" />
+              </span>
+              <span className="settings-copy">
+                <strong>语音朗读</strong>
+                <span>让回答和提醒读给您听</span>
+              </span>
+              <label className="switch">
+                <span className="sr-only">语音朗读</span>
+                <input
+                  type="checkbox"
+                  checked={preferences.soundEnabled}
+                  onChange={(event) => {
+                    if (!event.target.checked) stopSpeaking();
+                    updatePreferences({ soundEnabled: event.target.checked });
+                  }}
+                />
+                <span aria-hidden="true" />
+              </label>
+            </div>
+            {preferences.soundEnabled ? (
+              <div className="voice-settings">
+                <div className="voice-mode-options" role="group" aria-label="朗读音色">
+                  <button
+                    type="button"
+                    className={preferences.voiceMode === "warm" ? "active" : ""}
+                    aria-pressed={preferences.voiceMode === "warm"}
+                    onClick={() => {
+                      stopSpeaking();
+                      updatePreferences({ voiceMode: "warm" });
+                      setSpeechPlayback("idle");
+                    }}
+                  >
+                    温和女声
+                  </button>
+                  <button
+                    type="button"
+                    className={preferences.voiceMode === "clear" ? "active" : ""}
+                    aria-pressed={preferences.voiceMode === "clear"}
+                    onClick={() => {
+                      stopSpeaking();
+                      updatePreferences({ voiceMode: "clear" });
+                      setSpeechPlayback("idle");
+                    }}
+                  >
+                    清晰声线
+                  </button>
+                </div>
+                <button
+                  className="btn voice-playback-button"
+                  type="button"
+                  onClick={toggleSpeechPlayback}
+                >
+                  {speechPlayback === "speaking" ? (
+                    <Pause size={18} aria-hidden="true" />
+                  ) : (
+                    <Play size={18} aria-hidden="true" />
+                  )}
+                  {speechPlayback === "speaking"
+                    ? "暂停朗读"
+                    : speechPlayback === "paused"
+                      ? "继续朗读"
+                      : "试听当前音色"}
+                </button>
+              </div>
+            ) : null}
           </section>
 
           <section className="card card-pad elder-setting-row">
@@ -891,11 +988,60 @@ export function ProfilePage() {
               <input
                 type="checkbox"
                 checked={preferences.soundEnabled}
-                onChange={(event) => updatePreferences({ soundEnabled: event.target.checked })}
+                onChange={(event) => {
+                  if (!event.target.checked) stopSpeaking();
+                  updatePreferences({ soundEnabled: event.target.checked });
+                }}
               />
               <span aria-hidden="true" />
             </label>
           </div>
+          {preferences.soundEnabled ? (
+            <div className="voice-settings family-voice-settings">
+              <div className="voice-mode-options" role="group" aria-label="朗读音色">
+                <button
+                  type="button"
+                  className={preferences.voiceMode === "warm" ? "active" : ""}
+                  aria-pressed={preferences.voiceMode === "warm"}
+                  onClick={() => {
+                    stopSpeaking();
+                    updatePreferences({ voiceMode: "warm" });
+                    setSpeechPlayback("idle");
+                  }}
+                >
+                  温和女声
+                </button>
+                <button
+                  type="button"
+                  className={preferences.voiceMode === "clear" ? "active" : ""}
+                  aria-pressed={preferences.voiceMode === "clear"}
+                  onClick={() => {
+                    stopSpeaking();
+                    updatePreferences({ voiceMode: "clear" });
+                    setSpeechPlayback("idle");
+                  }}
+                >
+                  清晰声线
+                </button>
+              </div>
+              <button
+                className="btn voice-playback-button"
+                type="button"
+                onClick={toggleSpeechPlayback}
+              >
+                {speechPlayback === "speaking" ? (
+                  <Pause size={18} aria-hidden="true" />
+                ) : (
+                  <Play size={18} aria-hidden="true" />
+                )}
+                {speechPlayback === "speaking"
+                  ? "暂停朗读"
+                  : speechPlayback === "paused"
+                    ? "继续朗读"
+                    : "试听当前音色"}
+              </button>
+            </div>
+          ) : null}
           <div className="settings-row">
             <div className="settings-copy">
               <strong>系统通知</strong>
@@ -915,21 +1061,6 @@ export function ProfilePage() {
                   : "开启通知"}
             </button>
           </div>
-          <button
-            className="btn btn-ghost"
-            type="button"
-            style={{ width: "100%", marginTop: 10 }}
-            onClick={() => {
-              if (!preferences.soundEnabled) {
-                setToast("请先打开语音朗读");
-                return;
-              }
-              speakText("语音朗读已准备好。我会尽量说慢一点、说清楚一点。");
-            }}
-          >
-            <Volume2 size={19} aria-hidden="true" />
-            测试语音朗读
-          </button>
           <button
             className="btn btn-ghost"
             type="button"

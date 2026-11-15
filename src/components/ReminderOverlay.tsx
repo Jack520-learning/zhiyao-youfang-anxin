@@ -43,12 +43,14 @@ export function ReminderOverlay() {
       `到吃药时间啦。${humanizeRelation(
         nextDose.medication.relation
       )}，${nextDose.medication.name}，${nextDose.medication.dosage}。`,
-      preferences.soundEnabled && profile.voiceEnabled
+      preferences.soundEnabled && profile.voiceEnabled,
+      preferences.voiceMode
     );
   }, [
     open,
     reminderKey,
     preferences.soundEnabled,
+    preferences.voiceMode,
     profile.voiceEnabled
   ]);
 

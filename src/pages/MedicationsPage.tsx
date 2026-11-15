@@ -64,8 +64,40 @@ export function MedicationsPage() {
         ) : null}
       </header>
 
-      <div className="medication-list">
-        {medications.map((medication) => {
+      {!medications.length ? (
+        <section className="card card-pad empty-medication-state">
+          <span className="upload-icon">
+            <Pill size={32} aria-hidden="true" />
+          </span>
+          <h2>还没有添加自己的药品</h2>
+          <p>
+            系统不会自动放入演示药物。请按照医生处方或您实际在用的药，
+            拍照或输入药名后再加入清单。
+          </p>
+          {!readOnly ? (
+            <div className="header-actions">
+              <button
+                className="btn btn-primary"
+                type="button"
+                onClick={() => navigate("/add-medication")}
+              >
+                <Camera size={19} aria-hidden="true" />
+                拍照添加
+              </button>
+              <button
+                className="btn"
+                type="button"
+                onClick={() => navigate("/add-medication?mode=manual")}
+              >
+                <Pill size={19} aria-hidden="true" />
+                输入药名添加
+              </button>
+            </div>
+          ) : null}
+        </section>
+      ) : (
+        <div className="medication-list">
+          {medications.map((medication) => {
           const relatedRisk = riskChecks.find((riskCheck) =>
             riskCheck.involvedMedicationIds.includes(medication.id)
           );
@@ -151,8 +183,9 @@ export function MedicationsPage() {
               </span>
             </article>
           );
-        })}
-      </div>
+          })}
+        </div>
+      )}
     </div>
   );
 }

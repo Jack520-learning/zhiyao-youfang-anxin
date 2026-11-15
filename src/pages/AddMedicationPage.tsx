@@ -25,6 +25,7 @@ import {
   validateTimes
 } from "../lib/dosage";
 import { dateKey, nowIso } from "../lib/time";
+import { findBestMedicine } from "../catalog/retrieval";
 import { useAppStore } from "../store/useAppStore";
 import type { IntakeDraft, Medication, RiskCheck } from "../types";
 
@@ -90,12 +91,140 @@ export function AddMedicationPage() {
     setProgressLabel("正在保存原图");
     setError("");
     try {
-      const recognized = await recognizeMedicineImage(dataUrl, (value, label) => {
-        setProgress(value);
-        setProgressLabel(label);
-      });
-      setDraft(recognized);
-      saveIntakeDraft(recognized);
+      const visionPromise = fetch("/api/vision-identify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageDataUrl: dataUrl, mode: "medicine" })
+      })
+        .then(async (response) => {
+          if (!response.ok) return null;
+          return (await response.json()) as {
+            candidates?: Array<{
+              name?: string;
+              confidence?: number;
+            }>;
+            medicine?: {
+              name?: string;
+              genericName?: string;
+              activeIngredient?: string;
+              dosage?: string;
+              price?: string;
+              dosageForm?: string;
+              strength?: string;
+              frequency?: string;
+              relation?: string;
+              instructions?: string;
+            };
+            summary?: string;
+            cautions?: string[];
+          };
+        })
+        .catch(() => null);
+
+      let recognized: IntakeDraft;
+      try {
+        recognized = await recognizeMedicineImage(
+          dataUrl,
+          (value, label) => {
+            setProgress(value * 0.55);
+            setProgressLabel(label);
+          }
+        );
+      } catch {
+        recognized = createManualDraft(dataUrl);
+      }
+      setProgress(0.68);
+      setProgressLabel("AI 正在读取药名、成分、剂量和价格");
+      const vision = await visionPromise;
+      const visionMedicine = vision?.medicine;
+      const visionName =
+        visionMedicine?.name?.trim() ||
+        vision?.candidates?.[0]?.name?.trim() ||
+        "";
+      const catalogMatch = findBestMedicine(
+        visionName || recognized.name
+      );
+      const medicine =
+        catalogMatch && catalogMatch.score >= 0.58
+          ? catalogMatch.medicine
+          : undefined;
+      const nextName =
+        visionName ||
+        (recognized.name.length >= 2 ? recognized.name : "") ||
+        medicine?.displayName ||
+        recognized.name;
+      const dosage =
+        visionMedicine?.dosage ||
+        recognized.dosage ||
+        visionMedicine?.strength ||
+        medicine?.strength ||
+        "";
+      const filledDraft: IntakeDraft = {
+        ...recognized,
+        name: nextName,
+        genericName:
+          visionMedicine?.genericName ||
+          recognized.genericName ||
+          medicine?.activeIngredient ||
+          "",
+        ingredientsText:
+          visionMedicine?.activeIngredient ||
+          recognized.ingredientsText ||
+          medicine?.activeIngredient ||
+          "",
+        dosage,
+        price: visionMedicine?.price || recognized.price || "",
+        frequency:
+          visionMedicine?.frequency ||
+          recognized.frequency ||
+          "每日 1 次",
+        relation:
+          visionMedicine?.relation ||
+          recognized.relation ||
+          (medicine && /餐后|饭后|随餐/.test(medicine.timing)
+            ? /随餐/.test(medicine.timing)
+              ? "随餐"
+              : "饭后"
+            : ""),
+        instructions:
+          visionMedicine?.instructions ||
+          recognized.instructions ||
+          medicine?.howToTake ||
+          "",
+        confidence: Math.max(
+          recognized.confidence,
+          vision?.candidates?.[0]?.confidence ?? 0,
+          medicine ? 0.82 : 0
+        ),
+        lowConfidenceFields: recognized.lowConfidenceFields.filter(
+          (field) => {
+            if (field === "name") return !nextName;
+            if (field === "dosage") return !dosage;
+            if (field === "ingredientsText") {
+              return !(
+                visionMedicine?.activeIngredient ||
+                recognized.ingredientsText ||
+                medicine
+              );
+            }
+            return false;
+          }
+        )
+      };
+      setDraft(filledDraft);
+      saveIntakeDraft(filledDraft);
+      setProgress(1);
+      setProgressLabel("识别完成，请核对");
+      if (vision?.summary || vision?.cautions?.length) {
+        setError(
+          [
+            vision.summary,
+            ...(vision.cautions || []).map((item) => `注意：${item}`)
+          ]
+            .filter(Boolean)
+            .join("；")
+        );
+      }
       setPhase("review");
     } catch (recognitionError) {
       console.error(recognitionError);
@@ -103,7 +232,7 @@ export function AddMedicationPage() {
       setDraft(manual);
       saveIntakeDraft(manual);
       setError(
-        "本地识别暂时没有完成。原图已经保存，请直接核对并填写药名、剂量和用法。"
+        "识别暂时没有完成。原图已经保存，请直接核对并填写药名、剂量和用法。"
       );
       setPhase("review");
     }

@@ -208,7 +208,11 @@ export const useAppStore = create<AppStore>()(
           familyCode: account.familyCode,
           profile:
             role === "elder" && account.displayName
-              ? { ...current.profile, name: account.displayName }
+              ? {
+                  ...current.profile,
+                  name: account.displayName,
+                  healthProfileCompleted: false
+                }
               : current.profile,
           auditEvents: [
             auditEvent(
@@ -751,18 +755,25 @@ export const useAppStore = create<AppStore>()(
           preferences: {
             ...current.preferences,
             ...saved.preferences,
+            voiceMode:
+              saved.preferences?.voiceMode ?? current.preferences.voiceMode,
             fontScale:
               saved.preferences?.fontScale ?? current.preferences.fontScale
           },
-          medications: (saved.medications ?? current.medications).map(
-            (medication) => ({
+          medications: (saved.medications ?? current.medications)
+            .filter(
+              (medication) =>
+                medication.source?.title !== "演示处方（已确认）"
+            )
+            .map((medication) => ({
               ...medication,
               reminderEnabled: medication.reminderEnabled !== false
-            })
-          ),
+            })),
           profile: {
             ...current.profile,
             ...saved.profile,
+            healthProfileCompleted:
+              saved.profile?.healthProfileCompleted ?? false,
             timeZone:
               saved.profile?.timeZone ||
               Intl.DateTimeFormat().resolvedOptions().timeZone ||

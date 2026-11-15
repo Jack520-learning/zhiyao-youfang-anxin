@@ -97,7 +97,8 @@ export function HomePage() {
     if (status === "taken") {
       speakText(
         `好的，已经记录您吃过${dose.medication.name}。`,
-        preferences.soundEnabled && profile.voiceEnabled
+        preferences.soundEnabled && profile.voiceEnabled,
+        preferences.voiceMode
       );
     }
   }
