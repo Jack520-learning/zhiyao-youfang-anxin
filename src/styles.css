@@ -708,6 +708,23 @@ img {
   color: var(--primary-strong);
 }
 
+.hero-actions .btn:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.hero-actions .btn.btn-primary:hover:not(:disabled) {
+  border-color: #fff;
+  background: #f4fbf8;
+  color: var(--primary-strong);
+}
+
+.hero-actions .btn:focus-visible {
+  outline: 3px solid rgba(255, 255, 255, 0.72);
+  outline-offset: 3px;
+}
+
 .hero-secondary {
   display: grid;
   gap: 12px;
