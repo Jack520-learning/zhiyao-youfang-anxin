@@ -93,7 +93,7 @@ export function buildDraftsFromVision(
           ? /随餐/.test(medicine.timing)
             ? "随餐"
             : "饭后"
-          : "")
+          : "按说明书")
     );
     const ingredients = cleanName(
       item.activeIngredient ||

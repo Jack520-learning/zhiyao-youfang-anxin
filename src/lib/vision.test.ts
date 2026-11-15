@@ -57,6 +57,7 @@ describe("multi-medicine vision results", () => {
     ]);
     expect(drafts[1].ingredientsText).toBe("维生素B2");
     expect(drafts[2].dosage).toBe("100mg/片");
+    expect(drafts[0].relation).toBe("按说明书");
   });
 
   it("deduplicates the same package appearing twice", () => {

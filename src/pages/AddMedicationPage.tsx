@@ -9,7 +9,7 @@ import {
   ShieldAlert,
   Sparkles
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { RiskBadge } from "../components/RiskBadge";
 import { SourcesBlock } from "../components/SourcesBlock";
@@ -96,6 +96,7 @@ export function AddMedicationPage({
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState("");
   const [error, setError] = useState("");
+  const [formError, setFormError] = useState("");
   const [riskCheck, setRiskCheck] = useState<RiskCheck>();
   const [candidateMedication, setCandidateMedication] = useState<Medication>();
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -106,22 +107,6 @@ export function AddMedicationPage({
     initialCameraOpened.current = true;
     setCameraOpen(true);
   }, [captureMode]);
-
-  const canConfirm = useMemo(() => {
-    if (!draft) return false;
-    return Boolean(
-      draft.name.trim() &&
-        draft.dosage.trim() &&
-        draft.frequency.trim() &&
-        draft.relation.trim() &&
-        draft.times.length &&
-        validateDosageText(draft.dosage).valid &&
-        validateTimes(draft.times).valid &&
-        !draft.lowConfidenceFields.some((field) =>
-          ["name", "dosage", "frequency", "relation"].includes(field)
-        )
-    );
-  }, [draft]);
 
   useEffect(() => {
     if (!draft || phase !== "review") return;
@@ -242,6 +227,7 @@ export function AddMedicationPage({
       )
     };
     setDraft(nextDraft);
+    setFormError("");
     setDetectedDrafts((current) =>
       current.length
         ? current.map((item, index) =>
@@ -272,7 +258,34 @@ export function AddMedicationPage({
   }
 
   function confirmRecognition() {
-    if (!draft || !canConfirm) return;
+    if (!draft) return;
+    if (!draft.name.trim()) {
+      setFormError("请先填写药名");
+      return;
+    }
+    if (!draft.dosage.trim()) {
+      setFormError("请填写剂量或包装规格");
+      return;
+    }
+    const dosageValidation = validateDosageText(draft.dosage);
+    if (!dosageValidation.valid) {
+      setFormError(dosageValidation.message || "剂量填写不正确");
+      return;
+    }
+    if (!draft.frequency.trim()) {
+      setFormError("请选择每天服用次数");
+      return;
+    }
+    if (!draft.relation.trim()) {
+      setFormError("请选择饭前、饭后，或“说明书未注明”");
+      return;
+    }
+    const timeValidation = validateTimes(draft.times);
+    if (!timeValidation.valid) {
+      setFormError(timeValidation.message || "请检查每天用药时间");
+      return;
+    }
+    setFormError("");
     const createdAt = nowIso();
     const candidate: Medication = {
       id: createId("med"),
@@ -645,6 +658,7 @@ export function AddMedicationPage({
                   <option value="随餐">随餐</option>
                   <option value="睡前">睡前</option>
                   <option value="按需">按需</option>
+                  <option value="按说明书">说明书未注明</option>
                 </select>
               </label>
               <div className="field full">
@@ -679,7 +693,6 @@ export function AddMedicationPage({
               <button
                 type="button"
                 className="btn btn-primary btn-large"
-                disabled={!canConfirm}
                 onClick={confirmRecognition}
               >
                 <Check size={21} aria-hidden="true" />
@@ -689,6 +702,11 @@ export function AddMedicationPage({
                 重新拍照
               </button>
             </div>
+            {formError ? (
+              <p className="field-error" role="alert">
+                {formError}
+              </p>
+            ) : null}
             {!validateDosageText(draft.dosage).valid ? (
               <p className="field-error" role="alert">
                 {validateDosageText(draft.dosage).message}
