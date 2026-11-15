@@ -1,4 +1,5 @@
 import {
+  ArrowDown,
   BookOpenText,
   Camera,
   ChevronRight,
@@ -309,6 +310,7 @@ export function ChatPage() {
   const [composerSkill, setComposerSkill] = useState<ComposerSkill>();
   const [answerMode, setAnswerMode] = useState<AnswerMode>("safety");
   const [skillMenuOpen, setSkillMenuOpen] = useState(false);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [thinkingLabel, setThinkingLabel] = useState("正在思考并组织回答…");
   const [conversationToDelete, setConversationToDelete] = useState<{
     id: string;
@@ -323,6 +325,17 @@ export function ChatPage() {
     setInput(transcript);
   });
 
+  function updateScrollAvailability() {
+    const container = messagesRef.current;
+    if (!container) {
+      setShowScrollToBottom(false);
+      return;
+    }
+    setShowScrollToBottom(
+      container.scrollHeight - container.scrollTop - container.clientHeight > 60
+    );
+  }
+
   useEffect(() => {
     if (!autoScrollRef.current) return;
     const container = messagesRef.current;
@@ -331,12 +344,25 @@ export function ChatPage() {
       top: container.scrollHeight,
       behavior: "smooth"
     });
+    setShowScrollToBottom(false);
   }, [messages, sending, stages]);
 
   useEffect(() => {
     const container = messagesRef.current;
     if (container) container.scrollTop = 0;
   }, []);
+
+  useEffect(() => {
+    const container = messagesRef.current;
+    if (!container) {
+      setShowScrollToBottom(false);
+      return;
+    }
+    updateScrollAvailability();
+    const observer = new ResizeObserver(updateScrollAvailability);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [view, messages, sending, stages]);
 
   useEffect(() => {
     const initialQuery = searchParams.get("q");
@@ -839,6 +865,7 @@ export function ChatPage() {
     setStages([]);
     setPhotoNotice("");
     setComposerSkill(undefined);
+    setShowScrollToBottom(false);
   }
 
   function removeConversation(id: string, title: string) {
@@ -875,7 +902,21 @@ export function ChatPage() {
     setInput("");
     setPhotoNotice("");
     setComposerSkill(undefined);
+    requestAnimationFrame(() => {
+      if (messagesRef.current) messagesRef.current.scrollTop = 0;
+      setShowScrollToBottom(false);
+    });
     if (window.innerWidth < 900) setSidebarOpen(false);
+  }
+
+  function scrollToConversationBottom() {
+    const container = messagesRef.current;
+    if (!container) return;
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: "smooth"
+    });
+    setShowScrollToBottom(false);
   }
 
   const recentMessages = messages.slice(-5);
@@ -1121,7 +1162,12 @@ export function ChatPage() {
                   </span>
                 </div>
               ) : null}
-              <div className="chat-messages" aria-live="polite" ref={messagesRef}>
+              <div
+                className="chat-messages"
+                aria-live="polite"
+                ref={messagesRef}
+                onScroll={updateScrollAvailability}
+              >
                 {olderMessages.length ? (
                   <details className="chat-history">
                     <summary>查看更早的 {olderMessages.length} 条对话</summary>
@@ -1143,6 +1189,17 @@ export function ChatPage() {
                   </article>
                 ) : null}
               </div>
+              {showScrollToBottom ? (
+                <button
+                  type="button"
+                  className="chat-scroll-bottom"
+                  aria-label="直达回答底部"
+                  title="直达底部"
+                  onClick={scrollToConversationBottom}
+                >
+                  <ArrowDown size={22} aria-hidden="true" />
+                </button>
+              ) : null}
             </>
           )}
         </div>
@@ -1431,7 +1488,6 @@ function MessageRisk({
           disabled={!soundEnabled}
           onClick={stopSpeaking}
         >
-          <Square size={17} aria-hidden="true" />
           停止朗读
         </button>
       </div>

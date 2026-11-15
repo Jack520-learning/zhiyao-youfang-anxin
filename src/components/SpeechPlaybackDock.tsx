@@ -1,4 +1,4 @@
-import { LoaderCircle, Square, Volume2 } from "lucide-react";
+import { LoaderCircle, Volume2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   getSpeechStatus,
@@ -37,7 +37,6 @@ export function SpeechPlaybackDock() {
             : "正在朗读"}
       </span>
       <button type="button" onClick={stopSpeaking}>
-        <Square size={15} aria-hidden="true" />
         停止朗读
       </button>
     </aside>

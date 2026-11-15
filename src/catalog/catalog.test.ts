@@ -11,8 +11,10 @@ import {
 
 describe("combined medicine catalog", () => {
   it("contains the imported structured medicine catalog", () => {
-    expect(medicines).toHaveLength(29);
-    expect(new Set(medicines.map((item) => item.slug)).size).toBe(29);
+    expect(medicines.length).toBeGreaterThanOrEqual(100);
+    expect(new Set(medicines.map((item) => item.slug)).size).toBe(
+      medicines.length
+    );
   });
 
   it("matches generic and common brand names", () => {
@@ -20,6 +22,12 @@ describe("combined medicine catalog", () => {
     expect(findBestMedicine("芬必得")?.medicine.slug).toBe("ibuprofen");
     expect(findBestMedicine("络活喜")?.medicine.slug).toBe("amlodipine");
     expect(matchMedicines("二甲双").length).toBeGreaterThan(0);
+    expect(findBestMedicine("氨溴索")?.medicine.activeIngredient).toBe(
+      "氨溴索"
+    );
+    expect(findBestMedicine("利伐沙班")?.medicine.activeIngredient).toBe(
+      "利伐沙班"
+    );
   });
 
   it("returns deterministic interaction risk for warfarin and ibuprofen", () => {

@@ -16,7 +16,6 @@ import {
   RotateCcw,
   Save,
   ShieldCheck,
-  Square,
   Trash2,
   Type,
   UserRound,
@@ -616,7 +615,6 @@ export function ProfilePage() {
                   setSpeechPlayback("idle");
                 }}
               >
-                <Square size={16} aria-hidden="true" />
                 停止朗读
               </button>
             </div>
@@ -1201,7 +1199,6 @@ export function ProfilePage() {
                 setSpeechPlayback("idle");
               }}
             >
-              <Square size={16} aria-hidden="true" />
               停止朗读
             </button>
           </div>

@@ -3721,6 +3721,31 @@ img {
   padding: 18px 24px;
 }
 
+.ai-chat-stage.is-conversation {
+  position: relative;
+}
+
+.chat-scroll-bottom {
+  position: absolute;
+  z-index: 20;
+  right: 26px;
+  bottom: 18px;
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 8px 24px rgba(27, 58, 47, 0.16);
+}
+
+.chat-scroll-bottom:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
 .ai-chat-stage.is-conversation .chat-suggestions {
   padding: 8px 24px;
 }

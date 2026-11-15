@@ -1,4 +1,4 @@
-import { BellRing, Clock3, PhoneCall, Square, X } from "lucide-react";
+import { BellRing, Clock3, PhoneCall, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { speakText, stopSpeaking } from "../lib/speech";
 import { formatTime, getNextDose, humanizeRelation } from "../lib/time";
@@ -111,7 +111,6 @@ export function ReminderOverlay() {
           type="button"
           onClick={stopSpeaking}
         >
-          <Square size={18} aria-hidden="true" />
           停止朗读
         </button>
         <p className="field-hint" style={{ textAlign: "center", marginTop: 8 }}>
