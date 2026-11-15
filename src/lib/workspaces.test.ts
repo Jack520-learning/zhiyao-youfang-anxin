@@ -25,6 +25,9 @@ describe("account workspace helpers", () => {
   it("normalizes family codes and keeps every linked elder", () => {
     expect(normalizeFamilyCode(" ab-c123 ")).toBe("ABC123");
     expect(getLinkedFamilyCodes(account)).toEqual(["ABC123", "DEF456"]);
+    expect(
+      getLinkedFamilyCodes({ ...account, linkedFamilyCodes: [] })
+    ).toEqual([]);
   });
 
   it("uses account and family code as an isolated workspace key", () => {

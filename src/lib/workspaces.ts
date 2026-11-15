@@ -14,9 +14,12 @@ export function normalizeFamilyCode(value: string): string {
 }
 
 export function getLinkedFamilyCodes(account: LocalAccount): string[] {
+  const storedCodes = Array.isArray(account.linkedFamilyCodes)
+    ? account.linkedFamilyCodes
+    : [account.familyCode];
   return Array.from(
     new Set(
-      [account.familyCode, ...(account.linkedFamilyCodes ?? [])]
+      storedCodes
         .map(normalizeFamilyCode)
         .filter(Boolean)
     )

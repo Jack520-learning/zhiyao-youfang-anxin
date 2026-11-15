@@ -133,6 +133,10 @@ interface AppActions {
     password: string
   ) => Promise<{ ok: boolean; error?: string }>;
   switchAccount: (accountId: string) => { ok: boolean; error?: string };
+  deleteLinkedAccount: (
+    accountId: string,
+    password: string
+  ) => Promise<{ ok: boolean; error?: string }>;
   activateFamilyCode: (
     familyCode: string
   ) => { ok: boolean; error?: string };
@@ -470,6 +474,78 @@ export const useAppStore = create<AppStore>()(
               }`
             ),
             ...targetWorkspace.auditEvents
+          ].slice(0, 100)
+        });
+        return { ok: true };
+      },
+      deleteLinkedAccount: async (accountId, password) => {
+        const state = getState();
+        const targetAccount = state.accounts
+          .map(normalizeAccount)
+          .find((account) => account.id === accountId);
+        if (!targetAccount) {
+          return { ok: false, error: "找不到这个账号" };
+        }
+        const valid = await verifyPassword(
+          password,
+          targetAccount.passwordHash,
+          targetAccount.passwordSalt
+        );
+        if (!valid) {
+          return { ok: false, error: "密码不正确，账号尚未删除" };
+        }
+
+        const latest = getState();
+        let accounts = latest.accounts
+          .map(normalizeAccount)
+          .filter((account) => account.id !== targetAccount.id);
+        let workspaces = removeAccountWorkspaces(latest.workspaces, [
+          targetAccount.id
+        ]);
+
+        if (targetAccount.role === "elder") {
+          const deletedFamilyCode = targetAccount.familyCode;
+          accounts = accounts.map((account) => {
+            if (account.role !== "family") return account;
+            const remainingCodes = getLinkedFamilyCodes(account).filter(
+              (code) => code !== deletedFamilyCode
+            );
+            if (!remainingCodes.length) {
+              return {
+                ...account,
+                linkedFamilyCodes: []
+              };
+            }
+            return normalizeAccount({
+              ...account,
+              familyCode:
+                account.familyCode === deletedFamilyCode
+                  ? remainingCodes[0]
+                  : account.familyCode,
+              linkedFamilyCodes: remainingCodes
+            });
+          });
+          workspaces = Object.fromEntries(
+            Object.entries(workspaces).filter(
+              ([key]) => !key.endsWith(`::${deletedFamilyCode}`)
+            )
+          );
+        }
+
+        const wasCurrent = latest.sessionAccountId === targetAccount.id;
+        setState({
+          accounts,
+          workspaces,
+          sessionAccountId: wasCurrent
+            ? undefined
+            : latest.sessionAccountId,
+          auditEvents: [
+            auditEvent(
+              "data-deleted",
+              `删除${targetAccount.role === "elder" ? "老人" : "家属"}账号：${targetAccount.displayName}`,
+              { familyCode: targetAccount.familyCode }
+            ),
+            ...latest.auditEvents
           ].slice(0, 100)
         });
         return { ok: true };

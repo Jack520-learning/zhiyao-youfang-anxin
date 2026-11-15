@@ -3051,7 +3051,13 @@ img {
   margin-top: 10px;
 }
 
-.account-switch-list button {
+.account-switch-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: 6px;
+}
+
+.account-switch-main {
   display: flex;
   min-height: 64px;
   align-items: center;
@@ -3065,10 +3071,27 @@ img {
   text-align: left;
 }
 
-.account-switch-list button.active {
+.account-switch-row.active .account-switch-main {
   border-color: var(--primary);
   background: var(--primary-soft);
   color: var(--primary);
+}
+
+.account-delete-button {
+  display: grid;
+  width: 44px;
+  min-height: 64px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.account-delete-button:hover {
+  border-color: var(--red);
+  background: var(--red-soft);
+  color: var(--red);
 }
 
 .account-switch-list strong,
@@ -3084,6 +3107,36 @@ img {
 .account-switch-list small {
   margin-top: 3px;
   font-size: calc(12px * var(--font-scale));
+}
+
+.account-delete-notice {
+  margin-top: 12px;
+}
+
+.account-delete-panel {
+  display: grid;
+  gap: 13px;
+  margin-top: 14px;
+  border: 1px solid color-mix(in srgb, var(--red) 35%, var(--line));
+  border-radius: 16px;
+  padding: 16px;
+  background: var(--red-soft);
+}
+
+.account-delete-panel h3 {
+  color: var(--ink);
+  font-size: calc(17px * var(--font-scale));
+}
+
+.account-delete-panel p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: calc(12px * var(--font-scale));
+  line-height: 1.6;
+}
+
+.account-delete-panel .modal-actions {
+  margin-top: 0;
 }
 
 .loading-screen {
