@@ -462,6 +462,11 @@ async function callAiAssistant(payload) {
     "multi-drug":
       "逐项核对重复成分、同类重复、相互作用和错峰服用，不自行决定停药或改剂量。"
   }[payload.skill] || "使用普通安全用药问答方式。";
+  const answerStyle = {
+    quick: "用两三句话直接回答，先给结论和下一步。",
+    safety: "先核对用药风险，再给结论、原因和下一步。",
+    detailed: "先给结论，再分层解释原因、注意点和下一步，仍保持简洁。"
+  }[payload.answerMode] || "先给结论，再说明原因和下一步。";
   const context = {
     age: payload.profile?.age,
     conditions: payload.profile?.conditions || [],
@@ -477,6 +482,7 @@ async function callAiAssistant(payload) {
     riskLevel: payload.riskLevel || "unknown",
     activeSkill: payload.skillLabel || "",
     skillFocus,
+    answerStyle,
     groundingText: String(payload.groundingText || "").slice(0, 5000),
     conversationHistory: Array.isArray(payload.history)
       ? payload.history
@@ -511,7 +517,7 @@ async function callAiAssistant(payload) {
         },
         {
           role: "user",
-          content: `安全上下文：${JSON.stringify(context)}\n当前技能重点：${skillFocus}\n用户问题：${String(payload.query || "").slice(0, 1000)}`
+          content: `安全上下文：${JSON.stringify(context)}\n当前技能重点：${skillFocus}\n回答方式：${answerStyle}\n用户问题：${String(payload.query || "").slice(0, 1000)}`
         }
       ]
     })

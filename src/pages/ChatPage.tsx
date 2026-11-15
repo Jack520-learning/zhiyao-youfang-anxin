@@ -59,6 +59,7 @@ const sampleQuestions = [
 ];
 
 type ComposerSkill = "photo" | "catalog" | "herbs" | "multi-drug";
+type AnswerMode = "quick" | "safety" | "detailed";
 
 const composerSkills: Array<{
   id: ComposerSkill;
@@ -209,6 +210,7 @@ export function ChatPage() {
     searchParams.get("q") ? "conversation" : "home"
   );
   const [composerSkill, setComposerSkill] = useState<ComposerSkill>();
+  const [answerMode, setAnswerMode] = useState<AnswerMode>("safety");
   const [thinkingLabel, setThinkingLabel] = useState("正在思考并组织回答…");
   const [conversationToDelete, setConversationToDelete] = useState<{
     id: string;
@@ -274,7 +276,9 @@ export function ChatPage() {
     setThinkingLabel(
       needsMedicationReview(clean, composerSkill)
         ? "正在核对用药安全、当前药物和资料来源…"
-        : "正在思考并组织回答…"
+        : answerMode === "detailed"
+          ? "正在整理详细解释…"
+          : "正在思考并组织回答…"
     );
     const targetConversationId =
       useAppStore.getState().activeConversationId;
@@ -394,6 +398,7 @@ export function ChatPage() {
             skillLabel: composerSkills.find(
               (item) => item.id === composerSkill
             )?.label,
+            answerMode,
             history: (currentConversation?.messages ?? [])
               .filter((message) => message.id !== userMessage.id)
               .filter(
@@ -1017,7 +1022,7 @@ export function ChatPage() {
 
         <div className="ai-composer-wrap">
           <div className="ai-composer">
-            <label className="ai-search-field">
+            <div className="ai-search-field">
               <span className="sr-only">输入您想问的用药问题</span>
               <textarea
                 rows={1}
@@ -1036,7 +1041,29 @@ export function ChatPage() {
                   }
                 }}
               />
-            </label>
+            {composerSkill ? (
+              <div className="ai-active-skill">
+                <span>
+                  当前技能：
+                  <strong>
+                    {composerSkills.find((item) => item.id === composerSkill)?.label}
+                  </strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate(
+                      composerSkills.find((item) => item.id === composerSkill)
+                        ?.researchPath || "/chat"
+                    )
+                  }
+                >
+                  {composerSkills.find((item) => item.id === composerSkill)
+                    ?.researchLabel || "深度研究"}
+                  <ExternalLink size={14} aria-hidden="true" />
+                </button>
+              </div>
+            ) : null}
             <div className="ai-composer-actions">
               <div className="ai-tool-group">
                 <button className="ai-tool-button new-chat" type="button" onClick={startNewConversation}>
@@ -1076,6 +1103,21 @@ export function ChatPage() {
               </div>
               <span className="ai-composer-spacer" />
               <div className="ai-send-group">
+                <label className="ai-answer-mode">
+                  <span className="sr-only">选择回答方式</span>
+                  <select
+                    value={answerMode}
+                    onChange={(event) =>
+                      setAnswerMode(event.target.value as AnswerMode)
+                    }
+                    aria-label="选择回答方式"
+                  >
+                    <option value="safety">安全问药</option>
+                    <option value="quick">快速回答</option>
+                    <option value="detailed">详细解释</option>
+                  </select>
+                  <ChevronDown size={16} aria-hidden="true" />
+                </label>
                 <button
                 type="button"
                 className={`ai-mic-button ${speech.listening ? "listening" : ""}`}
@@ -1119,29 +1161,7 @@ export function ChatPage() {
                 )}
               </div>
             </div>
-            {composerSkill ? (
-              <div className="ai-active-skill">
-                <span>
-                  当前技能：
-                  <strong>
-                    {composerSkills.find((item) => item.id === composerSkill)?.label}
-                  </strong>
-                </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    navigate(
-                      composerSkills.find((item) => item.id === composerSkill)
-                        ?.researchPath || "/chat"
-                    )
-                  }
-                >
-                  {composerSkills.find((item) => item.id === composerSkill)
-                    ?.researchLabel || "深度研究"}
-                  <ExternalLink size={14} aria-hidden="true" />
-                </button>
-              </div>
-            ) : null}
+            </div>
             <div className={`ai-voice-status ${speech.error ? "error" : ""}`} aria-live="polite">
               {speech.error
                 ? speech.error
