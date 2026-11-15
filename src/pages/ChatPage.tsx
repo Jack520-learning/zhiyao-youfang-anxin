@@ -902,9 +902,6 @@ export function ChatPage() {
                 </div>
               ))}
             </div>
-            <p className="field-hint">
-              每条标题根据第一条问题生成。点击记录会恢复对应对话和图片上下文。
-            </p>
           </aside>
 
           <div className="ai-chat-main">
@@ -923,9 +920,6 @@ export function ChatPage() {
                   <Sparkles size={30} aria-hidden="true" />
                 </span>
                 <h1>有什么用药问题，直接问我</h1>
-                <p>
-                  药品、中药材、用法、不良反应和同服风险都可以问。高风险用药会明确提示求助边界。
-                </p>
               </section>
               <section className="ai-recommendations" aria-label="为你推荐">
                 <p>为你推荐</p>
@@ -1155,10 +1149,7 @@ export function ChatPage() {
                   ? `正在听：${speech.interim}`
                   : speech.listening
                     ? "正在聆听，松开后结束"
-                    : composerSkill
-                      ? composerSkills.find((item) => item.id === composerSkill)
-                          ?.placeholder
-                      : "语音、照片、药品名和药品百科都可以直接问"}
+                    : ""}
             </div>
           </div>
         </div>
