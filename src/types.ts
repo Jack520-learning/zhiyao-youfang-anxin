@@ -166,7 +166,9 @@ export interface IntakeDraft {
 export interface AppPreferences {
   notificationsEnabled: boolean;
   soundEnabled: boolean;
-  voiceMode: "warm" | "clear" | "male" | "calm";
+  voiceMode: "warm" | "clear" | "male" | "calm" | "custom";
+  customVoiceId?: string;
+  customVoiceName?: string;
   highContrast: boolean;
   fontScale: "standard" | "large" | "extra-large";
 }

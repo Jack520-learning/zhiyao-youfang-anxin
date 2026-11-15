@@ -44,13 +44,15 @@ export function ReminderOverlay() {
         nextDose.medication.relation
       )}，${nextDose.medication.name}，${nextDose.medication.dosage}。`,
       preferences.soundEnabled && profile.voiceEnabled,
-      preferences.voiceMode
+      preferences.voiceMode,
+      preferences.customVoiceId
     );
   }, [
     open,
     reminderKey,
     preferences.soundEnabled,
     preferences.voiceMode,
+    preferences.customVoiceId,
     profile.voiceEnabled
   ]);
 

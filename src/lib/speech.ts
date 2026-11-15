@@ -161,10 +161,11 @@ export function useSpeechRecognition(
   };
 }
 
-export type VoiceMode = "warm" | "clear" | "male" | "calm";
+export type VoiceMode = "warm" | "clear" | "male" | "calm" | "custom";
 export type SpeechPlaybackState = "idle" | "speaking" | "paused";
 
 let preferredVoiceMode: VoiceMode = "warm";
+let currentAudio: HTMLAudioElement | null = null;
 
 function scoreVoice(voice: SpeechSynthesisVoice, mode: VoiceMode): number {
   const name = voice.name.toLowerCase();
@@ -238,42 +239,91 @@ function naturalSpeechText(text: string): string {
 export function speakText(
   text: string,
   enabled = true,
-  voiceMode: VoiceMode = "warm"
-): boolean {
-  if (!enabled || !("speechSynthesis" in window)) return false;
-  window.speechSynthesis.cancel();
+  voiceMode: VoiceMode = "warm",
+  customVoiceId?: string
+): Promise<boolean> {
+  if (!enabled || !text.trim()) return Promise.resolve(false);
+  stopSpeaking();
   preferredVoiceMode = voiceMode;
+  return playServerVoice(text, voiceMode, customVoiceId);
+}
+
+async function playServerVoice(
+  text: string,
+  voiceMode: VoiceMode,
+  customVoiceId?: string
+): Promise<boolean> {
+  try {
+    const response = await fetch("/api/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: naturalSpeechText(text),
+        voiceMode,
+        customVoiceId
+      })
+    });
+    if (!response.ok) throw new Error("服务端语音合成不可用");
+    const payload = (await response.json()) as { audioUrl?: string };
+    if (!payload.audioUrl) throw new Error("没有返回音频");
+    const audio = new Audio(payload.audioUrl);
+    currentAudio = audio;
+    audio.onended = () => {
+      if (currentAudio === audio) currentAudio = null;
+    };
+    audio.onerror = () => {
+      if (currentAudio === audio) currentAudio = null;
+    };
+    await audio.play();
+    return true;
+  } catch {
+    return speakWithBrowser(text, voiceMode);
+  }
+}
+
+function speakWithBrowser(text: string, voiceMode: VoiceMode): boolean {
+  if (!("speechSynthesis" in window)) return false;
+  window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(naturalSpeechText(text));
   utterance.lang = "zh-CN";
-  utterance.voice = pickChineseVoice(voiceMode) ?? null;
+  const fallbackMode = voiceMode === "custom" ? "warm" : voiceMode;
+  utterance.voice = pickChineseVoice(fallbackMode) ?? null;
   utterance.rate =
-    voiceMode === "warm"
+    fallbackMode === "warm"
       ? 0.9
-      : voiceMode === "clear"
+      : fallbackMode === "clear"
         ? 0.96
-        : voiceMode === "male"
+        : fallbackMode === "male"
           ? 0.94
           : 0.82;
   utterance.pitch =
-    voiceMode === "warm"
+    fallbackMode === "warm"
       ? 0.96
-      : voiceMode === "clear"
+      : fallbackMode === "clear"
         ? 1.04
-        : voiceMode === "male"
+        : fallbackMode === "male"
           ? 0.9
           : 0.84;
   utterance.volume = 1;
+  utterance.onend = () => {
+    // Browser fallback has no persistent audio handle.
+  };
   window.speechSynthesis.speak(utterance);
   return true;
 }
 
 export function getSpeechPlaybackState(): SpeechPlaybackState {
+  if (currentAudio) return currentAudio.paused ? "paused" : "speaking";
   if (!("speechSynthesis" in window)) return "idle";
   if (!window.speechSynthesis.speaking) return "idle";
   return window.speechSynthesis.paused ? "paused" : "speaking";
 }
 
 export function pauseSpeaking(): boolean {
+  if (currentAudio) {
+    currentAudio.pause();
+    return true;
+  }
   if (!("speechSynthesis" in window) || !window.speechSynthesis.speaking) {
     return false;
   }
@@ -282,6 +332,10 @@ export function pauseSpeaking(): boolean {
 }
 
 export function resumeSpeaking(): boolean {
+  if (currentAudio?.paused) {
+    void currentAudio.play();
+    return true;
+  }
   if (!("speechSynthesis" in window) || !window.speechSynthesis.paused) {
     return false;
   }
@@ -290,10 +344,18 @@ export function resumeSpeaking(): boolean {
 }
 
 export function stopSpeaking() {
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.currentTime = 0;
+    currentAudio = null;
+  }
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
 }
 
-export function testVoiceMode(mode: VoiceMode): boolean {
+export function testVoiceMode(
+  mode: VoiceMode,
+  customVoiceId?: string
+): Promise<boolean> {
   return speakText(
     mode === "warm"
       ? "您好，我会用温和清楚的声音陪您核对用药。"
@@ -303,7 +365,8 @@ export function testVoiceMode(mode: VoiceMode): boolean {
           ? "您好，现在使用清晰男声为您朗读。"
           : "您好，现在使用沉稳男声慢慢为您朗读。",
     true,
-    mode
+    mode,
+    customVoiceId
   );
 }
 
@@ -314,7 +377,9 @@ export function getVoiceModeLabel(mode: VoiceMode): string {
       ? "明亮女声"
       : mode === "male"
         ? "清晰男声"
-        : "沉稳男声";
+        : mode === "calm"
+          ? "沉稳男声"
+          : "我的专属音色";
 }
 
 export function currentPreferredVoiceMode(): VoiceMode {

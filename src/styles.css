@@ -2199,6 +2199,44 @@ img {
   width: 100%;
 }
 
+.voice-clone-recorder {
+  display: grid;
+  gap: 12px;
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.voice-clone-recorder h3 {
+  font-size: calc(17px * var(--font-scale));
+}
+
+.voice-clone-recorder blockquote {
+  margin: 0;
+  border-left: 4px solid var(--primary);
+  border-radius: 0 12px 12px 0;
+  padding: 11px 14px;
+  background: var(--surface-soft);
+  color: var(--ink);
+  font-size: calc(15px * var(--font-scale));
+  line-height: 1.7;
+}
+
+.voice-record-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.voice-record-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: calc(12px * var(--font-scale));
+}
+
 .family-voice-settings {
   border-top: 0;
   padding-top: 0;

@@ -450,6 +450,118 @@ async function callQwenTranscription(audioBase64, mimeType) {
   return { text, model };
 }
 
+const TTS_MODEL = process.env.QWEN_TTS_MODEL || "qwen-audio-3.1-tts-flash";
+const CUSTOM_TTS_MODEL =
+  process.env.QWEN_CUSTOM_TTS_MODEL || "qwen-audio-3.1-tts-plus";
+const systemVoices = {
+  warm: "longanhuan_v3.1",
+  clear: "longxiaoxia_v3.1",
+  male: "longanyang_v3.1",
+  calm: "longlaotie_v3.1"
+};
+
+function getTtsBaseUrl() {
+  return (
+    process.env.DASHSCOPE_TTS_BASE_URL ||
+    "https://dashscope.aliyuncs.com/api/v1"
+  ).replace(/\/$/, "");
+}
+
+async function callQwenTts(text, voiceMode, customVoiceId) {
+  const isCustom = voiceMode === "custom" && customVoiceId;
+  const voice = isCustom ? customVoiceId : systemVoices[voiceMode];
+  if (!voice) throw new Error("没有找到对应的朗读音色");
+  const response = await fetch(
+    `${getTtsBaseUrl()}/services/audio/tts/SpeechSynthesizer`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${getAiKey()}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: isCustom ? CUSTOM_TTS_MODEL : TTS_MODEL,
+        input: {
+          text: String(text || "").slice(0, 2500),
+          voice,
+          format: "wav",
+          sample_rate: 24000
+        }
+      })
+    }
+  );
+  if (!response.ok) {
+    const payload = await response.text();
+    throw new Error(`千问语音合成失败（${response.status}）：${payload.slice(0, 160)}`);
+  }
+  const payload = await response.json();
+  const audioUrl = payload.output?.audio?.url;
+  if (!audioUrl) throw new Error("千问没有返回可播放音频");
+  return {
+    audioUrl: String(audioUrl).replace(/^http:\/\//i, "https://"),
+    voice
+  };
+}
+
+async function createCustomVoice(audioDataUrl) {
+  const prefix = `u${Date.now().toString(36).slice(-7)}${Math.random()
+    .toString(36)
+    .slice(2, 4)}`.slice(0, 10);
+  const response = await fetch(
+    `${getTtsBaseUrl()}/services/audio/tts/customization`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${getAiKey()}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "voice-enrollment",
+        input: {
+          action: "create_voice",
+          target_model: CUSTOM_TTS_MODEL,
+          prefix,
+          audio: audioDataUrl
+        }
+      })
+    }
+  );
+  if (!response.ok) {
+    const payload = await response.text();
+    throw new Error(
+      `专属音色创建失败（${response.status}）：${payload.slice(0, 200)}`
+    );
+  }
+  const payload = await response.json();
+  const voiceId = payload.output?.voice_id;
+  if (!voiceId) throw new Error("官方接口没有返回音色 ID");
+  let status = payload.output?.status || "DEPLOYING";
+  for (let attempt = 0; attempt < 30 && status === "DEPLOYING"; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const query = await fetch(
+      `${getTtsBaseUrl()}/services/audio/tts/customization`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${getAiKey()}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "voice-enrollment",
+          input: { action: "query_voice", voice_id: voiceId }
+        })
+      }
+    );
+    if (!query.ok) break;
+    const queryPayload = await query.json();
+    status = queryPayload.output?.status || status;
+  }
+  if (status !== "OK") {
+    throw new Error(`专属音色仍在部署或创建失败：${status}`);
+  }
+  return { voiceId, status, model: CUSTOM_TTS_MODEL };
+}
+
 async function callAiAssistant(payload) {
   const baseUrl = getAiBaseUrl();
   const skillFocus = {
@@ -880,6 +992,55 @@ const server = createServer(async (request, response) => {
             error instanceof Error
               ? error.message
               : "千问语音识别暂时不可用，请改用文字输入。"
+        });
+      }
+    }
+
+    if (url.pathname === "/api/tts" && request.method === "POST") {
+      if (!hasAiKey()) {
+        return json(response, 503, { error: "千问语音合成尚未配置" });
+      }
+      const body = await readJson(request, 256 * 1024);
+      if (!String(body.text || "").trim()) {
+        return json(response, 400, { error: "没有需要朗读的文字" });
+      }
+      try {
+        const result = await callQwenTts(
+          body.text,
+          body.voiceMode,
+          body.customVoiceId
+        );
+        return json(response, 200, result);
+      } catch (error) {
+        return json(response, 502, {
+          error:
+            error instanceof Error ? error.message : "语音合成暂时不可用"
+        });
+      }
+    }
+
+    if (url.pathname === "/api/voice-clone" && request.method === "POST") {
+      if (!hasAiKey()) {
+        return json(response, 503, { error: "千问音色复刻尚未配置" });
+      }
+      const body = await readJson(request, 15 * 1024 * 1024);
+      const audioDataUrl = String(body.audioDataUrl || "");
+      if (
+        !/^data:audio\/(wav|mpeg|mp3|mp4|m4a|x-m4a);base64,/i.test(
+          audioDataUrl
+        )
+      ) {
+        return json(response, 400, {
+          error: "请提供 10 到 20 秒的 WAV、MP3 或 M4A 人声音频"
+        });
+      }
+      try {
+        const result = await createCustomVoice(audioDataUrl);
+        return json(response, 200, result);
+      } catch (error) {
+        return json(response, 502, {
+          error:
+            error instanceof Error ? error.message : "专属音色创建失败"
         });
       }
     }

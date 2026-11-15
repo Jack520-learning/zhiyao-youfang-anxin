@@ -438,7 +438,8 @@ export function ChatPage() {
     speakText(
       `${response.message}。${response.riskCheck.nextStep}`,
       profile.voiceEnabled && preferences.soundEnabled,
-      preferences.voiceMode
+      preferences.voiceMode,
+      preferences.customVoiceId
     );
     setStages(
       response.stages.map((stage) => ({ ...stage, status: "done" }))
@@ -819,6 +820,7 @@ export function ChatPage() {
             riskCheck={message.riskCheck}
             soundEnabled={profile.voiceEnabled && preferences.soundEnabled}
             voiceMode={preferences.voiceMode}
+            customVoiceId={preferences.customVoiceId}
           />
         ) : null}
       </article>
@@ -1258,11 +1260,13 @@ export function ChatPage() {
 function MessageRisk({
   riskCheck,
   soundEnabled,
-  voiceMode
+  voiceMode,
+  customVoiceId
 }: {
   riskCheck: RiskCheck;
   soundEnabled: boolean;
-  voiceMode: "warm" | "clear" | "male" | "calm";
+  voiceMode: "warm" | "clear" | "male" | "calm" | "custom";
+  customVoiceId?: string;
 }) {
   return (
     <div className="message-risk">
@@ -1290,7 +1294,8 @@ function MessageRisk({
           speakText(
             `${riskCheck.summary}。${riskCheck.nextStep}`,
             true,
-            voiceMode
+            voiceMode,
+            customVoiceId
           )
         }
       >

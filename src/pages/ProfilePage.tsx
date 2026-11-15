@@ -39,6 +39,7 @@ import {
   type SpeechPlaybackState,
   type VoiceMode
 } from "../lib/speech";
+import { VoiceCloneRecorder } from "../components/VoiceCloneRecorder";
 import { useAppStore } from "../store/useAppStore";
 import type { EmergencyContact } from "../types";
 
@@ -83,6 +84,16 @@ export function ProfilePage() {
   const [cancelBusy, setCancelBusy] = useState(false);
   const [speechPlayback, setSpeechPlayback] =
     useState<SpeechPlaybackState>("idle");
+  const voicePresets: Array<{ value: VoiceMode; label: string }> =
+    preferences.customVoiceId
+      ? [
+          ...voiceOptions,
+          {
+            value: "custom",
+            label: preferences.customVoiceName || "我的专属音色"
+          }
+        ]
+      : voiceOptions;
   const [notificationState, setNotificationState] = useState<
     "idle" | "loading" | "granted" | "denied"
   >("idle");
@@ -192,7 +203,7 @@ export function ProfilePage() {
     navigate("/");
   }
 
-  function toggleSpeechPlayback() {
+  async function toggleSpeechPlayback() {
     if (!preferences.soundEnabled) {
       setToast("请先打开语音朗读");
       return;
@@ -207,7 +218,10 @@ export function ProfilePage() {
       setSpeechPlayback("speaking");
       return;
     }
-    const started = testVoiceMode(preferences.voiceMode);
+    const started = await testVoiceMode(
+      preferences.voiceMode,
+      preferences.customVoiceId
+    );
     if (!started) {
       setToast("当前浏览器没有可用的语音朗读功能");
       setSpeechPlayback("idle");
@@ -539,7 +553,7 @@ export function ProfilePage() {
                   role="group"
                   aria-label="朗读音色"
                 >
-                  {voiceOptions.map((option) => (
+                  {voicePresets.map((option) => (
                     <button
                       type="button"
                       className={
@@ -560,7 +574,7 @@ export function ProfilePage() {
                 <button
                   className="btn voice-playback-button"
                   type="button"
-                  onClick={toggleSpeechPlayback}
+                  onClick={() => void toggleSpeechPlayback()}
                 >
                   {speechPlayback === "speaking" ? (
                     <Pause size={18} aria-hidden="true" />
@@ -573,6 +587,16 @@ export function ProfilePage() {
                       ? "继续朗读"
                       : "试听当前音色"}
                 </button>
+                <VoiceCloneRecorder
+                  onCreated={(voiceId, voiceName) => {
+                    updatePreferences({
+                      customVoiceId: voiceId,
+                      customVoiceName: voiceName,
+                      voiceMode: "custom"
+                    });
+                    setToast("专属音色已创建并启用");
+                  }}
+                />
               </div>
             ) : null}
           </section>
@@ -1079,7 +1103,7 @@ export function ProfilePage() {
                 role="group"
                 aria-label="朗读音色"
               >
-                {voiceOptions.map((option) => (
+                {voicePresets.map((option) => (
                   <button
                     type="button"
                     className={
@@ -1100,7 +1124,7 @@ export function ProfilePage() {
               <button
                 className="btn voice-playback-button"
                 type="button"
-                onClick={toggleSpeechPlayback}
+                onClick={() => void toggleSpeechPlayback()}
               >
                 {speechPlayback === "speaking" ? (
                   <Pause size={18} aria-hidden="true" />
@@ -1113,6 +1137,16 @@ export function ProfilePage() {
                     ? "继续朗读"
                     : "试听当前音色"}
               </button>
+              <VoiceCloneRecorder
+                onCreated={(voiceId, voiceName) => {
+                  updatePreferences({
+                    customVoiceId: voiceId,
+                    customVoiceName: voiceName,
+                    voiceMode: "custom"
+                  });
+                  setToast("专属音色已创建并启用");
+                }}
+              />
             </div>
           ) : null}
           <div className="settings-row">

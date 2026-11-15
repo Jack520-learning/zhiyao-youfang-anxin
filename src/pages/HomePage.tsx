@@ -98,7 +98,8 @@ export function HomePage() {
       speakText(
         `好的，已经记录您吃过${dose.medication.name}。`,
         preferences.soundEnabled && profile.voiceEnabled,
-        preferences.voiceMode
+        preferences.voiceMode,
+        preferences.customVoiceId
       );
     }
   }
