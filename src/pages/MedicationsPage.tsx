@@ -47,7 +47,7 @@ export function MedicationsPage() {
             <button
               className="btn btn-primary btn-large"
               type="button"
-              onClick={() => navigate("/add-medication")}
+              onClick={() => navigate("/add-medication?capture=1")}
             >
               <Camera size={21} aria-hidden="true" />
               拍照加药
@@ -79,7 +79,7 @@ export function MedicationsPage() {
               <button
                 className="btn btn-primary"
                 type="button"
-                onClick={() => navigate("/add-medication")}
+                onClick={() => navigate("/add-medication?capture=1")}
               >
                 <Camera size={19} aria-hidden="true" />
                 拍照添加

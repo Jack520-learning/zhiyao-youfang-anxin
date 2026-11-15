@@ -4,15 +4,8 @@ import { useAppStore } from "../store/useAppStore";
 
 export function HealthProfilePrompt() {
   const role = useAppStore((state) => state.role);
-  const sessionAccountId = useAppStore((state) => state.sessionAccountId);
   const profile = useAppStore((state) => state.profile);
   const updateProfile = useAppStore((state) => state.updateProfile);
-  const storageKey = sessionAccountId
-    ? `health-profile-later:${sessionAccountId}`
-    : "health-profile-later";
-  const [dismissed, setDismissed] = useState(
-    () => sessionStorage.getItem(storageKey) === "1"
-  );
   const [name, setName] = useState(profile.name);
   const [age, setAge] = useState(
     profile.healthProfileCompleted ? profile.age || "" : ""
@@ -28,7 +21,7 @@ export function HealthProfilePrompt() {
   if (
     role !== "elder" ||
     profile.healthProfileCompleted ||
-    dismissed
+    profile.healthProfilePromptSeen
   ) {
     return null;
   }
@@ -47,6 +40,7 @@ export function HealthProfilePrompt() {
       name: name.trim(),
       age: parsedAge,
       healthProfileCompleted: true,
+      healthProfilePromptSeen: true,
       conditions: conditions
         .split(/[、,，]/)
         .map((item) => item.trim())
@@ -131,8 +125,7 @@ export function HealthProfilePrompt() {
             className="btn"
             type="button"
             onClick={() => {
-              sessionStorage.setItem(storageKey, "1");
-              setDismissed(true);
+              updateProfile({ healthProfilePromptSeen: true });
             }}
           >
             稍后填写

@@ -211,7 +211,8 @@ export const useAppStore = create<AppStore>()(
               ? {
                   ...current.profile,
                   name: account.displayName,
-                  healthProfileCompleted: false
+                  healthProfileCompleted: false,
+                  healthProfilePromptSeen: false
                 }
               : current.profile,
           auditEvents: [
@@ -755,8 +756,7 @@ export const useAppStore = create<AppStore>()(
           preferences: {
             ...current.preferences,
             ...saved.preferences,
-            voiceMode:
-              saved.preferences?.voiceMode ?? current.preferences.voiceMode,
+            voiceMode: "warm",
             fontScale:
               saved.preferences?.fontScale ?? current.preferences.fontScale
           },
@@ -774,6 +774,8 @@ export const useAppStore = create<AppStore>()(
             ...saved.profile,
             healthProfileCompleted:
               saved.profile?.healthProfileCompleted ?? false,
+            healthProfilePromptSeen:
+              saved.profile?.healthProfilePromptSeen ?? false,
             timeZone:
               saved.profile?.timeZone ||
               Intl.DateTimeFormat().resolvedOptions().timeZone ||

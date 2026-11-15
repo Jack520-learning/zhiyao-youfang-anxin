@@ -154,7 +154,6 @@ export function HomePage() {
             </p>
           </div>
         </header>
-        <HomeSearch />
         <DiscomfortNotice
           status={concernStatus}
           contactName={firstContact?.name}
@@ -191,7 +190,7 @@ export function HomePage() {
               <button
                 type="button"
                 className="btn btn-large"
-                onClick={() => navigate("/add-medication?from=today")}
+                onClick={() => navigate("/add-medication?from=today&capture=1")}
               >
                 <Camera size={21} aria-hidden="true" />
                 拍药盒
@@ -224,6 +223,9 @@ export function HomePage() {
             </button>
           </aside>
         </div>
+        <section className="home-search-lower" aria-label="搜索与识别用药">
+          <HomeSearch />
+        </section>
       </div>
     );
   }
@@ -254,7 +256,7 @@ export function HomePage() {
           <button
             className="btn btn-primary"
             type="button"
-            onClick={() => navigate("/add-medication?from=today")}
+            onClick={() => navigate("/add-medication?from=today&capture=1")}
           >
             <Camera size={20} aria-hidden="true" />
             拍照加药
@@ -266,7 +268,6 @@ export function HomePage() {
         </div>
       </header>
 
-      <HomeSearch />
       <DiscomfortNotice
         status={concernStatus}
         contactName={firstContact?.name}
@@ -338,7 +339,7 @@ export function HomePage() {
           <button
             type="button"
             className="card quick-action warm"
-            onClick={() => navigate("/add-medication?from=today")}
+            onClick={() => navigate("/add-medication?from=today&capture=1")}
           >
             <span className="quick-action-icon">
               <Camera size={25} aria-hidden="true" />
@@ -425,6 +426,9 @@ export function HomePage() {
             </div>
           ))}
         </div>
+      </section>
+      <section className="home-search-lower" aria-label="搜索与识别用药">
+        <HomeSearch />
       </section>
     </div>
   );

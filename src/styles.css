@@ -2183,6 +2183,18 @@ img {
   color: var(--primary);
 }
 
+.voice-mode-static {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 13px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 750;
+}
+
 .voice-playback-button {
   width: 100%;
 }
@@ -2221,6 +2233,19 @@ img {
 
 .health-profile-card h2 {
   margin-top: 4px;
+}
+
+.profile-page {
+  width: 100%;
+  max-width: none;
+}
+
+.profile-page .elder-settings-stack {
+  width: 100%;
+}
+
+.home-search-lower {
+  margin-top: 22px;
 }
 
 .account-switcher {

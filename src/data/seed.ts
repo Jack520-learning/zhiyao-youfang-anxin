@@ -22,6 +22,7 @@ export function createInitialState(options?: {
     timeZone:
       Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai",
     healthProfileCompleted: false,
+    healthProfilePromptSeen: false,
     visionPreference: "large",
     voiceEnabled: true
   };

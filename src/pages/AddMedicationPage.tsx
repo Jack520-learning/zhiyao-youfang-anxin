@@ -9,7 +9,7 @@ import {
   ShieldAlert,
   Sparkles
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { RiskBadge } from "../components/RiskBadge";
 import { SourcesBlock } from "../components/SourcesBlock";
@@ -42,8 +42,9 @@ export function AddMedicationPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const manualMode = searchParams.get("mode") === "manual";
+  const captureMode = searchParams.get("capture") === "1";
   const origin = searchParams.get("from");
-  const backPath = origin === "chat" ? "/chat" : origin === "today" ? "/" : "/medications";
+  const backPath = origin === "chat" ? "/chat" : origin === "today" ? "/today" : "/medications";
   const backLabel = origin === "chat" ? "返回问药识药" : origin === "today" ? "返回今日" : "返回用药清单";
   const existingDraft = useAppStore((state) => state.intakeDraft);
   const profile = useAppStore((state) => state.profile);
@@ -51,10 +52,20 @@ export function AddMedicationPage() {
   const saveIntakeDraft = useAppStore((state) => state.saveIntakeDraft);
   const addMedication = useAppStore((state) => state.addMedication);
   const [phase, setPhase] = useState<Phase>(() =>
-    manualMode || existingDraft?.imageDataUrl ? "review" : "upload"
+    manualMode
+      ? "review"
+      : captureMode
+        ? "upload"
+        : existingDraft?.imageDataUrl
+          ? "review"
+          : "upload"
   );
   const [draft, setDraft] = useState<IntakeDraft | undefined>(() =>
-    manualMode ? createManualDraft() : existingDraft
+    manualMode
+      ? createManualDraft()
+      : captureMode
+        ? undefined
+        : existingDraft
   );
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState("");
@@ -62,6 +73,13 @@ export function AddMedicationPage() {
   const [riskCheck, setRiskCheck] = useState<RiskCheck>();
   const [candidateMedication, setCandidateMedication] = useState<Medication>();
   const [cameraOpen, setCameraOpen] = useState(false);
+  const initialCameraOpened = useRef(false);
+
+  useEffect(() => {
+    if (!captureMode || initialCameraOpened.current) return;
+    initialCameraOpened.current = true;
+    setCameraOpen(true);
+  }, [captureMode]);
 
   const canConfirm = useMemo(() => {
     if (!draft) return false;

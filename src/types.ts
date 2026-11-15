@@ -109,6 +109,7 @@ export interface ElderProfile {
   allergies: string[];
   timeZone: string;
   healthProfileCompleted: boolean;
+  healthProfilePromptSeen: boolean;
   visionPreference: "standard" | "large" | "extra-large";
   voiceEnabled: boolean;
 }

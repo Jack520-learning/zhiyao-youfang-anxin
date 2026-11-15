@@ -228,6 +228,7 @@ export function ProfilePage() {
       name: healthDraft.name.trim(),
       age,
       healthProfileCompleted: true,
+      healthProfilePromptSeen: true,
       conditions: healthDraft.conditions
         .split(/[、,，]/)
         .map((item) => item.trim())
@@ -430,7 +431,7 @@ export function ProfilePage() {
 
   if (role === "elder") {
     return (
-      <div className="page">
+      <div className="page profile-page">
         <header className="page-header">
           <div>
             <p className="eyebrow">我的</p>
@@ -520,31 +521,9 @@ export function ProfilePage() {
             </div>
             {preferences.soundEnabled ? (
               <div className="voice-settings">
-                <div className="voice-mode-options" role="group" aria-label="朗读音色">
-                  <button
-                    type="button"
-                    className={preferences.voiceMode === "warm" ? "active" : ""}
-                    aria-pressed={preferences.voiceMode === "warm"}
-                    onClick={() => {
-                      stopSpeaking();
-                      updatePreferences({ voiceMode: "warm" });
-                      setSpeechPlayback("idle");
-                    }}
-                  >
-                    温和女声
-                  </button>
-                  <button
-                    type="button"
-                    className={preferences.voiceMode === "clear" ? "active" : ""}
-                    aria-pressed={preferences.voiceMode === "clear"}
-                    onClick={() => {
-                      stopSpeaking();
-                      updatePreferences({ voiceMode: "clear" });
-                      setSpeechPlayback("idle");
-                    }}
-                  >
-                    清晰声线
-                  </button>
+                <div className="voice-mode-static">
+                  <Volume2 size={18} aria-hidden="true" />
+                  温和女声
                 </div>
                 <button
                   className="btn voice-playback-button"
@@ -810,7 +789,7 @@ export function ProfilePage() {
   }
 
   return (
-    <div className="page">
+    <div className="page profile-page">
       <header className="page-header">
         <div>
           <p className="eyebrow">授权 · 家属权限</p>
@@ -998,31 +977,9 @@ export function ProfilePage() {
           </div>
           {preferences.soundEnabled ? (
             <div className="voice-settings family-voice-settings">
-              <div className="voice-mode-options" role="group" aria-label="朗读音色">
-                <button
-                  type="button"
-                  className={preferences.voiceMode === "warm" ? "active" : ""}
-                  aria-pressed={preferences.voiceMode === "warm"}
-                  onClick={() => {
-                    stopSpeaking();
-                    updatePreferences({ voiceMode: "warm" });
-                    setSpeechPlayback("idle");
-                  }}
-                >
-                  温和女声
-                </button>
-                <button
-                  type="button"
-                  className={preferences.voiceMode === "clear" ? "active" : ""}
-                  aria-pressed={preferences.voiceMode === "clear"}
-                  onClick={() => {
-                    stopSpeaking();
-                    updatePreferences({ voiceMode: "clear" });
-                    setSpeechPlayback("idle");
-                  }}
-                >
-                  清晰声线
-                </button>
+              <div className="voice-mode-static">
+                <Volume2 size={18} aria-hidden="true" />
+                温和女声
               </div>
               <button
                 className="btn voice-playback-button"

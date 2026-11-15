@@ -106,6 +106,9 @@ export function AppShell() {
     if (state.profile.timeZone !== timeZone) {
       state.updateProfile({ timeZone });
     }
+    if (state.preferences.voiceMode !== "warm") {
+      state.updatePreferences({ voiceMode: "warm" });
+    }
   }, [sessionAccountId, role]);
 
   if (!hydrated) {
