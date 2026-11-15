@@ -1,6 +1,6 @@
-import { BellRing, Clock3, PhoneCall, X } from "lucide-react";
+import { BellRing, Clock3, PhoneCall, Square, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { speakText } from "../lib/speech";
+import { speakText, stopSpeaking } from "../lib/speech";
 import { formatTime, getNextDose, humanizeRelation } from "../lib/time";
 import { useAppStore } from "../store/useAppStore";
 
@@ -106,6 +106,14 @@ export function ReminderOverlay() {
             需要帮助，联系 {contacts[0].name}
           </a>
         ) : null}
+        <button
+          className="btn btn-ghost"
+          type="button"
+          onClick={stopSpeaking}
+        >
+          <Square size={18} aria-hidden="true" />
+          停止朗读
+        </button>
         <p className="field-hint" style={{ textAlign: "center", marginTop: 8 }}>
           这里只是提醒，不会替您决定停药或调整剂量。
         </p>

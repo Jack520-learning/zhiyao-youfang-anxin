@@ -41,7 +41,7 @@ import {
 import { findBestMedicine } from "../catalog/retrieval";
 import { buildLocalGuidance } from "../catalog/guidance";
 import { searchHerbs } from "../catalog/herbs";
-import { speakText } from "../lib/speech";
+import { preloadSpeech, speakText, stopSpeaking } from "../lib/speech";
 import { useQwenSpeechRecognition } from "../lib/qwenSpeech";
 import { nowIso } from "../lib/time";
 import { useAppStore } from "../store/useAppStore";
@@ -1385,6 +1385,17 @@ function MessageRisk({
   voiceMode: "warm" | "clear" | "male" | "calm" | "custom";
   customVoiceId?: string;
 }) {
+  const speechContent = `${riskCheck.summary}。${riskCheck.nextStep}`;
+
+  useEffect(() => {
+    if (!soundEnabled) return;
+    void preloadSpeech(
+      speechContent,
+      voiceMode,
+      customVoiceId
+    ).catch(() => undefined);
+  }, [customVoiceId, soundEnabled, speechContent, voiceMode]);
+
   return (
     <div className="message-risk">
       <div className="message-risk-top">
@@ -1402,23 +1413,28 @@ function MessageRisk({
         </p>
         <SourcesBlock sourceIds={riskCheck.sourceIds} />
       </details>
-      <button
-        type="button"
-        className="btn btn-ghost"
-        style={{ marginTop: 8 }}
-        disabled={!soundEnabled}
-        onClick={() =>
-          speakText(
-            `${riskCheck.summary}。${riskCheck.nextStep}`,
-            true,
-            voiceMode,
-            customVoiceId
-          )
-        }
-      >
-        <Volume2 size={18} aria-hidden="true" />
-        {soundEnabled ? "朗读检查结果" : "语音朗读已关闭"}
-      </button>
+      <div className="speech-action-row">
+        <button
+          type="button"
+          className="btn btn-ghost"
+          disabled={!soundEnabled}
+          onClick={() =>
+            void speakText(speechContent, true, voiceMode, customVoiceId)
+          }
+        >
+          <Volume2 size={18} aria-hidden="true" />
+          {soundEnabled ? "朗读检查结果" : "语音朗读已关闭"}
+        </button>
+        <button
+          type="button"
+          className="btn btn-ghost speech-stop-inline"
+          disabled={!soundEnabled}
+          onClick={stopSpeaking}
+        >
+          <Square size={17} aria-hidden="true" />
+          停止朗读
+        </button>
+      </div>
     </div>
   );
 }

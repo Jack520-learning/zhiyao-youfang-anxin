@@ -1938,6 +1938,48 @@ img {
   cursor: grabbing;
 }
 
+.speech-playback-dock {
+  position: fixed;
+  z-index: 92;
+  bottom: 96px;
+  left: 50%;
+  display: flex;
+  max-width: calc(100vw - 28px);
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 8px 7px 14px;
+  background: rgba(255, 254, 250, 0.97);
+  box-shadow: 0 12px 34px rgba(20, 44, 36, 0.18);
+  color: var(--ink);
+  transform: translateX(-50%);
+  backdrop-filter: blur(14px);
+}
+
+.speech-playback-dock > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.speech-playback-dock button {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 12px;
+  background: var(--red-soft);
+  color: var(--red);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .auth-page {
   display: grid;
   width: min(1180px, calc(100% - 32px));
@@ -3752,6 +3794,17 @@ img {
   background: var(--surface);
   color: var(--ink);
   font-size: calc(13px * var(--font-scale));
+}
+
+.speech-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.speech-stop-inline {
+  color: var(--red);
 }
 
 .ai-composer-wrap {

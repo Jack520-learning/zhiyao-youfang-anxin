@@ -163,10 +163,22 @@ export function useSpeechRecognition(
 
 export type VoiceMode = "warm" | "clear" | "male" | "calm" | "custom";
 export type SpeechPlaybackState = "idle" | "speaking" | "paused";
+export type SpeechStatus = SpeechPlaybackState | "loading";
 
 let preferredVoiceMode: VoiceMode = "warm";
 let currentAudio: HTMLAudioElement | null = null;
 let speechRequestVersion = 0;
+let speechPending = false;
+const speechUrlCache = new Map<
+  string,
+  { audioUrl: string; createdAt: number; voice: string }
+>();
+
+function emitSpeechState() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("speech-state-change"));
+  }
+}
 
 function scoreVoice(voice: SpeechSynthesisVoice, mode: VoiceMode): number {
   const name = voice.name.toLowerCase();
@@ -237,7 +249,7 @@ function naturalSpeechText(text: string): string {
     .trim();
 }
 
-export function speakText(
+export async function speakText(
   text: string,
   enabled = true,
   voiceMode: VoiceMode = "warm",
@@ -246,12 +258,22 @@ export function speakText(
   if (!enabled || !text.trim()) return Promise.resolve(false);
   stopSpeaking();
   preferredVoiceMode = voiceMode;
-  return playServerVoice(
-    text,
-    voiceMode,
-    customVoiceId,
-    speechRequestVersion
-  );
+  const requestVersion = speechRequestVersion;
+  speechPending = true;
+  emitSpeechState();
+  try {
+    return await playServerVoice(
+      text,
+      voiceMode,
+      customVoiceId,
+      requestVersion
+    );
+  } finally {
+    if (requestVersion === speechRequestVersion) {
+      speechPending = false;
+      emitSpeechState();
+    }
+  }
 }
 
 async function playServerVoice(
@@ -261,33 +283,71 @@ async function playServerVoice(
   requestVersion: number
 ): Promise<boolean> {
   try {
-    const response = await fetch("/api/tts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        text: naturalSpeechText(text),
-        voiceMode,
-        customVoiceId
-      })
-    });
-    if (!response.ok) throw new Error("服务端语音合成不可用");
-    const payload = (await response.json()) as { audioUrl?: string };
+    const payload = await getSpeechAudioUrl(text, voiceMode, customVoiceId);
     if (requestVersion !== speechRequestVersion) return false;
-    if (!payload.audioUrl) throw new Error("没有返回音频");
     const audio = new Audio(payload.audioUrl);
     currentAudio = audio;
     audio.onended = () => {
       if (currentAudio === audio) currentAudio = null;
+      emitSpeechState();
     };
     audio.onerror = () => {
       if (currentAudio === audio) currentAudio = null;
+      emitSpeechState();
     };
     await audio.play();
+    emitSpeechState();
     return true;
   } catch {
     if (requestVersion !== speechRequestVersion) return false;
     return speakWithBrowser(text, voiceMode);
   }
+}
+
+async function getSpeechAudioUrl(
+  text: string,
+  voiceMode: VoiceMode,
+  customVoiceId?: string
+): Promise<{ audioUrl: string; voice: string }> {
+  const spokenText = naturalSpeechText(text);
+  const cacheKey = `${voiceMode}:${customVoiceId || "default"}:${spokenText}`;
+  const cached = speechUrlCache.get(cacheKey);
+  if (cached && Date.now() - cached.createdAt < 10 * 60 * 1000) {
+    return cached;
+  }
+  const response = await fetch("/api/tts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text: spokenText,
+      voiceMode,
+      customVoiceId
+    })
+  });
+  if (!response.ok) throw new Error("服务端语音合成不可用");
+  const payload = (await response.json()) as {
+    audioUrl?: string;
+    voice?: string;
+  };
+  if (!payload.audioUrl) throw new Error("没有返回音频");
+  const result = {
+    audioUrl: payload.audioUrl,
+    voice: payload.voice || voiceMode
+  };
+  speechUrlCache.set(cacheKey, {
+    ...result,
+    createdAt: Date.now()
+  });
+  return result;
+}
+
+export async function preloadSpeech(
+  text: string,
+  voiceMode: VoiceMode = "warm",
+  customVoiceId?: string
+): Promise<void> {
+  if (!text.trim()) return;
+  await getSpeechAudioUrl(text, voiceMode, customVoiceId);
 }
 
 function speakWithBrowser(text: string, voiceMode: VoiceMode): boolean {
@@ -315,7 +375,7 @@ function speakWithBrowser(text: string, voiceMode: VoiceMode): boolean {
           : 0.84;
   utterance.volume = 1;
   utterance.onend = () => {
-    // Browser fallback has no persistent audio handle.
+    emitSpeechState();
   };
   window.speechSynthesis.speak(utterance);
   return true;
@@ -328,38 +388,49 @@ export function getSpeechPlaybackState(): SpeechPlaybackState {
   return window.speechSynthesis.paused ? "paused" : "speaking";
 }
 
+export function getSpeechStatus(): SpeechStatus {
+  if (speechPending) return "loading";
+  return getSpeechPlaybackState();
+}
+
 export function pauseSpeaking(): boolean {
   if (currentAudio) {
     currentAudio.pause();
+    emitSpeechState();
     return true;
   }
   if (!("speechSynthesis" in window) || !window.speechSynthesis.speaking) {
     return false;
   }
   window.speechSynthesis.pause();
+  emitSpeechState();
   return true;
 }
 
 export function resumeSpeaking(): boolean {
   if (currentAudio?.paused) {
     void currentAudio.play();
+    emitSpeechState();
     return true;
   }
   if (!("speechSynthesis" in window) || !window.speechSynthesis.paused) {
     return false;
   }
   window.speechSynthesis.resume();
+  emitSpeechState();
   return true;
 }
 
 export function stopSpeaking() {
   speechRequestVersion += 1;
+  speechPending = false;
   if (currentAudio) {
     currentAudio.pause();
     currentAudio.currentTime = 0;
     currentAudio = null;
   }
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  emitSpeechState();
 }
 
 export function testVoiceMode(

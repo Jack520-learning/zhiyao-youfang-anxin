@@ -25,6 +25,7 @@ import { FloatingSos } from "./FloatingSos";
 import { HealthProfilePrompt } from "./HealthProfilePrompt";
 import { SosModal } from "./SosModal";
 import { ReminderOverlay } from "./ReminderOverlay";
+import { SpeechPlaybackDock } from "./SpeechPlaybackDock";
 
 interface NavItem {
   to: string;
@@ -233,6 +234,7 @@ export function AppShell() {
 
       <FloatingSos onOpen={() => setSosOpen(true)} />
       <HealthProfilePrompt />
+      <SpeechPlaybackDock />
 
       <nav className="mobile-nav" aria-label={`${roleName}底部导航`}>
         {nav.map(({ to, label, icon: Icon, end }) => (
