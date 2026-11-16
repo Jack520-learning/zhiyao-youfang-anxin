@@ -5585,10 +5585,37 @@ img {
 
 .ai-chat-stage.is-conversation .chat-messages {
   overflow-y: auto;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(15, 107, 85, 0.34) transparent;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
 }
 
 .ai-chat-stage.is-conversation .chat-messages::-webkit-scrollbar {
+  width: 8px;
+}
+
+.ai-chat-stage.is-conversation .chat-messages::-webkit-scrollbar-track {
+  margin-block: 14px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.ai-chat-stage.is-conversation .chat-messages::-webkit-scrollbar-thumb {
+  min-height: 44px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(15, 107, 85, 0.34);
+  background-clip: padding-box;
+}
+
+.ai-chat-stage.is-conversation .chat-messages::-webkit-scrollbar-thumb:hover,
+.ai-chat-stage.is-conversation .chat-messages::-webkit-scrollbar-thumb:active {
+  background: rgba(15, 107, 85, 0.62);
+  background-clip: padding-box;
+}
+
+.ai-chat-stage.is-conversation .chat-messages::-webkit-scrollbar-button {
   display: none;
 }
 
