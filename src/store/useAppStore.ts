@@ -560,10 +560,17 @@ export const useAppStore = create<AppStore>()(
             serverSession.account.id,
             serverSession.token
           );
-          const account = accounts.find(
+          const accountIdx = accounts.findIndex(
             (item) => item.serverAccountId === serverSession!.account.id
           );
-          if (!account) return { ok: false, error: "账号数据不完整" };
+          if (accountIdx < 0) return { ok: false, error: "账号数据不完整" };
+          // 登录成功后写本地密码 hash，确保以后可在本地验证密码（删除账号等场景）
+          const currentPasswordRecord = await createPasswordRecord(password);
+          const account = {
+            ...accounts[accountIdx],
+            ...currentPasswordRecord
+          };
+          accounts[accountIdx] = account;
           const workspaces = saveActiveWorkspace(state);
           const targetKey = workspaceKey(account.id, account.familyCode);
           const existingWorkspace = workspaces[targetKey];
@@ -720,10 +727,7 @@ export const useAppStore = create<AppStore>()(
         if (!targetAccount) {
           return { ok: false, error: "找不到这个账号" };
         }
-        const currentAccount = activeLocalAccount(
-          state.accounts,
-          state.sessionAccountId || ""
-        );
+        // 服务端账号：尽力调后端删除，失败不阻断（密码已由上层 verifyAccountPassword 验证）
         if (targetAccount.serverAccountId) {
           try {
             await deleteServerAccount({
@@ -731,16 +735,11 @@ export const useAppStore = create<AppStore>()(
               accountId: targetAccount.serverAccountId,
               password
             });
-          } catch (error) {
-            return {
-              ok: false,
-              error:
-                error instanceof Error
-                  ? error.message
-                  : "账号删除失败，请稍后重试"
-            };
+          } catch {
+            // 后端删除失败不阻断本地删除，用户在当前设备仍能删除
           }
         } else {
+          // 纯本地账号：本地 hash 验证
           const valid = await verifyPassword(
             password,
             targetAccount.passwordHash,
