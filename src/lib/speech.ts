@@ -168,6 +168,7 @@ export type SpeechStatus = SpeechPlaybackState | "loading";
 
 let preferredVoiceMode: VoiceMode = DEFAULT_VOICE_MODE;
 let currentAudio: HTMLAudioElement | null = null;
+let browserSpeechUtterance: SpeechSynthesisUtterance | null = null;
 let speechRequestVersion = 0;
 let speechPending = false;
 let speechAbortController: AbortController | null = null;
@@ -188,6 +189,12 @@ const expectedSystemVoices: Record<
   male: "longanyang_v3.1",
   calm: "longcheng_v3.1"
 };
+const systemVoiceGender: Partial<Record<VoiceMode, "female" | "male">> = {
+  warm: "female",
+  clear: "female",
+  male: "male",
+  calm: "male"
+};
 
 function emitSpeechState() {
   if (typeof window !== "undefined") {
@@ -206,11 +213,73 @@ function naturalSpeechText(text: string): string {
     .trim();
 }
 
+function selectBrowserVoice(voiceMode: VoiceMode) {
+  if (
+    typeof window === "undefined" ||
+    !window.speechSynthesis ||
+    typeof window.SpeechSynthesisUtterance !== "function"
+  ) {
+    return null;
+  }
+  const voices = window.speechSynthesis.getVoices?.() || [];
+  const chineseVoices = voices.filter((voice) => /^zh/i.test(voice.lang));
+  const gender = systemVoiceGender[voiceMode];
+  if (!gender) return chineseVoices[0] || null;
+  const maleName = /yunxi|yunjian|kangkang|liang|male|男/i;
+  const femaleName = /xiaoxiao|huihui|yaoyao|female|女/i;
+  return (
+    chineseVoices.find((voice) =>
+      gender === "male"
+        ? maleName.test(voice.name)
+        : femaleName.test(voice.name)
+    ) || null
+  );
+}
+
+function playWithBrowserVoice(
+  text: string,
+  requestVersion: number,
+  voiceMode: VoiceMode
+): boolean {
+  if (requestVersion !== speechRequestVersion) return false;
+  const voice = selectBrowserVoice(voiceMode);
+  if (!voice) return false;
+  const synth = window.speechSynthesis!;
+  synth.cancel();
+  const utterance = new window.SpeechSynthesisUtterance(
+    naturalSpeechText(text)
+  );
+  utterance.lang = "zh-CN";
+  utterance.rate = 0.94;
+  utterance.pitch = 1;
+  utterance.voice = voice;
+  const clear = () => {
+    if (browserSpeechUtterance === utterance) {
+      browserSpeechUtterance = null;
+      emitSpeechState();
+    }
+  };
+  utterance.onend = clear;
+  utterance.onerror = clear;
+  browserSpeechUtterance = utterance;
+  emitSpeechState();
+  try {
+    synth.speak(utterance);
+    return true;
+  } catch {
+    clear();
+    return false;
+  }
+}
+
 export async function speakText(
   text: string,
   enabled = true,
   voiceMode: VoiceMode = "warm",
-  customVoiceId?: string
+  customVoiceId?: string,
+  options?: {
+    fallbackAfterMs?: number;
+  }
 ): Promise<boolean> {
   if (!enabled || !text.trim()) return Promise.resolve(false);
   stopSpeaking();
@@ -223,17 +292,38 @@ export async function speakText(
   const cached = getCachedSpeechAudio(text, voiceMode, customVoiceId);
   try {
     if (cached) {
-      return await playAudioUrl(cached.audioUrl, requestVersion);
+      try {
+        if (await playAudioUrl(cached.audioUrl, requestVersion)) return true;
+      } catch {
+        // Continue with the local browser voice if autoplay fails.
+      }
+      return playWithBrowserVoice(text, requestVersion, voiceMode);
     }
-    return await playServerAudio(
+    const serverPlayback = playServerAudio(
       text,
       voiceMode,
       customVoiceId,
       requestVersion,
       abortController.signal
-    );
+    ).catch(() => false);
+    if (!selectBrowserVoice(voiceMode)) {
+      return await serverPlayback;
+    }
+    let fallbackTimer: number | undefined;
+    const browserFallback = new Promise<boolean>((resolve) => {
+      fallbackTimer = window.setTimeout(() => {
+        abortController.abort();
+        resolve(
+          playWithBrowserVoice(text, requestVersion, voiceMode)
+        );
+      }, Math.max(1000, options?.fallbackAfterMs ?? 4500));
+    });
+    const started = await Promise.race([serverPlayback, browserFallback]);
+    if (fallbackTimer) window.clearTimeout(fallbackTimer);
+    if (started) return true;
+    return playWithBrowserVoice(text, requestVersion, voiceMode);
   } catch {
-    return false;
+    return playWithBrowserVoice(text, requestVersion, voiceMode);
   } finally {
     if (speechAbortController === abortController) {
       speechAbortController = null;
@@ -375,6 +465,9 @@ export async function preloadSpeech(
 }
 
 export function getSpeechPlaybackState(): SpeechPlaybackState {
+  if (browserSpeechUtterance) {
+    return window.speechSynthesis?.paused ? "paused" : "speaking";
+  }
   if (currentAudio) return currentAudio.paused ? "paused" : "speaking";
   return "idle";
 }
@@ -385,6 +478,11 @@ export function getSpeechStatus(): SpeechStatus {
 }
 
 export function pauseSpeaking(): boolean {
+  if (browserSpeechUtterance && window.speechSynthesis) {
+    window.speechSynthesis.pause();
+    emitSpeechState();
+    return true;
+  }
   if (currentAudio) {
     currentAudio.pause();
     emitSpeechState();
@@ -394,6 +492,11 @@ export function pauseSpeaking(): boolean {
 }
 
 export function resumeSpeaking(): boolean {
+  if (browserSpeechUtterance && window.speechSynthesis) {
+    window.speechSynthesis.resume();
+    emitSpeechState();
+    return true;
+  }
   if (currentAudio?.paused) {
     void currentAudio.play();
     emitSpeechState();
@@ -405,6 +508,10 @@ export function resumeSpeaking(): boolean {
 export function stopSpeaking() {
   speechRequestVersion += 1;
   speechPending = false;
+  if (browserSpeechUtterance) {
+    window.speechSynthesis?.cancel();
+    browserSpeechUtterance = null;
+  }
   speechAbortController?.abort();
   speechAbortController = null;
   if (currentAudio) {

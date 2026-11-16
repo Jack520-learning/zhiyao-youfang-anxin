@@ -267,4 +267,57 @@ describe("speech playback start", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("falls back to the matching browser voice when server audio is slow", async () => {
+    let spoken = 0;
+    let selectedVoiceName = "";
+    class FakeUtterance {
+      lang = "";
+      rate = 1;
+      pitch = 1;
+      voice: { name?: string } | null = null;
+      onend: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      constructor(public text: string) {}
+    }
+    Object.assign(window, {
+      SpeechSynthesisUtterance: FakeUtterance,
+      speechSynthesis: {
+        paused: false,
+        cancel: () => undefined,
+        pause: () => undefined,
+        resume: () => undefined,
+        speak: (utterance: FakeUtterance) => {
+          spoken += 1;
+          selectedVoiceName = utterance.voice?.name || "";
+        },
+        getVoices: () => [
+          { lang: "zh-CN", name: "Microsoft Yunxi" },
+          { lang: "zh-CN", name: "Microsoft Huihui" }
+        ]
+      }
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_url: string, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener(
+              "abort",
+              () => reject(new DOMException("slow", "AbortError")),
+              { once: true }
+            );
+          })
+      )
+    );
+
+    await expect(
+      speakText("慢速朗读兜底", true, "warm", undefined, {
+        fallbackAfterMs: 20
+      })
+    ).resolves.toBe(true);
+    expect(spoken).toBe(1);
+    expect(selectedVoiceName).toBe("Microsoft Huihui");
+    expect(getSpeechStatus()).toBe("speaking");
+  });
 });

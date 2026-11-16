@@ -745,28 +745,52 @@ async function callQwenTts(text, voiceMode, customVoiceId) {
   }
   const voice = isCustom ? customVoiceId : systemVoices[voiceMode];
   if (!voice) throw new Error("没有找到对应的朗读音色");
-  const response = await fetch(
-    `${getTtsBaseUrl()}/services/audio/tts/SpeechSynthesizer`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${getAiKey()}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: isCustom ? CUSTOM_TTS_MODEL : TTS_MODEL,
-        input: {
-          text: String(text || "").slice(0, 2500),
-          voice,
-          format: "wav",
-          sample_rate: 24000
+  let response;
+  let failureText = "";
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      response = await fetch(
+        `${getTtsBaseUrl()}/services/audio/tts/SpeechSynthesizer`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${getAiKey()}`,
+            "Content-Type": "application/json"
+          },
+          signal: AbortSignal.timeout(12_000),
+          body: JSON.stringify({
+            model: isCustom ? CUSTOM_TTS_MODEL : TTS_MODEL,
+            input: {
+              text: String(text || "").slice(0, 2500),
+              voice,
+              format: "wav",
+              sample_rate: 24000
+            }
+          })
         }
-      })
+      );
+    } catch (error) {
+      if (attempt === 2) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 450 * (attempt + 1)));
+      continue;
     }
-  );
-  if (!response.ok) {
-    const payload = await response.text();
-    throw new Error(`语音合成服务失败（${response.status}）：${payload.slice(0, 160)}`);
+    if (response.ok) break;
+    failureText = await response.text().catch(() => "");
+    if (
+      attempt < 2 &&
+      (response.status === 429 || response.status >= 500)
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 450 * (attempt + 1)));
+      continue;
+    }
+    throw new Error(
+      `语音合成服务失败（${response.status}）：${failureText.slice(0, 160)}`
+    );
+  }
+  if (!response?.ok) {
+    throw new Error(
+      `语音合成服务失败（${response?.status || 502}）：${failureText.slice(0, 160)}`
+    );
   }
   const payload = await response.json();
   const audioUrl = payload.output?.audio?.url;

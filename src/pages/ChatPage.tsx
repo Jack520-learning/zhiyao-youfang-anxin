@@ -71,7 +71,6 @@ import {
 } from "../lib/vision";
 import {
   getSpeechStatus,
-  preloadSpeech,
   speakText,
   stopSpeaking
 } from "../lib/speech";
@@ -418,29 +417,6 @@ export function ChatPage() {
     window.addEventListener("speech-state-change", update);
     return () => window.removeEventListener("speech-state-change", update);
   }, []);
-
-  useEffect(() => {
-    if (
-      preferences.voiceMode === "custom" &&
-      !preferences.customVoiceId
-    ) {
-      return;
-    }
-    const messagesToPrepare = messages
-      .filter((message) => !message.pending && message.content.trim())
-      .slice(-5);
-    for (const message of messagesToPrepare) {
-      void preloadSpeech(
-        message.content,
-        preferences.voiceMode,
-        preferences.customVoiceId
-      ).catch(() => undefined);
-    }
-  }, [
-    messages,
-    preferences.voiceMode,
-    preferences.customVoiceId
-  ]);
 
   useEffect(() => {
     latestSidebarWidth.current = sidebarWidth;
@@ -973,7 +949,8 @@ export function ChatPage() {
         finalMessageContent,
         true,
         preferences.voiceMode,
-        preferences.customVoiceId
+        preferences.customVoiceId,
+        { fallbackAfterMs: 3500 }
       );
       setSpeakingMessageId(assistantMessageId);
       void autoPlayback.then((started) => {
@@ -1476,7 +1453,8 @@ export function ChatPage() {
       text,
       true,
       preferences.voiceMode,
-      preferences.customVoiceId
+      preferences.customVoiceId,
+      { fallbackAfterMs: 6000 }
     );
     setSpeakingMessageId(messageId);
     const started = await playback;
