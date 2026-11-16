@@ -3,8 +3,19 @@ import { splitDosageText } from "./dosage";
 import { nowIso } from "./time";
 
 let workerPromise: Promise<import("tesseract.js").Worker> | undefined;
+const progressListeners = new Set<
+  (progress: number, label: string) => void
+>();
 
-async function getWorker(onProgress?: (progress: number, label: string) => void) {
+function translateStatus(status: string): string {
+  if (/loading language traineddata/i.test(status)) return "正在加载中文识别资料";
+  if (/initializing api/i.test(status)) return "正在初始化文字识别";
+  if (/recognizing text/i.test(status)) return "正在逐行识别药品文字";
+  if (/loading tesseract core/i.test(status)) return "正在载入识别引擎";
+  return status ? "正在识别图片内容" : "准备识别";
+}
+
+async function getWorker() {
   if (!workerPromise) {
     workerPromise = import("tesseract.js").then(async ({ createWorker, OEM, PSM }) => {
       const worker = await createWorker("chi_sim", OEM.LSTM_ONLY, {
@@ -14,10 +25,9 @@ async function getWorker(onProgress?: (progress: number, label: string) => void)
         gzip: true,
         cacheMethod: "none",
         logger: (message) => {
-          onProgress?.(
-            Math.max(0, Math.min(1, message.progress || 0)),
-            message.status
-          );
+          const progress = Math.max(0, Math.min(1, message.progress || 0));
+          const label = translateStatus(message.status || "");
+          for (const listener of progressListeners) listener(progress, label);
         }
       });
       await worker.setParameters({
@@ -112,9 +122,22 @@ export async function recognizeMedicineImage(
   imageDataUrl: string,
   onProgress?: (progress: number, label: string) => void
 ): Promise<IntakeDraft> {
+  if (onProgress) progressListeners.add(onProgress);
   onProgress?.(0.02, "正在载入本地识别引擎");
-  const worker = await getWorker(onProgress);
-  const result = await worker.recognize(imageDataUrl);
+  try {
+    const worker = await getWorker();
+    const result = await worker.recognize(imageDataUrl);
+    onProgress?.(1, "文字识别完成");
+    return parseRecognitionResult(imageDataUrl, result);
+  } finally {
+    if (onProgress) progressListeners.delete(onProgress);
+  }
+}
+
+function parseRecognitionResult(
+  imageDataUrl: string,
+  result: import("tesseract.js").RecognizeResult
+): IntakeDraft {
   const text = result.data.text.trim();
   const confidence = Math.max(0, Math.min(1, (result.data.confidence || 0) / 100));
   const name = extractName(text);

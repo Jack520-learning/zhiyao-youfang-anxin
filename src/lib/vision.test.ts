@@ -72,7 +72,7 @@ describe("multi-medicine vision results", () => {
     ).toHaveLength(1);
   });
 
-  it("does not treat package quantity as a single dose", () => {
+  it("fills a catalog dose instead of treating package quantity as a single dose", () => {
     const drafts = buildDraftsFromVision(
       "data:image/jpeg;base64,test",
       createManualDraft("data:image/jpeg;base64,test"),
@@ -86,9 +86,9 @@ describe("multi-medicine vision results", () => {
         ]
       }
     );
-    expect(drafts[0].dosage).toBe("");
+    expect(drafts[0].dosage).toBe("0.5mg");
+    expect(drafts[0].dosageSource).toBe("catalog");
     expect(drafts[0].strength).toBe("0.5mg/片");
     expect(drafts[0].packageSpec).toBe("100片/盒");
-    expect(drafts[0].lowConfidenceFields).toContain("dosage");
   });
 });

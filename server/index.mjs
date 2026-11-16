@@ -551,7 +551,7 @@ async function callVisionIdentification(imageDataUrl, mode) {
           content: [
             {
               type: "text",
-              text: `请逐项识别照片中的所有${subject}，不同包装、不同颜色或不同药名分别作为独立条目。输出 JSON：{"isMedicine":true或false,"rejectionReason":"照片不是药品、药盒、说明书或处方单时说明原因","candidates":[{"name":"名称","confidence":0到1,"visibleFeatures":["可见特征"]}],"medicines":[{"position":"例如：上/中/下或左/右","name":"包装上的完整药名","genericName":"通用名","activeIngredient":"有效成分","dosage":"包装上可见的规格和单次用量","price":"优先读取包装或价签价格；药名明确但未标价时，给出中国常见零售范围‘约¥X-Y/盒或支（市场参考）’；无法判断时写‘需以药房价格为准’","dosageForm":"剂型","strength":"规格","frequency":"包装明确写出的频次，否则留空","relation":"饭前/饭后/随餐/睡前，包装明确写出才填","instructions":"仅摘录该药品包装可见说明","confidence":0到1,"visibleFeatures":["用于区分该药品的可见特征"]}],"summary":"不超过120字的谨慎结论","cautions":["需要人工核实的点"]}。medicines 必须包含所有可辨识的不同对象，通常为1到10项；不要只填第一种。相同药品重复出现只输出一次。中药材形态相似时不要给单一确定结论；药品必须优先读取每个包装的文字。价格估算必须明确写“市场参考”，不得说成实际售价；其他看不清的信息不要猜测。`
+              text: `请逐项识别照片中的所有${subject}，不同包装、不同颜色或不同药名分别作为独立条目。输出 JSON：{"isMedicine":true或false,"rejectionReason":"照片不是药品、药盒、说明书或处方单时说明原因","candidates":[{"name":"名称","confidence":0到1,"visibleFeatures":["可见特征"]}],"medicines":[{"position":"例如：上/中/下或左/右","name":"包装上的完整药名","genericName":"通用名","activeIngredient":"有效成分","singleDose":"包装或说明书明确写出的每次实际服用量，例如每次1片或0.5mg；只有规格或包装数量时必须留空","dosage":"包装上可见的规格或单片含量","price":"优先读取包装或价签价格；药名明确但未标价时，给出中国常见零售范围‘约¥X-Y/盒或支（市场参考）’；无法判断时写‘需以药房价格为准’","dosageForm":"剂型","strength":"单片或单粒规格","packageSpec":"包装数量，例如100片/盒","frequency":"包装明确写出的频次，否则留空","relation":"饭前/饭后/随餐/睡前，包装明确写出才填","instructions":"仅摘录该药品包装可见说明","confidence":0到1,"visibleFeatures":["用于区分该药品的可见特征"]}],"summary":"不超过120字的谨慎结论","cautions":["需要人工核实的点"]}。medicines 必须包含所有可辨识的不同对象，通常为1到10项；不要只填第一种。相同药品重复出现只输出一次。中药材形态相似时不要给单一确定结论；药品必须优先读取每个包装的文字。价格估算必须明确写“市场参考”，不得说成实际售价；其他看不清的信息不要猜测。`
             },
             {
               type: "image_url",
@@ -581,10 +581,12 @@ async function callVisionIdentification(imageDataUrl, mode) {
       name: String(item.name || "").slice(0, 50),
       genericName: String(item.genericName || "").slice(0, 50),
       activeIngredient: String(item.activeIngredient || "").slice(0, 80),
+      singleDose: String(item.singleDose || "").slice(0, 80),
       dosage: String(item.dosage || "").slice(0, 80),
       price: String(item.price || "").slice(0, 40),
       dosageForm: String(item.dosageForm || "").slice(0, 40),
       strength: String(item.strength || "").slice(0, 80),
+      packageSpec: String(item.packageSpec || "").slice(0, 80),
       frequency: String(item.frequency || "").slice(0, 40),
       relation: String(item.relation || "").slice(0, 30),
       instructions: String(item.instructions || "").slice(0, 500),
@@ -1107,6 +1109,67 @@ async function callAiAssistant(payload) {
   if (!response.ok) throw new Error(`AI 服务返回 ${response.status}`);
   const data = await response.json();
   return data.choices?.[0]?.message?.content?.trim();
+}
+
+async function suggestMedicationDose(payload) {
+  const prompt = [
+    "你负责从药品标签和公开药品信息中提取“每次实际服用剂量”。",
+    "只返回 JSON，不要 Markdown。格式：",
+    '{"dosage":"例如1片或0.5mg；无法可靠确定时为空字符串","strength":"单片或单粒规格","packageSpec":"包装数量","basis":"依据","confidence":0到1}',
+    "规则：包装数量绝不能当作单次剂量；只有规格、没有明确单次用量时可以结合公开药品说明给出建议，但必须降低置信度。",
+    "无法可靠确定时必须返回空 dosage，禁止猜测。",
+    `药名：${String(payload.name || "").slice(0, 80)}`,
+    `已识别规格：${String(payload.strength || "").slice(0, 80)}`,
+    `包装数量：${String(payload.packageSpec || "").slice(0, 80)}`,
+    `标签文字：${String(payload.instructionText || "").slice(0, 1200)}`
+  ].join("\n");
+  const requestBody = (enableSearch) =>
+    JSON.stringify({
+      model: getTextModel(),
+      temperature: 0.05,
+      max_tokens: 300,
+      ...(enableSearch ? { enable_search: true } : {}),
+      messages: [
+        {
+          role: "system",
+          content:
+            "你是药品标签信息提取助手。只提取或谨慎补充单次服用剂量，不诊断、不开处方，不把包装数量当剂量，不确定时返回空值。"
+        },
+        { role: "user", content: prompt }
+      ]
+    });
+  const request = (enableSearch) =>
+    fetch(`${getAiBaseUrl()}/chat/completions`, {
+      method: "POST",
+      signal: AbortSignal.timeout(10000),
+      headers: {
+        Authorization: `Bearer ${getAiKey()}`,
+        "Content-Type": "application/json"
+      },
+      body: requestBody(enableSearch)
+    });
+  let response = await request(true);
+  if (response.status === 400) response = await request(false);
+  if (!response.ok) throw new Error(`自动补充剂量失败（${response.status}）`);
+  const data = await response.json();
+  const parsed = parseModelJson(data.choices?.[0]?.message?.content);
+  const dosage = String(parsed.dosage || "").trim().slice(0, 80);
+  if (
+    dosage &&
+    !/\d+(?:\.\d+)?\s*(?:mg|毫克|g|克|ml|毫升|片|粒|袋|滴)/i.test(dosage)
+  ) {
+    throw new Error("自动补充的剂量格式不正确");
+  }
+  return {
+    dosage,
+    strength: String(parsed.strength || "").trim().slice(0, 80),
+    packageSpec: String(parsed.packageSpec || "").trim().slice(0, 80),
+    basis: String(parsed.basis || "").trim().slice(0, 200),
+    confidence:
+      typeof parsed.confidence === "number"
+        ? Math.max(0, Math.min(1, parsed.confidence))
+        : 0
+  };
 }
 
 async function callUnconstrainedModel(query) {
@@ -2154,6 +2217,28 @@ const server = createServer(async (request, response) => {
       const answer = await callAiAssistant(body);
       if (!answer) return json(response, 502, { error: "模型没有返回内容" });
       return json(response, 200, { message: answer, mode: "llm" });
+    }
+
+    if (
+      url.pathname === "/api/medication-dose-suggest" &&
+      request.method === "POST"
+    ) {
+      if (!isAiConfigured()) {
+        return json(response, 503, { error: "自动补充服务尚未配置" });
+      }
+      const body = await readJson(request, 64 * 1024);
+      if (!String(body.name || "").trim()) {
+        return json(response, 400, { error: "缺少药名" });
+      }
+      try {
+        const result = await suggestMedicationDose(body);
+        return json(response, 200, result);
+      } catch (error) {
+        return json(response, 502, {
+          error:
+            error instanceof Error ? error.message : "自动补充剂量失败"
+        });
+      }
     }
 
     if (url.pathname === "/api/transcribe" && request.method === "POST") {

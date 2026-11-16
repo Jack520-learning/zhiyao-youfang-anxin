@@ -19,6 +19,7 @@ import { DosageFormSafetyNotice } from "../components/DosageFormSafetyNotice";
 import { createManualDraft, recognizeMedicineImage } from "../lib/ocr";
 import { fileToCompressedDataUrl } from "../lib/image";
 import { createId } from "../lib/ids";
+import { requestDoseSuggestion } from "../lib/doseAutofill";
 import { checkNewMedication } from "../lib/riskEngine";
 import {
   frequencyOptions,
@@ -100,11 +101,13 @@ export function AddMedicationPage({
   const [progressLabel, setProgressLabel] = useState("");
   const [error, setError] = useState("");
   const [formError, setFormError] = useState("");
+  const [autoFillStatus, setAutoFillStatus] = useState("");
   const [riskCheck, setRiskCheck] = useState<RiskCheck>();
   const [candidateMedication, setCandidateMedication] = useState<Medication>();
   const [cameraOpen, setCameraOpen] = useState(false);
   const initialCameraOpened = useRef(false);
   const libraryInputRef = useRef<HTMLInputElement>(null);
+  const progressTickerRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     if (!captureMode || initialCameraOpened.current) return;
@@ -118,11 +121,84 @@ export function AddMedicationPage({
     return () => window.clearTimeout(timer);
   }, [draft, phase, saveIntakeDraft]);
 
+  useEffect(
+    () => () => {
+      if (progressTickerRef.current) {
+        window.clearInterval(progressTickerRef.current);
+      }
+    },
+    []
+  );
+
+  async function autoFillMissingDoses(drafts: IntakeDraft[]) {
+    const candidates = drafts
+      .filter((item) => !item.dosage.trim())
+      .slice(0, 3);
+    if (!candidates.length) {
+      setAutoFillStatus("");
+      return;
+    }
+    setAutoFillStatus("正在自动补充每次实际服用剂量…");
+    let filledCount = 0;
+    await Promise.all(
+      candidates.map(async (item) => {
+        try {
+          const suggestion = await requestDoseSuggestion({
+            name: item.name,
+            instructionText: `${item.rawText}\n${item.instructions}`,
+            strength: item.strength || "",
+            packageSpec: item.packageSpec || ""
+          });
+          if (!suggestion) return;
+          const patch: Partial<IntakeDraft> = {
+            dosage: suggestion.dosage,
+            strength: item.strength || suggestion.strength,
+            packageSpec: item.packageSpec || suggestion.packageSpec,
+            dosageSource: "ai",
+            dosageBasis: suggestion.basis,
+            confidence: Math.max(item.confidence, suggestion.confidence)
+          };
+          filledCount += 1;
+          setDetectedDrafts((current) =>
+            current.map((entry) =>
+              entry.name === item.name && !entry.dosage.trim()
+                ? { ...entry, ...patch }
+                : entry
+            )
+          );
+          setDraft((current) =>
+            current?.name === item.name && !current.dosage.trim()
+              ? { ...current, ...patch }
+              : current
+          );
+          setError(
+            `已自动补充“${item.name}”的每次实际服用剂量，请核对后再保存。`
+          );
+        } catch {
+          // Keep the field editable when automatic completion is unavailable.
+        }
+      })
+    );
+    setAutoFillStatus(
+      filledCount
+        ? `已自动补充 ${filledCount} 项剂量，请逐项核对。`
+        : "暂未找到可靠的自动剂量，请根据处方或说明书手动填写。"
+    );
+  }
+
   async function processImage(dataUrl: string) {
     setPhase("recognizing");
     setProgress(0.03);
     setProgressLabel("正在保存原图");
     setError("");
+    if (progressTickerRef.current) {
+      window.clearInterval(progressTickerRef.current);
+    }
+    progressTickerRef.current = window.setInterval(() => {
+      setProgress((current) =>
+        Math.min(0.94, current + (0.94 - current) * 0.08 + 0.0015)
+      );
+    }, 120);
     try {
       const visionPromise = fetch("/api/vision-identify", {
         method: "POST",
@@ -140,15 +216,17 @@ export function AddMedicationPage({
         recognized = await recognizeMedicineImage(
           dataUrl,
           (value, label) => {
-            setProgress(value * 0.55);
+            setProgress((current) =>
+              Math.max(current, Math.min(0.55, value * 0.55))
+            );
             setProgressLabel(label);
           }
         );
       } catch {
         recognized = createManualDraft(dataUrl);
       }
-      setProgress(0.68);
-      setProgressLabel("AI 正在读取药名、成分、剂量和价格");
+      setProgress((current) => Math.max(current, 0.58));
+      setProgressLabel("正在匹配药名、规格、单次剂量和包装信息");
       const vision = await visionPromise;
       const visionMedicines = getVisionMedicines(vision);
       const medicalText = `${recognized.rawText} ${
@@ -196,6 +274,7 @@ export function AddMedicationPage({
         );
       }
       setPhase("review");
+      void autoFillMissingDoses(nextDrafts);
     } catch (recognitionError) {
       console.error(recognitionError);
       const manual = createManualDraft(dataUrl);
@@ -207,6 +286,11 @@ export function AddMedicationPage({
         "识别暂时没有完成。原图已经保存，请直接核对并填写药名、剂量和用法。"
       );
       setPhase("review");
+    } finally {
+      if (progressTickerRef.current) {
+        window.clearInterval(progressTickerRef.current);
+        progressTickerRef.current = undefined;
+      }
     }
   }
 
@@ -226,6 +310,9 @@ export function AddMedicationPage({
     const nextDraft = {
       ...draft,
       [field]: value,
+      ...(field === "dosage"
+        ? { dosageSource: undefined, dosageBasis: undefined }
+        : {}),
       lowConfidenceFields: draft.lowConfidenceFields.filter(
         (item) => item !== String(field)
       )
@@ -247,6 +334,9 @@ export function AddMedicationPage({
     const nextDraft = {
       ...draft,
       ...fields,
+      ...("dosage" in fields
+        ? { dosageSource: undefined, dosageBasis: undefined }
+        : {}),
       lowConfidenceFields: draft.lowConfidenceFields.filter(
         (item) => !changedFieldNames.has(item)
       )
@@ -325,6 +415,8 @@ export function AddMedicationPage({
       dosage: draft.dosage.trim(),
       strength: draft.strength?.trim(),
       packageSpec: draft.packageSpec?.trim(),
+      dosageSource: draft.dosageSource,
+      dosageBasis: draft.dosageBasis,
       frequency: draft.frequency.trim(),
       times: isAsNeededFrequency(draft.frequency)
         ? []
@@ -373,6 +465,8 @@ export function AddMedicationPage({
       dosage: draft.dosage.trim(),
       strength: draft.strength?.trim(),
       packageSpec: draft.packageSpec?.trim(),
+      dosageSource: draft.dosageSource,
+      dosageBasis: draft.dosageBasis,
       frequency: draft.frequency.trim(),
       times: isAsNeededFrequency(draft.frequency)
         ? []
@@ -621,6 +715,24 @@ export function AddMedicationPage({
                 {error}
               </div>
             ) : null}
+            {autoFillStatus ? (
+              <div className="notice" style={{ marginBottom: 18 }}>
+                <Sparkles size={20} aria-hidden="true" />
+                {autoFillStatus}
+              </div>
+            ) : null}
+            {draft.dosageSource ? (
+              <div className="notice warm" style={{ marginBottom: 18 }}>
+                <ShieldAlert size={20} aria-hidden="true" />
+                当前单次剂量为自动填写：
+                {draft.dosageSource === "catalog"
+                  ? "来自药品目录参考信息"
+                  : draft.dosageSource === "ai"
+                    ? "来自智能标签分析"
+                    : "来自包装或说明书文字"}
+                。{draft.dosageBasis || "请核对处方或说明书。"}
+              </div>
+            ) : null}
             <DosageFormSafetyNotice
               medicationName={draft.name}
               instructions={`${draft.instructions} ${draft.dosage} ${draft.strength ?? ""} ${draft.packageSpec ?? ""}`}
@@ -678,6 +790,9 @@ export function AddMedicationPage({
                 <span className="field-hint">
                   这里只填一次实际服用量。包装数量，例如“100片/盒”，不能填在这里。
                 </span>
+                {draft.dosageBasis ? (
+                  <span className="field-hint">自动填写依据：{draft.dosageBasis}</span>
+                ) : null}
               </label>
               <label className="field">
                 <span className="field-label">单片/单粒规格</span>

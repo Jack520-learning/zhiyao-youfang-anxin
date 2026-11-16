@@ -1,5 +1,6 @@
 import { findBestMedicine } from "../catalog/retrieval";
 import { isAsNeededFrequency, splitDosageText } from "./dosage";
+import { suggestDoseFromText } from "./doseAutofill";
 import type { IntakeDraft } from "../types";
 
 export interface VisionMedicine {
@@ -7,6 +8,7 @@ export interface VisionMedicine {
   name?: string;
   genericName?: string;
   activeIngredient?: string;
+  singleDose?: string;
   dosage?: string;
   price?: string;
   dosageForm?: string;
@@ -78,13 +80,22 @@ export function buildDraftsFromVision(
         ? catalogMatch.medicine
         : undefined;
     const rawDosage = cleanName(
-      item.dosage ||
+      item.singleDose ||
+        item.dosage ||
         item.strength ||
         medicine?.strength ||
         (!multiple ? fallbackDraft.dosage : "")
     );
     const dosageDetails = splitDosageText(rawDosage);
-    const dosage = dosageDetails.dosage;
+    const labelDose = suggestDoseFromText(
+      `${item.instructions || ""} ${!multiple ? fallbackDraft.instructions : ""}`,
+      "label"
+    );
+    const catalogDose = medicine
+      ? suggestDoseFromText(medicine.howToTake, "catalog")
+      : null;
+    const suggestedDose = labelDose || catalogDose;
+    const dosage = dosageDetails.dosage || suggestedDose?.dosage || "";
     const strength = cleanName(
       item.strength || dosageDetails.strength || medicine?.strength
     );
@@ -135,6 +146,16 @@ export function buildDraftsFromVision(
       dosage,
       strength,
       packageSpec,
+      dosageSource: dosage
+        ? dosageDetails.dosage
+          ? "label"
+          : suggestedDose?.source
+        : undefined,
+      dosageBasis: dosage
+        ? dosageDetails.dosage
+          ? "包装或说明书明确写出的单次用量"
+          : suggestedDose?.basis
+        : undefined,
       frequency,
       times:
         isAsNeededFrequency(frequency)

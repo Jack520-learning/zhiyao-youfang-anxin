@@ -967,6 +967,8 @@ export function ChatPage() {
           dosage: nextDraft.dosage,
           strength: nextDraft.strength,
           packageSpec: nextDraft.packageSpec,
+          dosageSource: nextDraft.dosageSource,
+          dosageBasis: nextDraft.dosageBasis,
           frequency: nextDraft.frequency,
           times: nextDraft.times,
           relation: nextDraft.relation,

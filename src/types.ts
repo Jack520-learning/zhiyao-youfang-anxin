@@ -37,6 +37,8 @@ export interface Medication {
   dosage: string;
   strength?: string;
   packageSpec?: string;
+  dosageSource?: "label" | "catalog" | "ai";
+  dosageBasis?: string;
   frequency: string;
   times: string[];
   relation: string;
@@ -162,6 +164,8 @@ export interface IntakeDraft {
   dosage: string;
   strength?: string;
   packageSpec?: string;
+  dosageSource?: "label" | "catalog" | "ai";
+  dosageBasis?: string;
   frequency: string;
   times: string[];
   relation: string;
