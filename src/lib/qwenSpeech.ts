@@ -4,7 +4,7 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
-    reader.onerror = reject;
+    reader.onerror = () => reject(new Error("音频文件读取失败"));
     reader.readAsDataURL(blob);
   });
 }
@@ -99,19 +99,35 @@ export function useQwenSpeechRecognition(
               mimeType: blob.type
             })
           });
-          const payload = (await response.json()) as {
-            text?: string;
-            error?: string;
-          };
+          let payload: { text?: string; error?: string } = {};
+          try {
+            payload = (await response.json()) as {
+              text?: string;
+              error?: string;
+            };
+          } catch {
+            // 后端可能返回非 JSON，忽略解析错误
+          }
           if (!response.ok || !payload.text) {
-            throw new Error(payload.error || "千问没有返回语音文字");
+            // 所有错误信息强制本地化，不暴露后端英文
+            const raw = payload.error || "";
+            const code = (raw.match(/error|failed|invalid|unauthorized|quota|limit/i) || [])[0];
+            let friendly = "语音识别暂时不可用，请改用文字输入。";
+            if (code && /quota|limit/i.test(code)) {
+              friendly = "语音识别额度已用完，请稍后再试。";
+            } else if (code && /unauthorized|auth/i.test(code)) {
+              friendly = "语音服务未授权，请联系管理员。";
+            } else if (code && /invalid/i.test(code)) {
+              friendly = "语音格式不支持，请换一种输入方式。";
+            }
+            throw new Error(friendly);
           }
           callbackRef.current(payload.text);
         } catch (transcriptionError) {
           setError(
             transcriptionError instanceof Error
               ? transcriptionError.message
-              : "语音识别失败，请改用文字输入。"
+              : "语音识别暂时不可用，请改用文字输入。"
           );
         } finally {
           setProcessing(false);
@@ -121,10 +137,26 @@ export function useQwenSpeechRecognition(
       recorderRef.current = recorder;
       recorder.start(180);
       setListening(true);
-    } catch {
+    } catch (err) {
       holdingRef.current = false;
       setListening(false);
-      setError("无法使用麦克风，请检查浏览器权限。");
+      // 区分用户拒绝 vs 其他硬件错误
+      const name = err instanceof Error ? err.name : "";
+      const msg = err instanceof Error ? err.message : "";
+      if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+        setError("麦克风权限被拒绝，请在浏览器地址栏点击锁图标允许麦克风权限。");
+      } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+        setError("没有找到可用的麦克风设备。");
+      } else if (name === "NotReadableError" || name === "TrackStartError") {
+        setError("麦克风被其他程序占用，请关闭后再试。");
+      } else if (name === "OverconstrainedError") {
+        setError("当前麦克风不支持所需格式，请检查设备。");
+      } else {
+        setError("无法使用麦克风，请检查浏览器权限和设备。");
+      }
+      // 静默清理可能残留的 stream
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
     }
   }
 

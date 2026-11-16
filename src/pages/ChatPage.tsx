@@ -1257,8 +1257,10 @@ export function ChatPage() {
   }
 
   function stopGeneration() {
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
   }
 
   function regenerateMessage(messageId: string) {
