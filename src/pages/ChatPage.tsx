@@ -416,8 +416,8 @@ export function ChatPage() {
     if (!start) return;
 
     function onMove(event: MouseEvent) {
-      const delta = event.clientX - start.mouseX;
-      const next = Math.min(400, Math.max(160, start.width + delta));
+      const delta = event.clientX - start!.mouseX;
+      const next = Math.min(400, Math.max(160, start!.width + delta));
       setSidebarWidth(next);
     }
     function onUp() {
