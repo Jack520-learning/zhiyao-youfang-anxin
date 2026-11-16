@@ -671,12 +671,18 @@ export function ChatPage() {
         content: localResponse.message,
         createdAt: nowIso(),
         answerMode: effectiveAnswerMode,
-        pending: true
+        riskCheck: localResponse.riskCheck,
+        pending: false
       };
       addChatMessage(streamedMessage, targetConversationId);
       setStreamingMessageId(streamedAssistantMessageId);
       streamingMessageIdRef.current = streamedAssistantMessageId;
       let fullText = "";
+      let timedOut = false;
+      const timeout = window.setTimeout(() => {
+        timedOut = true;
+        generationController.abort();
+      }, effectiveAnswerMode === "detailed" ? 14000 : 10000);
       try {
         const streamed = await streamAssistantAnswer(
           {
@@ -761,7 +767,9 @@ export function ChatPage() {
           (err instanceof DOMException && err.name === "AbortError") ||
           (err as Error | undefined)?.name === "AbortError";
         if (aborted) {
-          const finalContent = `${localResponse.message}\n\n_（已停止生成，保留本地规则回答）_`;
+          const finalContent = timedOut
+            ? localResponse.message
+            : `${localResponse.message}\n\n_（已停止生成，保留本地规则回答）_`;
           replaceChatMessage(
             streamedAssistantMessageId,
             {
@@ -791,6 +799,7 @@ export function ChatPage() {
           targetConversationId
         );
       } finally {
+        window.clearTimeout(timeout);
         setStreamingMessageId("");
         streamingMessageIdRef.current = "";
         abortControllerRef.current = null;
@@ -1379,7 +1388,10 @@ export function ChatPage() {
         message.riskCheck &&
           ["medium", "high", "emergency"].includes(message.riskCheck.level)
       );
-    const canRegenerate = message.role === "assistant" && !isStreaming;
+    const canRegenerate =
+      message.role === "assistant" &&
+      !isStreaming &&
+      !(sending && streamingMessageId === message.id);
     const canSpeak =
       (message.role === "assistant" || message.role === "user") &&
       Boolean(message.content) &&

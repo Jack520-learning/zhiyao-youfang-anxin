@@ -879,22 +879,22 @@ function buildAssistantRequest(payload) {
   }[payload.skill] || "使用普通安全用药问答方式。";
   const answerConfig = isDailyConversation ? {
     style: "像熟悉的朋友一样自然陪聊，直接回应用户说的话，用两到四句中文，最多问一个开放式问题。不要输出标题、列表、Markdown格式、风险等级或医疗建议。不要假装知道实时天气、位置或用户未提供的事实。",
-    maxTokens: 360,
+    maxTokens: 280,
     temperature: 0.55
   } : {
     quick: {
       style: "只说两三句话，第一句直接给结论，最后一句给一个最该做的下一步。不展开原理，不列清单，不重复用户问题。绝对不要输出任何Markdown表格、|字符、---分隔线或#标题符号，保持纯文本。",
-      maxTokens: 500,
+      maxTokens: 360,
       temperature: 0.05
     },
     safety: {
       style: "先识别用户真正问的是用法、漏服、同服、价格、症状、储存还是禁忌，再直接回答这个具体问题。标题和内容必须随问题变化，不要固定套用「风险核对—结论—下一步」，也不要复用与问题无关的通用段落。用法题要落到具体药名、剂量、时间和饭前饭后；漏服题要说明具体处理边界；同服题要指出涉及的具体药；价格题要明确未核实实时价格；症状题要先给危险信号。保留 groundingText 的风险等级、禁忌和下一步，不得增加新药事实。不要输出表格或---分隔线。",
-      maxTokens: 1200,
+      maxTokens: 900,
       temperature: 0.05
     },
     detailed: {
       style: "先给一句话总论，然后用标准Markdown二级标题「## 」分小节展开：## 是什么/为什么、## 用法用量与时间、## 注意事项与禁忌、## 可能的副作用、## 特殊人群提醒、## 储存与有效期、## 下一步建议。内容要具体、有可操作性，但不诊断、不开处方、不调整剂量。绝对不要输出表格、|字符或---分隔线。",
-      maxTokens: 2000,
+      maxTokens: 1400,
       temperature: 0.2
     }
   }[payload.answerMode] || {
@@ -1062,9 +1062,16 @@ function executeAssistantTool(payload, name) {
 async function requestAiAssistant(payload, options = {}) {
   const { baseUrl, model, context, skillFocus, answerStyle, systemPrompt, answerMaxTokens, answerTemperature } =
     buildAssistantRequest(payload);
+  const timeoutMs = options.timeoutMs || 12000;
+  const requestSignal = options.signal
+    ? AbortSignal.any([
+        options.signal,
+        AbortSignal.timeout(timeoutMs)
+      ])
+    : AbortSignal.timeout(timeoutMs);
   return fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
-    signal: options.signal,
+    signal: requestSignal,
     headers: {
       Authorization: `Bearer ${getAiKey()}`,
       "Content-Type": "application/json"
@@ -2107,11 +2114,10 @@ const server = createServer(async (request, response) => {
           });
         }
       }
-      const functionMessages = await prepareAssistantToolCalls(
-        body,
-        sendEvent,
-        abortController.signal
-      );
+      // The locally prepared context already contains the profile, medication
+      // schedule and grounded evidence. Avoid an extra model round before the
+      // actual answer so short questions do not appear stuck for several seconds.
+      const functionMessages = [];
       sendEvent("stage", {
         id: "generating",
         label: "正在生成受控回答"
