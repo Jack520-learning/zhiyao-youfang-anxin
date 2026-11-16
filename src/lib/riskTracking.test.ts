@@ -74,4 +74,31 @@ describe("risk summary tracking", () => {
     expect(restored.find((item) => item.id === "high-medication-risk")?.level)
       .toBe("high");
   });
+
+  it("does not let an old conversation copy erase the family review", () => {
+    const reviewed = {
+      ...risk("reviewed-risk", ["src-drug-catalog"]),
+      familyReview: {
+        reviewedAt: "2026-11-16T09:00:00.000Z",
+        reviewedBy: "家属刘女士"
+      }
+    };
+    const conversation: Conversation = {
+      id: "conversation-review",
+      title: "核对记录",
+      createdAt: reviewed.createdAt,
+      updatedAt: reviewed.createdAt,
+      messages: [
+        {
+          id: "message-review",
+          role: "assistant",
+          content: "风险提醒",
+          createdAt: reviewed.createdAt,
+          riskCheck: risk("reviewed-risk", ["src-drug-catalog"])
+        }
+      ]
+    };
+    const restored = collectTrackableRiskChecks([reviewed], [conversation]);
+    expect(restored[0].familyReview).toEqual(reviewed.familyReview);
+  });
 });

@@ -28,7 +28,18 @@ export function collectTrackableRiskChecks(
     for (const message of conversation.messages) {
       const riskCheck = message.riskCheck;
       if (riskCheck && isTrackableRiskCheck(riskCheck)) {
-        byId.set(riskCheck.id, riskCheck);
+        const indexed = byId.get(riskCheck.id);
+        byId.set(
+          riskCheck.id,
+          indexed
+            ? {
+                ...riskCheck,
+                ...indexed,
+                familyReview:
+                  indexed.familyReview || riskCheck.familyReview
+              }
+            : riskCheck
+        );
       }
     }
   }
