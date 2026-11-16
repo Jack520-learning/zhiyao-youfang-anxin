@@ -94,6 +94,11 @@ import {
   isMedicationActivityQuery
 } from "../lib/medicationActivity";
 import { buildUnavailableAnswer } from "../lib/unavailableAnswer";
+import {
+  buildGeneralKnowledgeResponse,
+  isGeneralKnowledgeQuestion,
+  withGeneralKnowledgeNotice
+} from "../lib/generalKnowledge";
 import { useAppStore } from "../store/useAppStore";
 import type {
   AssistantResponse,
@@ -573,7 +578,12 @@ export function ChatPage() {
         : draftContextQuestion;
     const medicationActivityQuery =
       !dailyConversation && isMedicationActivityQuery(contextualQuestion);
-    const effectiveAnswerMode = dailyConversation
+    const generalKnowledgeQuery =
+      !dailyConversation &&
+      !medicationActivityQuery &&
+      isGeneralKnowledgeQuestion(contextualQuestion);
+    const effectiveAnswerMode =
+      dailyConversation || generalKnowledgeQuery
       ? "quick"
       : resolveAdaptiveAnswerMode(contextualQuestion, answerMode);
     setThinkingLabel(
@@ -585,7 +595,8 @@ export function ChatPage() {
             ? "正在整理详细解释…"
             : "正在思考并组织回答…"
     );
-    const plannedTools = dailyConversation || medicationActivityQuery
+    const plannedTools =
+      dailyConversation || medicationActivityQuery || generalKnowledgeQuery
       ? []
       : planAgentTools(
           contextualQuestion,
@@ -616,6 +627,8 @@ export function ChatPage() {
           profile,
           previousAssistantMessage?.content
         )
+      : generalKnowledgeQuery
+        ? buildGeneralKnowledgeResponse(contextualQuestion)
       : safetyResponseFromRuns(agentRuns) ??
         answerWithRules(contextualQuestion, activeMedications, profile, {
           answerMode: effectiveAnswerMode
@@ -628,7 +641,8 @@ export function ChatPage() {
           activeMedications.map((medication) => medication.name)
         ) ?? localResponse;
     }
-    const catalogResponse = dailyConversation || medicationActivityQuery
+    const catalogResponse =
+      dailyConversation || medicationActivityQuery || generalKnowledgeQuery
       ? null
       : catalogResponseFromRuns(agentRuns) ??
         answerFromDrugCatalog(
@@ -782,9 +796,17 @@ export function ChatPage() {
             medications,
             evidence: localResponse.riskCheck.sourceIds,
             riskLevel: localResponse.riskCheck.level,
-            groundingText: localResponse.message,
-            skill: dailyConversation ? "daily-chat" : composerSkill,
-            skillLabel: dailyConversation
+            groundingText: generalKnowledgeQuery
+              ? "这是与健康用药无关的一般常识问题，请直接、可靠地回答当前问题。"
+              : localResponse.message,
+            skill: generalKnowledgeQuery
+              ? "general-knowledge"
+              : dailyConversation
+                ? "daily-chat"
+                : composerSkill,
+            skillLabel: generalKnowledgeQuery
+              ? "一般常识"
+              : dailyConversation
               ? "日常陪伴"
               : composerSkills.find((item) => item.id === composerSkill)
                   ?.label,
@@ -842,7 +864,9 @@ export function ChatPage() {
         }
         response = toElderVoiceResponse({
           ...localResponse,
-          message: streamed,
+          message: generalKnowledgeQuery
+            ? withGeneralKnowledgeNotice(streamed)
+            : streamed,
           mode: "llm"
         });
         replaceChatMessage(
@@ -862,8 +886,14 @@ export function ChatPage() {
           (err as Error | undefined)?.name === "AbortError";
         if (aborted) {
           const finalContent = timedOut
-            ? toElderVoice(localResponse.message)
-            : `${toElderVoice(localResponse.message)}\n\n_（已停止生成，保留本地规则回答）_`;
+            ? generalKnowledgeQuery
+              ? withGeneralKnowledgeNotice(toElderVoice(localResponse.message))
+              : toElderVoice(localResponse.message)
+            : `${
+                generalKnowledgeQuery
+                  ? withGeneralKnowledgeNotice(toElderVoice(localResponse.message))
+                  : toElderVoice(localResponse.message)
+              }\n\n_（已停止生成，保留本地规则回答）_`;
           replaceChatMessage(
             streamedAssistantMessageId,
             {
@@ -886,7 +916,9 @@ export function ChatPage() {
           streamedAssistantMessageId,
           {
             ...streamedMessage,
-            content: toElderVoice(response.message),
+            content: generalKnowledgeQuery
+              ? withGeneralKnowledgeNotice(toElderVoice(response.message))
+              : toElderVoice(response.message),
             pending: false,
             riskCheck: response.riskCheck
           },
@@ -905,7 +937,9 @@ export function ChatPage() {
       addChatMessage({
         id: createId("chat"),
         role: "assistant",
-        content: toElderVoice(response.message),
+        content: generalKnowledgeQuery
+          ? withGeneralKnowledgeNotice(toElderVoice(response.message))
+          : toElderVoice(response.message),
         createdAt: nowIso(),
         answerMode: effectiveAnswerMode,
         riskCheck: response.riskCheck
@@ -1556,6 +1590,7 @@ export function ChatPage() {
         {message.role === "assistant" &&
         message.riskCheck &&
         message.riskCheck.level !== "unknown" &&
+        !isQuickAnswer &&
         responseMode === "safety" &&
         !isStreaming ? (
           <div className="answer-followups">

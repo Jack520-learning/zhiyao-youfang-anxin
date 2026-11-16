@@ -886,6 +886,7 @@ function classifyAssistantQuestion(query) {
 function buildAssistantRequest(payload) {
   const baseUrl = getAiBaseUrl();
   const isDailyConversation = payload.skill === "daily-chat";
+  const isGeneralKnowledge = payload.skill === "general-knowledge";
   const skillFocus = {
     photo:
       "围绕照片识别结果回答，明确哪些字段来自图片、哪些仍需包装或说明书确认。",
@@ -896,9 +897,15 @@ function buildAssistantRequest(payload) {
     "multi-drug":
       "逐项核对重复成分、同类重复、相互作用和错峰服用，不自行决定停药或改剂量。",
     "daily-chat":
-      "自然回应日常聊天、陪伴和情绪表达；不进行疾病诊断，不生成药物建议。"
+      "自然回应日常聊天、陪伴和情绪表达；不进行疾病诊断，不生成药物建议。",
+    "general-knowledge":
+      "直接回答与健康用药无关的一般常识问题，表达清楚、准确、简洁。"
   }[payload.skill] || "使用普通安全用药问答方式。";
-  const answerConfig = isDailyConversation ? {
+  const answerConfig = isGeneralKnowledge ? {
+    style: "直接回答用户的一般常识问题，使用两到五句简洁中文。围绕当前问题提供准确信息，不写健康风险模板，不推荐药物，不诊断疾病。不要自行添加免责声明，客户端会统一提示。",
+    maxTokens: 420,
+    temperature: 0.2
+  } : isDailyConversation ? {
     style: "像熟悉的朋友一样自然陪聊，直接回应用户说的话，用两到四句中文，最多问一个开放式问题。不要输出标题、列表、Markdown格式、风险等级或医疗建议。不要假装知道实时天气、位置或用户未提供的事实。",
     maxTokens: 280,
     temperature: 0.55
@@ -946,7 +953,7 @@ function buildAssistantRequest(payload) {
     skillFocus,
     questionIntent: classifyAssistantQuestion(payload.query),
     answerMode: payload.answerMode || "safety",
-    conversationOnly: isDailyConversation,
+    conversationOnly: isDailyConversation || isGeneralKnowledge,
     answerStyle,
     agentTrace: Array.isArray(payload.agentTrace)
       ? payload.agentTrace
@@ -980,7 +987,9 @@ function buildAssistantRequest(payload) {
           }))
       : []
   };
-  const systemPrompt = isDailyConversation
+  const systemPrompt = isGeneralKnowledge
+    ? "你是智药有方中的一般常识问答助手。当前问题与健康用药无关。请直接、准确、简洁地回答用户真正询问的内容，不使用药物安全模板，不诊断疾病，不推荐药物或治疗。始终直接称呼对方为“您”。"
+    : isDailyConversation
     ? "你是智药有方中的日常陪伴助手，始终直接对老人说话并使用“您”，不得用“用户”“患者”等第三人称称呼对方。请根据当前问题和上一轮对话自然、温暖、简洁地回应，不诊断疾病，不给药物、剂量或治疗建议。不要假装知道天气、位置或未提供的事实。如果问题转向身体症状或用药，应简短提示改用安全问药后继续回答。"
     : "你是智药有方的老人安全用药信息助手，始终直接对老人说话并使用“您”，不得用“用户”“患者”等第三人称称呼对方。groundingText 是本地安全规则已经确定的结论和依据，只能在不改变其风险等级、剂量边界、禁忌和下一步的前提下改写表达。必须直接回答当前问题，并正确承接明确的上一轮话题；不得答非所问或把无关模板套入回答。当前技能只决定回答重点，不得借技能扩张医疗权限。不得补充 groundingText 之外的药物事实，不诊断、不开处方、不判断停药、不建议调整剂量或替代医生。高风险或紧急状态只能强调求助，不得增加具体用药动作。资料不足时保留简短说明。用法、漏服、同服、价格、症状和储存分别采用对应内容。用简短、温和、老人能理解的中文回答。";
   return {
