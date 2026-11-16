@@ -1,6 +1,7 @@
 import {
   Activity,
   AlertTriangle,
+  BellOff,
   BellRing,
   CalendarCheck,
   CheckCircle2,
@@ -29,6 +30,8 @@ export function FamilyPage() {
   const consent = useAppStore((state) => state.consent);
   const contacts = useAppStore((state) => state.emergencyContacts);
   const familyAlerts = useAppStore((state) => state.familyAlerts);
+  const preferences = useAppStore((state) => state.preferences);
+  const updatePreferences = useAppStore((state) => state.updatePreferences);
   const sessionAccountId = useAppStore((state) => state.sessionAccountId);
   const accounts = useAppStore((state) => state.accounts);
   const markFamilyAlertHandled = useAppStore(
@@ -95,7 +98,26 @@ export function FamilyPage() {
             这里只显示老人授权的摘要和需要介入的异常，不展示完整对话与逐条隐私日志。
           </p>
         </div>
-        <span className="family-code">{familyCode}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button
+            className="icon-btn"
+            type="button"
+            aria-label={preferences.remindersEnabled ? "关闭提醒" : "开启提醒"}
+            title={preferences.remindersEnabled ? "关闭提醒" : "开启提醒"}
+            onClick={() =>
+              updatePreferences({
+                remindersEnabled: !preferences.remindersEnabled
+              })
+            }
+          >
+            {preferences.remindersEnabled ? (
+              <BellRing size={22} aria-hidden="true" />
+            ) : (
+              <BellOff size={22} aria-hidden="true" />
+            )}
+          </button>
+          <span className="family-code">{familyCode}</span>
+        </div>
       </header>
 
       <ProactiveRiskPanel limit={4} />
