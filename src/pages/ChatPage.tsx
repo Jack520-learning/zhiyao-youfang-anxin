@@ -45,8 +45,13 @@ import { sendConcernAlert } from "../lib/cloud";
 import { streamAssistantAnswer } from "../lib/assistantStream";
 import {
   isAnswerModeCompliant,
-  isQuestionFocusedAnswer
+  isQuestionFocusedAnswer,
+  isResponseRelevantToQuestion
 } from "../lib/assistantAnswer";
+import {
+  toElderVoice,
+  toElderVoiceResponse
+} from "../lib/elderVoice";
 import {
   catalogResponseFromRuns,
   planAgentTools,
@@ -672,6 +677,7 @@ export function ChatPage() {
         };
       }
     }
+    localResponse = toElderVoiceResponse(localResponse);
     const discomfortRegex = /(不舒服|头晕|难受|胸闷|恶心|心慌)/;
     if (
       !dailyConversation &&
@@ -754,7 +760,7 @@ export function ChatPage() {
         generationController.abort();
       }, effectiveAnswerMode === "detailed" ? 14000 : 10000);
       try {
-        const streamed = await streamAssistantAnswer(
+        const streamed = toElderVoice(await streamAssistantAnswer(
           {
             query: clean,
             profile,
@@ -807,25 +813,28 @@ export function ChatPage() {
             },
             signal: generationController.signal
           }
-        );
+        ));
         if (generationRunRef.current !== runId) return;
         if (!streamed.trim()) throw new Error("模型没有返回内容");
         if (!isQuestionFocusedAnswer(streamed, localResponse.message)) {
           throw new Error("模型回答偏离具体问题，已切换本地规则回答");
         }
+        if (!isResponseRelevantToQuestion(clean, streamed)) {
+          throw new Error("模型回答与当前问题类型不一致，已切换本地回答");
+        }
         if (!isAnswerModeCompliant(streamed, effectiveAnswerMode)) {
           throw new Error("模型回答未满足所选回答方式，已切换本地结构化回答");
         }
-        response = {
+        response = toElderVoiceResponse({
           ...localResponse,
           message: streamed,
           mode: "llm"
-        };
+        });
         replaceChatMessage(
           streamedAssistantMessageId,
           {
             ...streamedMessage,
-            content: streamed,
+            content: response.message,
             pending: false,
             riskCheck: response.riskCheck
           },
@@ -838,8 +847,8 @@ export function ChatPage() {
           (err as Error | undefined)?.name === "AbortError";
         if (aborted) {
           const finalContent = timedOut
-            ? localResponse.message
-            : `${localResponse.message}\n\n_（已停止生成，保留本地规则回答）_`;
+            ? toElderVoice(localResponse.message)
+            : `${toElderVoice(localResponse.message)}\n\n_（已停止生成，保留本地规则回答）_`;
           replaceChatMessage(
             streamedAssistantMessageId,
             {
@@ -862,7 +871,7 @@ export function ChatPage() {
           streamedAssistantMessageId,
           {
             ...streamedMessage,
-            content: response.message,
+            content: toElderVoice(response.message),
             pending: false,
             riskCheck: response.riskCheck
           },
@@ -881,7 +890,7 @@ export function ChatPage() {
       addChatMessage({
         id: createId("chat"),
         role: "assistant",
-        content: response.message,
+        content: toElderVoice(response.message),
         createdAt: nowIso(),
         answerMode: effectiveAnswerMode,
         riskCheck: response.riskCheck

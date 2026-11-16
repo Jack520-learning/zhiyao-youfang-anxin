@@ -1,3 +1,5 @@
+import { isEmotionalDiscomfortQuery } from "./dailyConversation";
+
 export function isQuestionFocusedAnswer(
   candidate: string,
   groundingText: string
@@ -49,4 +51,26 @@ export function isAnswerModeCompliant(
     headingCount >= 3 &&
     /详细说明|完整解释|判断依据/.test(text)
   );
+}
+
+export function isResponseRelevantToQuestion(
+  query: string,
+  candidate: string
+): boolean {
+  const answer = candidate.trim();
+  if (!answer) return false;
+  if (isEmotionalDiscomfortQuery(query)) {
+    return (
+      /(心里|心情|情绪|难受|烦|压抑|陪伴|陪您|愿意|担心)/.test(answer) &&
+      !/仅凭头晕|药物引起|相互作用|调整剂量|资料不足/.test(answer)
+    );
+  }
+  if (
+    /(今天.*(吃|服).*药|用药记录|服药记录|提醒.*(情况|状态))/.test(
+      query.replace(/\s+/g, "")
+    )
+  ) {
+    return /(服药|用药|确认|提醒|药名|药物)/.test(answer);
+  }
+  return true;
 }

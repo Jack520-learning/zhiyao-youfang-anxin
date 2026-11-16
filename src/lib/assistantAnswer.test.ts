@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   isAnswerModeCompliant,
-  isQuestionFocusedAnswer
+  isQuestionFocusedAnswer,
+  isResponseRelevantToQuestion
 } from "./assistantAnswer";
 
 describe("assistant answer validation", () => {
@@ -43,5 +44,20 @@ describe("assistant answer validation", () => {
     expect(isAnswerModeCompliant(detailed, "detailed")).toBe(true);
     expect(isAnswerModeCompliant(detailed, "quick")).toBe(false);
     expect(isAnswerModeCompliant(quick, "detailed")).toBe(false);
+  });
+
+  it("rejects an emotional question answered as a medication side effect", () => {
+    expect(
+      isResponseRelevantToQuestion(
+        "我心里不舒服怎么办",
+        "仅凭头晕不能判断是哪种药造成的，请核对药物剂量。"
+      )
+    ).toBe(false);
+    expect(
+      isResponseRelevantToQuestion(
+        "我心里不舒服怎么办",
+        "听起来您心里有些难受，我愿意陪您慢慢说。"
+      )
+    ).toBe(true);
   });
 });
