@@ -11,6 +11,7 @@ import {
   Pill,
   RefreshCw,
   ShieldAlert,
+  TrendingUp,
   UserRound,
   UsersRound
 } from "lucide-react";
@@ -45,6 +46,7 @@ const familyNav: NavItem[] = [
   { to: "/family", label: "概览", icon: UsersRound },
   { to: "/safety", label: "风险", icon: ShieldAlert },
   { to: "/medications", label: "用药", icon: FileHeart },
+  { to: "/impact", label: "效果", icon: TrendingUp },
   { to: "/profile", label: "授权", icon: CircleUserRound }
 ];
 
@@ -95,8 +97,11 @@ export function AppShell() {
     if (!sessionAccountId) return;
     if (role === "family" && location.pathname === "/chat") {
       navigate("/family", { replace: true });
-    } else if (role === "elder" && location.pathname === "/family") {
-      navigate("/", { replace: true });
+    } else if (
+      role === "elder" &&
+      ["/family", "/impact", "/evaluation"].includes(location.pathname)
+    ) {
+      navigate("/chat", { replace: true });
     }
   }, [location.pathname, navigate, role, sessionAccountId]);
 
@@ -236,7 +241,13 @@ export function AppShell() {
       <HealthProfilePrompt key={sessionAccountId || "signed-out"} />
       <SpeechPlaybackDock />
 
-      <nav className="mobile-nav" aria-label={`${roleName}底部导航`}>
+      <nav
+        className="mobile-nav"
+        aria-label={`${roleName}底部导航`}
+        style={{
+          gridTemplateColumns: `repeat(${nav.length}, minmax(0, 1fr))`
+        }}
+      >
         {nav.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}

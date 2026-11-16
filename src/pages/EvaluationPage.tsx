@@ -9,11 +9,12 @@ import {
   ShieldCheck
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { herbs } from "../catalog/herbs";
 import { medicines } from "../catalog/medicines";
 import { evaluateSafetyScenarios } from "../evaluation/safetyScenarios";
 import { toChineseErrorMessage } from "../lib/userMessage";
+import { useAppStore } from "../store/useAppStore";
 
 const riskLevelLabels: Record<string, string> = {
   emergency: "紧急",
@@ -93,6 +94,7 @@ const userTasks = [
 
 export function EvaluationPage() {
   const navigate = useNavigate();
+  const role = useAppStore((state) => state.role);
   const results = useMemo(() => evaluateSafetyScenarios(), []);
   const passed = results.filter((result) => result.passed).length;
   const passRate = Math.round((passed / results.length) * 100);
@@ -232,6 +234,10 @@ export function EvaluationPage() {
         </td>
       </tr>
     ));
+  }
+
+  if (role !== "family") {
+    return <Navigate to="/chat" replace />;
   }
 
   return (

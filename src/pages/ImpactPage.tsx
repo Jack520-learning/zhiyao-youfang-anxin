@@ -8,14 +8,14 @@ import {
   TrendingUp,
   UsersRound
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { DiscoveryNav } from "../components/DiscoveryNav";
+import { Navigate, useNavigate } from "react-router-dom";
 import { buildProactiveRiskInsights } from "../lib/proactiveRisk";
 import { trackableRiskChecks } from "../lib/riskTracking";
 import { useAppStore } from "../store/useAppStore";
 
 export function ImpactPage() {
   const navigate = useNavigate();
+  const role = useAppStore((state) => state.role);
   const medications = useAppStore((state) => state.medications);
   const doseEvents = useAppStore((state) => state.doseEvents);
   const riskChecks = useAppStore((state) => state.riskChecks);
@@ -35,6 +35,10 @@ export function ImpactPage() {
     riskChecks,
     familyAlerts
   });
+
+  if (role !== "family") {
+    return <Navigate to="/chat" replace />;
+  }
 
   const metrics = [
     {
@@ -61,7 +65,6 @@ export function ImpactPage() {
 
   return (
     <div className="page impact-page">
-      <DiscoveryNav />
       <header className="page-header">
         <div>
           <p className="eyebrow">效果指标 · 社会价值 · 可持续模式</p>
@@ -178,8 +181,8 @@ export function ImpactPage() {
           </article>
         </div>
         <div className="header-actions" style={{ marginTop: 18 }}>
-          <button className="btn btn-primary" type="button" onClick={() => navigate("/chat")}>
-            进入智能问药
+          <button className="btn btn-primary" type="button" onClick={() => navigate("/safety")}>
+            查看家庭风险
           </button>
           <button className="btn" type="button" onClick={() => navigate("/evaluation")}>
             打开质量评估
