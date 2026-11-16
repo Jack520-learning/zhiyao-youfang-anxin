@@ -24,6 +24,7 @@ import {
 } from "../lib/accountApi";
 import { createId } from "../lib/ids";
 import { nowIso } from "../lib/time";
+import { normalizeVoiceMode } from "../lib/voiceDefaults";
 import { toChineseErrorMessage } from "../lib/userMessage";
 import {
   collectTrackableRiskChecks,
@@ -1486,6 +1487,12 @@ export const useAppStore = create<AppStore>()(
             ? {
                 ...state.preferences,
                 ...snapshot.preferences,
+                voiceMode: normalizeVoiceMode(
+                  snapshot.preferences.voiceMode ??
+                    state.preferences.voiceMode,
+                  snapshot.preferences.customVoiceId ??
+                    state.preferences.customVoiceId
+                ),
                 customVoices:
                   snapshot.preferences.customVoices ??
                   state.preferences.customVoices
@@ -1555,8 +1562,12 @@ export const useAppStore = create<AppStore>()(
           preferences: {
             ...current.preferences,
             ...saved.preferences,
-            voiceMode:
-              saved.preferences?.voiceMode ?? current.preferences.voiceMode,
+            voiceMode: normalizeVoiceMode(
+              saved.preferences?.voiceMode ??
+                current.preferences.voiceMode,
+              saved.preferences?.customVoiceId ??
+                current.preferences.customVoiceId
+            ),
             customVoices: (
               saved.preferences?.customVoices ??
               (saved.preferences?.customVoiceId

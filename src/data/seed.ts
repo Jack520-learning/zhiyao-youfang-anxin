@@ -6,6 +6,7 @@ import type {
 } from "../types";
 import { createFamilyCode, createId } from "../lib/ids";
 import { nowIso } from "../lib/time";
+import { DEFAULT_VOICE_MODE } from "../lib/voiceDefaults";
 
 const createdAt = nowIso();
 
@@ -78,7 +79,7 @@ export function createInitialState(options?: {
       notificationsEnabled: false,
       remindersEnabled: true,
       soundEnabled: true,
-      voiceMode: "warm",
+      voiceMode: DEFAULT_VOICE_MODE,
       customVoiceId: undefined,
       customVoiceName: undefined,
       customVoices: [],

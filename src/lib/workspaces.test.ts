@@ -75,4 +75,20 @@ describe("account workspace helpers", () => {
     expect(restored.medications).toHaveLength(1);
     expect(restored.familyCode).toBe("ABC123");
   });
+
+  it("keeps the explicitly selected voice until it is changed again", () => {
+    const state = createInitialState({
+      role: "elder",
+      familyCode: "ABC123"
+    });
+    expect(state.preferences.voiceMode).toBe("warm");
+
+    state.preferences.voiceMode = "male";
+    const restored = workspacePatch(captureWorkspace(state));
+    expect(restored.preferences.voiceMode).toBe("male");
+
+    state.preferences.voiceMode = "clear";
+    const switched = workspacePatch(captureWorkspace(state));
+    expect(switched.preferences.voiceMode).toBe("clear");
+  });
 });

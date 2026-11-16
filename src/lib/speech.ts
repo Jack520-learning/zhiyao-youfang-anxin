@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { DEFAULT_VOICE_MODE } from "./voiceDefaults";
 
 interface SpeechRecognitionResultLike {
   readonly transcript: string;
@@ -165,7 +166,7 @@ export type VoiceMode = "warm" | "clear" | "male" | "calm" | "custom";
 export type SpeechPlaybackState = "idle" | "speaking" | "paused";
 export type SpeechStatus = SpeechPlaybackState | "loading";
 
-let preferredVoiceMode: VoiceMode = "warm";
+let preferredVoiceMode: VoiceMode = DEFAULT_VOICE_MODE;
 let currentAudio: HTMLAudioElement | null = null;
 let speechRequestVersion = 0;
 let speechPending = false;

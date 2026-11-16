@@ -46,6 +46,7 @@ import { LinkedAccountManager } from "../components/LinkedAccountManager";
 import { useAppStore } from "../store/useAppStore";
 import { toChineseErrorMessage } from "../lib/userMessage";
 import { formatTimeZoneLabel } from "../lib/time";
+import { DEFAULT_VOICE_MODE } from "../lib/voiceDefaults";
 import type { EmergencyContact } from "../types";
 
 const voiceOptions: Array<{ value: VoiceMode; label: string }> = [
@@ -699,6 +700,9 @@ export function ProfilePage() {
                       }}
                     >
                       {option.label}
+                      {option.value === DEFAULT_VOICE_MODE
+                        ? "（默认）"
+                        : ""}
                     </button>
                   ))}
                 </div>
@@ -1280,6 +1284,9 @@ export function ProfilePage() {
                     }}
                   >
                     {option.label}
+                    {option.value === DEFAULT_VOICE_MODE
+                      ? "（默认）"
+                      : ""}
                   </button>
                 ))}
               </div>
