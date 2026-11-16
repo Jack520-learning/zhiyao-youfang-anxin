@@ -1,7 +1,7 @@
 import {
   ArrowDown,
   BellOff,
-  BellPlus,
+  BellRing,
   BookOpenText,
   Camera,
   ChevronRight,
@@ -299,6 +299,7 @@ export function ChatPage() {
   const profile = useAppStore((state) => state.profile);
   const preferences = useAppStore((state) => state.preferences);
   const updateProfile = useAppStore((state) => state.updateProfile);
+  const updatePreferences = useAppStore((state) => state.updatePreferences);
   const familyCode = useAppStore((state) => state.familyCode);
   const addFamilyAlert = useAppStore((state) => state.addFamilyAlert);
   const addChatMessage = useAppStore((state) => state.addChatMessage);
@@ -1268,22 +1269,19 @@ export function ChatPage() {
             <button
               className="icon-btn"
               type="button"
-              aria-label="新增提醒"
-              title="新增提醒"
-              onClick={() => navigate("/add-medication?from=chat")}
-            >
-              <BellPlus size={20} aria-hidden="true" />
-            </button>
-            <button
-              className="icon-btn"
-              type="button"
-              aria-label="取消提醒"
-              title="取消提醒"
+              aria-label={preferences.remindersEnabled ? "关闭吃药提醒" : "开启吃药提醒"}
+              title={preferences.remindersEnabled ? "关闭吃药提醒" : "开启吃药提醒"}
               onClick={() =>
-                window.dispatchEvent(new CustomEvent("dismiss-reminder"))
+                updatePreferences({
+                  remindersEnabled: !preferences.remindersEnabled
+                })
               }
             >
-              <BellOff size={20} aria-hidden="true" />
+              {preferences.remindersEnabled ? (
+                <BellRing size={20} aria-hidden="true" />
+              ) : (
+                <BellOff size={20} aria-hidden="true" />
+              )}
             </button>
           </div>
         </header>

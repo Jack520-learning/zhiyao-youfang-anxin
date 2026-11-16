@@ -168,6 +168,7 @@ export interface IntakeDraft {
 
 export interface AppPreferences {
   notificationsEnabled: boolean;
+  remindersEnabled: boolean;
   soundEnabled: boolean;
   voiceMode: "warm" | "clear" | "male" | "calm" | "custom";
   customVoiceId?: string;

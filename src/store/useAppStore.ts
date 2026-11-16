@@ -1435,7 +1435,10 @@ export const useAppStore = create<AppStore>()(
               name: `我的专属音色 ${index + 1}`
             })),
             fontScale:
-              saved.preferences?.fontScale ?? current.preferences.fontScale
+              saved.preferences?.fontScale ?? current.preferences.fontScale,
+            remindersEnabled:
+              saved.preferences?.remindersEnabled ??
+              current.preferences.remindersEnabled
           },
           medications: (saved.medications ?? current.medications)
             .filter(

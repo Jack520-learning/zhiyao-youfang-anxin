@@ -20,20 +20,16 @@ export function ReminderOverlay() {
   );
   const [dismissedDoseId, setDismissedDoseId] = useState("");
 
-  // Allow the chat header "取消提醒" button to dismiss the current overlay.
-  useEffect(() => {
-    function onDismiss() {
-      if (nextDose) setDismissedDoseId(nextDose.doseId);
-    }
-    window.addEventListener("dismiss-reminder", onDismiss);
-    return () => window.removeEventListener("dismiss-reminder", onDismiss);
-  }, [nextDose]);
-
   const minutesFromNow = nextDose
     ? (new Date(nextDose.scheduledAt).getTime() - Date.now()) / 60000
     : Number.POSITIVE_INFINITY;
   const due = Boolean(nextDose && minutesFromNow <= 15 && minutesFromNow >= -90);
-  const open = Boolean(nextDose && due && dismissedDoseId !== nextDose.doseId);
+  const open = Boolean(
+    nextDose &&
+      due &&
+      preferences.remindersEnabled &&
+      dismissedDoseId !== nextDose.doseId
+  );
   const reminderKey = nextDose?.doseId ?? "";
 
   useEffect(() => {
@@ -55,6 +51,13 @@ export function ReminderOverlay() {
     preferences.customVoiceId,
     profile.voiceEnabled
   ]);
+
+  // If user turns reminders off while overlay is showing, close it immediately
+  useEffect(() => {
+    if (!preferences.remindersEnabled) {
+      stopSpeaking();
+    }
+  }, [preferences.remindersEnabled]);
 
   if (role !== "elder" || !open || !nextDose) return null;
 

@@ -76,6 +76,7 @@ export function createInitialState(options?: {
     familyAlerts: [],
     preferences: {
       notificationsEnabled: false,
+      remindersEnabled: true,
       soundEnabled: true,
       voiceMode: "warm",
       customVoiceId: undefined,
