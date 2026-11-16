@@ -109,6 +109,7 @@ import {
 } from "../lib/generalKnowledge";
 import { useAppStore } from "../store/useAppStore";
 import { cleanAnswerForChat } from "../lib/chatAnswer";
+import { resolveChatRegeneration } from "../lib/chatRegeneration";
 import type {
   AssistantResponse,
   AssistantStage,
@@ -464,9 +465,17 @@ export function ChatPage() {
     };
   }, [isResizing]);
 
-  async function submitQuestion(question = input, autoScroll = true) {
+  async function submitQuestion(
+    question = input,
+    autoScroll = true,
+    options?: {
+      regenerateMessageId?: string;
+    }
+  ) {
     const clean = question.trim();
     if (!clean || sending) return;
+    const regenerateMessageId = options?.regenerateMessageId;
+    const isRegeneration = Boolean(regenerateMessageId);
     const runId = generationRunRef.current + 1;
     generationRunRef.current = runId;
     const generationController = new AbortController();
@@ -484,6 +493,7 @@ export function ChatPage() {
           conversation.id === useAppStore.getState().activeConversationId
       );
     if (
+      !isRegeneration &&
       view === "home" &&
       liveConversation?.messages.some((message) => message.role === "user")
     ) {
@@ -491,7 +501,7 @@ export function ChatPage() {
     }
     setView("conversation");
     autoScrollRef.current = autoScroll;
-    setInput("");
+    if (!isRegeneration) setInput("");
     setSending(true);
     setStreamingMessageId("");
     streamingMessageIdRef.current = "";
@@ -499,12 +509,16 @@ export function ChatPage() {
     const targetConversationId =
       useAppStore.getState().activeConversationId;
     const userMessage: ChatMessage = {
-      id: createId("chat"),
+      id: isRegeneration
+        ? `${regenerateMessageId}-question`
+        : createId("chat"),
       role: "user",
       content: clean,
       createdAt: nowIso()
     };
-    addChatMessage(userMessage, targetConversationId);
+    if (!isRegeneration) {
+      addChatMessage(userMessage, targetConversationId);
+    }
 
     const activeMedications = medications.filter(
       (medication) => medication.status === "active"
@@ -514,9 +528,18 @@ export function ChatPage() {
       (conversation) =>
         conversation.id === stateAfterMessage.activeConversationId
     );
-    const previousMessages = (currentConversation?.messages ?? []).filter(
-      (message) => message.id !== userMessage.id
-    );
+    const regeneration = isRegeneration
+      ? resolveChatRegeneration(
+          currentConversation?.messages ?? [],
+          regenerateMessageId!
+        )
+      : null;
+    const previousMessages = isRegeneration
+      ? regeneration?.historyMessages ?? []
+      : (currentConversation?.messages ?? []).filter(
+          (message) => message.id !== userMessage.id
+        );
+    const historyMessages = previousMessages;
     const previousUserMessage = [...previousMessages]
       .reverse()
       .find((message) => message.role === "user");
@@ -748,16 +771,30 @@ export function ChatPage() {
       !dailyConversation &&
       localResponse.riskCheck.level !== "emergency"
     ) {
-      streamedAssistantMessageId = createId("chat");
+      streamedAssistantMessageId =
+        regenerateMessageId || createId("chat");
+      const existingMessage = isRegeneration
+        ? currentConversation?.messages.find(
+            (message) => message.id === regenerateMessageId
+          )
+        : undefined;
       const streamedMessage: ChatMessage = {
         id: streamedAssistantMessageId,
         role: "assistant",
         content: "",
-        createdAt: nowIso(),
+        createdAt: existingMessage?.createdAt || nowIso(),
         answerMode: effectiveAnswerMode,
         pending: true
       };
-      addChatMessage(streamedMessage, targetConversationId);
+      if (isRegeneration) {
+        replaceChatMessage(
+          streamedAssistantMessageId,
+          streamedMessage,
+          targetConversationId
+        );
+      } else {
+        addChatMessage(streamedMessage, targetConversationId);
+      }
       setStreamingMessageId(streamedAssistantMessageId);
       streamingMessageIdRef.current = streamedAssistantMessageId;
       let fullText = "";
@@ -790,8 +827,7 @@ export function ChatPage() {
                   ?.label,
             answerMode: effectiveAnswerMode,
             agentTrace,
-            history: (currentConversation?.messages ?? [])
-              .filter((message) => message.id !== userMessage.id)
+            history: historyMessages
               .filter(
                 (message) =>
                   message.role === "user" || message.role === "assistant"
@@ -933,14 +969,28 @@ export function ChatPage() {
     const assistantMessageId =
       streamedAssistantMessageId || createId("chat");
     if (!streamedAssistantMessageId) {
-      addChatMessage({
-        id: assistantMessageId,
+      const existingMessage = isRegeneration
+        ? currentConversation?.messages.find(
+            (message) => message.id === regenerateMessageId
+          )
+        : undefined;
+      const finalMessage: ChatMessage = {
+        id: isRegeneration ? regenerateMessageId! : assistantMessageId,
         role: "assistant",
         content: finalMessageContent,
-        createdAt: nowIso(),
+        createdAt: existingMessage?.createdAt || nowIso(),
         answerMode: effectiveAnswerMode,
         riskCheck: response.riskCheck
-      }, targetConversationId);
+      };
+      if (isRegeneration) {
+        replaceChatMessage(
+          regenerateMessageId!,
+          finalMessage,
+          targetConversationId
+        );
+      } else {
+        addChatMessage(finalMessage, targetConversationId);
+      }
     }
     if (profile.voiceEnabled && preferences.soundEnabled) {
       const speechRunId = speechRunRef.current + 1;
@@ -1512,21 +1562,11 @@ export function ChatPage() {
   }
 
   function regenerateMessage(messageId: string) {
-    // 找到该 AI 消息前面的最近一条用户消息
-    const idx = messages.findIndex((m) => m.id === messageId);
-    if (idx < 0) return;
-    let userMsg: ChatMessage | undefined;
-    for (let i = idx - 1; i >= 0; i--) {
-      if (messages[i].role === "user") {
-        userMsg = messages[i];
-        break;
-      }
-    }
-    // 删除从这条 AI 消息到最后（可能还有后续 AI 回复）
-    const toDelete = messages.slice(idx).map((m) => m.id);
-    toDelete.forEach((id) => deleteChatMessage(id, activeConversationId));
-    if (userMsg) {
-      void submitQuestion(userMsg.content, true);
+    const context = resolveChatRegeneration(messages, messageId);
+    if (context) {
+      void submitQuestion(context.question, true, {
+        regenerateMessageId: messageId
+      });
     }
   }
 
