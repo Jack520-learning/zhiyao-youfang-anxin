@@ -59,6 +59,7 @@ export function AccountSwitcher({
   const [settingUpPassword, setSettingUpPassword] = useState(false);
   // 编辑账号
   const [editTarget, setEditTarget] = useState<LocalAccount>();
+  const [editUsername, setEditUsername] = useState("");
   const [editDisplayName, setEditDisplayName] = useState("");
   const [editCurrentPassword, setEditCurrentPassword] = useState("");
   const [editNewPassword, setEditNewPassword] = useState("");
@@ -82,6 +83,7 @@ export function AccountSwitcher({
     setSetupPasswordValue("");
     setSetupPasswordError("");
     setEditTarget(undefined);
+    setEditUsername("");
     setEditDisplayName("");
     setEditCurrentPassword("");
     setEditNewPassword("");
@@ -145,6 +147,7 @@ export function AccountSwitcher({
 
   function startEdit(account: LocalAccount) {
     setEditTarget(account);
+    setEditUsername(account.username);
     setEditDisplayName(account.displayName);
     setEditCurrentPassword("");
     setEditNewPassword("");
@@ -165,11 +168,19 @@ export function AccountSwitcher({
         return;
       }
       // 至少修改一项
+      const changedUser = editUsername.trim() && editUsername.trim() !== editTarget.username;
       const changedName = editDisplayName.trim() && editDisplayName.trim() !== editTarget.displayName;
       const changedPwd = editNewPassword.trim();
-      if (!changedName && !changedPwd) {
-        setEditError("至少修改显示名或密码一项");
+      if (!changedUser && !changedName && !changedPwd) {
+        setEditError("至少修改用户名、显示名或密码一项");
         return;
+      }
+      // 新用户名校验
+      if (changedUser) {
+        if (!/^[a-zA-Z0-9_]{3,20}$/.test(editUsername.trim())) {
+          setEditError("用户名 3-20 位，仅字母、数字、下划线");
+          return;
+        }
       }
       // 新密码校验
       if (changedPwd) {
@@ -203,12 +214,14 @@ export function AccountSwitcher({
       const result = await updateServerAccount({
         accountId: editTarget.id,
         currentPassword: editCurrentPassword,
+        ...(changedUser ? { newUsername: editUsername.trim() } : {}),
         ...(changedPwd ? { newPassword: editNewPassword.trim() } : {}),
         ...(changedName ? { displayName: editDisplayName.trim() } : {})
       });
       // 更新本地 store
+      const finalUsername = changedUser ? editUsername.trim() : editTarget.username;
       const newEncryptedPwd = changedPwd
-        ? await encryptPassword(editNewPassword.trim(), editTarget.username)
+        ? await encryptPassword(editNewPassword.trim(), finalUsername)
         : undefined;
       useAppStore.setState((state) => {
         const updates: Partial<typeof state> = {
@@ -216,6 +229,7 @@ export function AccountSwitcher({
             if (item.id !== editTarget.id) return item;
             return {
               ...item,
+              username: changedUser ? finalUsername : item.username,
               displayName: changedName ? editDisplayName.trim() : item.displayName,
               ...(newEncryptedPwd ? { encryptedPassword: newEncryptedPwd } : {})
             };
@@ -603,6 +617,18 @@ export function AccountSwitcher({
                             <h4 style={{ margin: 0, fontSize: 14 }}>
                               编辑账号：{editTarget?.displayName}
                             </h4>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                              <label style={{ fontSize: 12, color: "var(--muted)" }}>用户名（不可与他人重复）</label>
+                              <input
+                                className="input"
+                                type="text"
+                                value={editUsername}
+                                onChange={(e) => setEditUsername(e.target.value)}
+                                maxLength={20}
+                                placeholder="用户名"
+                                style={{ padding: "6px 10px", fontSize: 13 }}
+                              />
+                            </div>
                             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                               <label style={{ fontSize: 12, color: "var(--muted)" }}>显示名</label>
                               <input

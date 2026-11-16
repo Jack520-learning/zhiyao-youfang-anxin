@@ -145,6 +145,7 @@ export async function deleteServerAccount(input: {
 export async function updateServerAccount(input: {
   accountId: string;
   currentPassword: string;
+  newUsername?: string;
   newPassword?: string;
   displayName?: string;
 }): Promise<{ ok: boolean; changes?: Record<string, unknown> }> {
@@ -154,6 +155,7 @@ export async function updateServerAccount(input: {
     body: {
       accountId: input.accountId,
       currentPassword: input.currentPassword,
+      ...(input.newUsername ? { newUsername: input.newUsername } : {}),
       ...(input.newPassword ? { newPassword: input.newPassword } : {}),
       ...(input.displayName ? { displayName: input.displayName } : {})
     }

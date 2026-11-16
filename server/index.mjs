@@ -1541,6 +1541,25 @@ const server = createServer(async (request, response) => {
       }
       const changes = {};
       let saveNeeded = false;
+      // 新用户名
+      const newUsername = String(body.newUsername || "").trim();
+      if (newUsername && newUsername !== target.username) {
+        if (!/^[a-zA-Z0-9_]{3,20}$/.test(newUsername)) {
+          return json(response, 400, {
+            error: "用户名 3-20 位，仅字母、数字、下划线"
+          });
+        }
+        if (database.accounts[newUsername]) {
+          return json(response, 409, { error: "该用户名已被占用" });
+        }
+        // 改 username = 改 map key
+        const oldKey = target.username;
+        target.username = newUsername;
+        delete database.accounts[oldKey];
+        database.accounts[newUsername] = target;
+        saveNeeded = true;
+        changes.username = newUsername;
+      }
       // 新密码
       const newPassword = String(body.newPassword || "").trim();
       if (newPassword) {
