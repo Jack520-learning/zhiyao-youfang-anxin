@@ -933,20 +933,25 @@ function buildAssistantRequest(payload) {
   const answerStyle = answerConfig.style;
   const answerMaxTokens = answerConfig.maxTokens;
   const answerTemperature = answerConfig.temperature;
+  const medicationContext = (payload.medications || []).map((medication) => ({
+    name: medication.name,
+    genericName: medication.genericName,
+    ingredients: medication.ingredients,
+    dosage: medication.dosage,
+    frequency: medication.frequency,
+    times: medication.times || [],
+    relation: medication.relation,
+    reminderEnabled: medication.reminderEnabled
+  }));
   const context = {
-    age: payload.profile?.age,
-    conditions: payload.profile?.conditions || [],
-    allergies: payload.profile?.allergies || [],
-    medications: (payload.medications || []).map((medication) => ({
-      name: medication.name,
-      genericName: medication.genericName,
-      ingredients: medication.ingredients,
-      dosage: medication.dosage,
-      frequency: medication.frequency,
-      times: medication.times || [],
-      relation: medication.relation,
-      reminderEnabled: medication.reminderEnabled
-    })),
+    ...(isGeneralKnowledge
+      ? {}
+      : {
+          age: payload.profile?.age,
+          conditions: payload.profile?.conditions || [],
+          allergies: payload.profile?.allergies || [],
+          medications: medicationContext
+        }),
     evidence: payload.evidence || [],
     riskLevel: payload.riskLevel || "unknown",
     activeSkill: payload.skillLabel || "",

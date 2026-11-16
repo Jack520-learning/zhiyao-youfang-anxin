@@ -9,6 +9,11 @@ describe("general knowledge questions", () => {
   it("recognizes non-health knowledge questions", () => {
     expect(isGeneralKnowledgeQuestion("为什么天空是蓝色的")).toBe(true);
     expect(isGeneralKnowledgeQuestion("一公里等于多少米")).toBe(true);
+    expect(
+      isGeneralKnowledgeQuestion(
+        "用吹风机的吹风机吹吹风机，吹风机，会被吹风机的吹风机给吹毁吗？"
+      )
+    ).toBe(true);
   });
 
   it("keeps health questions in the medical flow", () => {
