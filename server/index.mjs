@@ -1526,6 +1526,46 @@ const server = createServer(async (request, response) => {
       return json(response, 200, { ok: true });
     }
 
+    if (url.pathname === "/api/auth/update" && request.method === "POST") {
+      const body = await readJson(request, 64 * 1024);
+      const accountId = String(body.accountId || "");
+      const target = Object.values(database.accounts).find(
+        (account) => account.id === accountId
+      );
+      if (!target) {
+        return json(response, 404, { error: "没有找到该账号" });
+      }
+      // 必须验证当前密码
+      if (!(await verifyAccountPassword(String(body.currentPassword || ""), target))) {
+        return json(response, 401, { error: "当前密码不正确" });
+      }
+      const changes = {};
+      let saveNeeded = false;
+      // 新密码
+      const newPassword = String(body.newPassword || "").trim();
+      if (newPassword) {
+        if (newPassword.length < 4) {
+          return json(response, 400, { error: "新密码至少 4 位" });
+        }
+        const { passwordSalt, passwordHash } = await hashAccountPassword(newPassword);
+        target.passwordSalt = passwordSalt;
+        target.passwordHash = passwordHash;
+        saveNeeded = true;
+        changes.password = true;
+      }
+      // 新显示名
+      const newDisplayName = String(body.displayName || "").trim();
+      if (newDisplayName && newDisplayName !== target.displayName) {
+        target.displayName = newDisplayName.slice(0, 30);
+        saveNeeded = true;
+        changes.displayName = target.displayName;
+      }
+      if (saveNeeded) {
+        await saveDatabase();
+      }
+      return json(response, 200, { ok: true, changes });
+    }
+
     if (url.pathname === "/api/auth/delete" && request.method === "POST") {
       const body = await readJson(request, 64 * 1024);
       const accountId = String(body.accountId || "");

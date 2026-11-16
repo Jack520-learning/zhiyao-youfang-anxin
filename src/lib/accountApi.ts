@@ -141,3 +141,21 @@ export async function deleteServerAccount(input: {
     }
   });
 }
+
+export async function updateServerAccount(input: {
+  accountId: string;
+  currentPassword: string;
+  newPassword?: string;
+  displayName?: string;
+}): Promise<{ ok: boolean; changes?: Record<string, unknown> }> {
+  return accountRequest("/api/auth/update", {
+    method: "POST",
+    token: "",
+    body: {
+      accountId: input.accountId,
+      currentPassword: input.currentPassword,
+      ...(input.newPassword ? { newPassword: input.newPassword } : {}),
+      ...(input.displayName ? { displayName: input.displayName } : {})
+    }
+  });
+}

@@ -5,6 +5,7 @@ import {
   LogIn,
   LoaderCircle,
   KeyRound,
+  Pencil,
   Trash2,
   X
 } from "lucide-react";
@@ -19,6 +20,7 @@ import {
   encryptPassword,
   verifyPassword
 } from "../lib/auth";
+import { updateServerAccount, verifyServerAccountPassword } from "../lib/accountApi";
 import { getLinkedFamilyCodes } from "../lib/workspaces";
 import { useAppStore } from "../store/useAppStore";
 import type { LocalAccount, UserRole } from "../types";
@@ -55,6 +57,15 @@ export function AccountSwitcher({
   const [setupPasswordValue, setSetupPasswordValue] = useState("");
   const [setupPasswordError, setSetupPasswordError] = useState("");
   const [settingUpPassword, setSettingUpPassword] = useState(false);
+  // 编辑账号
+  const [editTarget, setEditTarget] = useState<LocalAccount>();
+  const [editDisplayName, setEditDisplayName] = useState("");
+  const [editCurrentPassword, setEditCurrentPassword] = useState("");
+  const [editNewPassword, setEditNewPassword] = useState("");
+  const [editConfirmPassword, setEditConfirmPassword] = useState("");
+  const [editError, setEditError] = useState("");
+  const [editNotice, setEditNotice] = useState("");
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     if (open) return;
@@ -70,6 +81,13 @@ export function AccountSwitcher({
     setSetupPasswordAccountId(undefined);
     setSetupPasswordValue("");
     setSetupPasswordError("");
+    setEditTarget(undefined);
+    setEditDisplayName("");
+    setEditCurrentPassword("");
+    setEditNewPassword("");
+    setEditConfirmPassword("");
+    setEditError("");
+    setEditNotice("");
   }, [open]);
 
   if (!open) return null;
@@ -115,7 +133,106 @@ export function AccountSwitcher({
     setSetupPasswordAccountId(undefined);
     setSetupPasswordValue("");
     setSetupPasswordError("");
+    setEditTarget(undefined);
+    setEditDisplayName("");
+    setEditCurrentPassword("");
+    setEditNewPassword("");
+    setEditConfirmPassword("");
+    setEditError("");
+    setEditNotice("");
     onClose();
+  }
+
+  function startEdit(account: LocalAccount) {
+    setEditTarget(account);
+    setEditDisplayName(account.displayName);
+    setEditCurrentPassword("");
+    setEditNewPassword("");
+    setEditConfirmPassword("");
+    setEditError("");
+    setEditNotice("");
+  }
+
+  async function confirmEdit() {
+    if (!editTarget) return;
+    setEditing(true);
+    setEditError("");
+    setEditNotice("");
+    try {
+      // 必须有当前密码
+      if (!editCurrentPassword) {
+        setEditError("请输入该账号的当前密码");
+        return;
+      }
+      // 至少修改一项
+      const changedName = editDisplayName.trim() && editDisplayName.trim() !== editTarget.displayName;
+      const changedPwd = editNewPassword.trim();
+      if (!changedName && !changedPwd) {
+        setEditError("至少修改显示名或密码一项");
+        return;
+      }
+      // 新密码校验
+      if (changedPwd) {
+        if (editNewPassword.trim().length < 4) {
+          setEditError("新密码至少 4 位");
+          return;
+        }
+        if (editNewPassword.trim() !== editConfirmPassword.trim()) {
+          setEditError("两次输入的新密码不一致");
+          return;
+        }
+        if (editNewPassword.trim() === editCurrentPassword) {
+          setEditError("新密码不能和当前密码相同");
+          return;
+        }
+      }
+      // 先本地验证当前密码（有 hash 就本地，没有走服务端）
+      let currentValid = Boolean(editTarget.passwordHash) && await verifyPassword(editCurrentPassword, editTarget.passwordHash, editTarget.passwordSalt);
+      if (!currentValid) {
+        currentValid = await verifyServerAccountPassword({
+          token: "",
+          accountId: editTarget.id,
+          password: editCurrentPassword
+        });
+      }
+      if (!currentValid) {
+        setEditError("当前密码不正确");
+        return;
+      }
+      // 调后端更新
+      const result = await updateServerAccount({
+        accountId: editTarget.id,
+        currentPassword: editCurrentPassword,
+        ...(changedPwd ? { newPassword: editNewPassword.trim() } : {}),
+        ...(changedName ? { displayName: editDisplayName.trim() } : {})
+      });
+      // 更新本地 store
+      const newEncryptedPwd = changedPwd
+        ? await encryptPassword(editNewPassword.trim(), editTarget.username)
+        : undefined;
+      useAppStore.setState((state) => {
+        const updates: Partial<typeof state> = {
+          accounts: state.accounts.map((item) => {
+            if (item.id !== editTarget.id) return item;
+            return {
+              ...item,
+              displayName: changedName ? editDisplayName.trim() : item.displayName,
+              ...(newEncryptedPwd ? { encryptedPassword: newEncryptedPwd } : {})
+            };
+          })
+        };
+        if (sessionAccountId === editTarget.id && changedName && state.profile) {
+          updates.profile = { ...state.profile, name: editDisplayName.trim() };
+        }
+        return updates;
+      });
+      setEditTarget(undefined);
+      setEditNotice("账号信息已更新");
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : "更新失败，请重试");
+    } finally {
+      setEditing(false);
+    }
   }
 
   async function toggleRevealPassword(account: LocalAccount) {
@@ -295,6 +412,7 @@ export function AccountSwitcher({
                     const linkedCount = getLinkedFamilyCodes(account).length;
                     const isRevealed = revealAccountId === account.id;
                     const isSetup = setupPasswordAccountId === account.id;
+                    const isEdit = editTarget?.id === account.id;
                     const canReveal = active; // 只有当前登录账号才能查看密码
                     return (
                       <div key={account.id}>
@@ -302,7 +420,7 @@ export function AccountSwitcher({
                           className={`account-switch-row ${
                             active ? "active" : ""
                           }`}
-                          style={{ gridTemplateColumns: "minmax(0, 1fr) 40px 40px" }}
+                          style={{ gridTemplateColumns: "minmax(0, 1fr) 36px 36px 36px" }}
                         >
                           <button
                             type="button"
@@ -319,6 +437,21 @@ export function AccountSwitcher({
                               </small>
                             </span>
                             <ArrowLeftRight size={19} aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            className="account-delete-button"
+                            aria-label={`编辑账号：${account.displayName}`}
+                            title="编辑账号信息"
+                            onClick={() => {
+                              startEdit(account);
+                              setRevealAccountId(undefined);
+                              setSetupPasswordAccountId(undefined);
+                              setDeleteTarget(undefined);
+                            }}
+                            disabled={editing}
+                          >
+                            <Pencil size={15} aria-hidden="true" />
                           </button>
                           <button
                             type="button"
@@ -346,11 +479,11 @@ export function AccountSwitcher({
                             }
                           >
                             {revealing ? (
-                              <LoaderCircle size={16} aria-hidden="true" />
+                              <LoaderCircle size={15} aria-hidden="true" />
                             ) : isRevealed ? (
-                              <EyeOff size={16} aria-hidden="true" />
+                              <EyeOff size={15} aria-hidden="true" />
                             ) : (
-                              <Eye size={16} aria-hidden="true" />
+                              <Eye size={15} aria-hidden="true" />
                             )}
                           </button>
                           <button
@@ -364,9 +497,10 @@ export function AccountSwitcher({
                               setShowPassword(false);
                               setDeleteError("");
                               setDeleteNotice("");
+                              setEditTarget(undefined);
                             }}
                           >
-                            <Trash2 size={16} aria-hidden="true" />
+                            <Trash2 size={15} aria-hidden="true" />
                           </button>
                         </div>
                         {isRevealed && revealedPassword ? (
@@ -451,6 +585,108 @@ export function AccountSwitcher({
                                 {setupPasswordError}
                               </p>
                             ) : null}
+                          </div>
+                        ) : null}
+                        {isEdit ? (
+                          <div
+                            style={{
+                              marginTop: 6,
+                              padding: 12,
+                              background: "var(--bg)",
+                              borderRadius: 8,
+                              border: "1px solid var(--border)",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 10
+                            }}
+                          >
+                            <h4 style={{ margin: 0, fontSize: 14 }}>
+                              编辑账号：{editTarget?.displayName}
+                            </h4>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                              <label style={{ fontSize: 12, color: "var(--muted)" }}>显示名</label>
+                              <input
+                                className="input"
+                                type="text"
+                                value={editDisplayName}
+                                onChange={(e) => setEditDisplayName(e.target.value)}
+                                maxLength={30}
+                                placeholder="修改显示名"
+                                style={{ padding: "6px 10px", fontSize: 13 }}
+                              />
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                              <label style={{ fontSize: 12, color: "var(--muted)" }}>当前密码 *</label>
+                              <input
+                                className="input"
+                                type="password"
+                                value={editCurrentPassword}
+                                onChange={(e) => setEditCurrentPassword(e.target.value)}
+                                placeholder="必须输入当前密码才能修改"
+                                autoComplete="current-password"
+                                style={{ padding: "6px 10px", fontSize: 13 }}
+                              />
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                              <label style={{ fontSize: 12, color: "var(--muted)" }}>新密码（留空则不修改）</label>
+                              <input
+                                className="input"
+                                type="password"
+                                value={editNewPassword}
+                                onChange={(e) => setEditNewPassword(e.target.value)}
+                                placeholder="至少 4 位"
+                                autoComplete="new-password"
+                                style={{ padding: "6px 10px", fontSize: 13 }}
+                              />
+                            </div>
+                            {editNewPassword ? (
+                              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                <label style={{ fontSize: 12, color: "var(--muted)" }}>确认新密码</label>
+                                <input
+                                  className="input"
+                                  type="password"
+                                  value={editConfirmPassword}
+                                  onChange={(e) => setEditConfirmPassword(e.target.value)}
+                                  placeholder="再次输入新密码"
+                                  autoComplete="new-password"
+                                  style={{ padding: "6px 10px", fontSize: 13 }}
+                                />
+                              </div>
+                            ) : null}
+                            {editError ? (
+                              <p className="error" style={{ margin: 0, fontSize: 12 }}>
+                                {editError}
+                              </p>
+                            ) : null}
+                            {editNotice ? (
+                              <p className="notice" style={{ margin: 0, fontSize: 12 }}>
+                                {editNotice}
+                              </p>
+                            ) : null}
+                            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                              <button
+                                className="btn"
+                                type="button"
+                                onClick={() => {
+                                  setEditTarget(undefined);
+                                  setEditError("");
+                                  setEditNotice("");
+                                }}
+                                disabled={editing}
+                                style={{ padding: "6px 14px" }}
+                              >
+                                取消
+                              </button>
+                              <button
+                                className="btn primary"
+                                type="button"
+                                onClick={() => void confirmEdit()}
+                                disabled={editing}
+                                style={{ padding: "6px 14px" }}
+                              >
+                                {editing ? "保存中..." : "保存"}
+                              </button>
+                            </div>
                           </div>
                         ) : null}
                       </div>
