@@ -7,10 +7,27 @@ function normalize(value: string): string {
   return value.toLowerCase().replace(/\s+/g, "");
 }
 
+export function isEmotionalDiscomfortQuery(query: string): boolean {
+  const normalized = normalize(query);
+  const physicalEmergency =
+    /胸痛|胸口痛|喘不上气|呼吸困难|胸闷出汗|冷汗|晕倒|快晕倒|意识不清/.test(
+      normalized
+    );
+  return (
+    !physicalEmergency &&
+    /(心里|心情|情绪).*(不舒服|难受|堵|烦|闷|压抑|低落)|想哭|委屈|孤独|烦躁/.test(
+      normalized
+    )
+  );
+}
+
 export function isDailyConversationQuery(query: string): boolean {
   const normalized = normalize(query);
-  return /你好|您好|嗨|在吗|早上好|上午好|中午好|下午好|晚上好|谢谢|感谢|再见|晚安|心情|开心|难过|不高兴|烦|累|无聊|陪我|聊聊天|说说话|笑话|故事|唱歌|天气|下雨|太阳|新闻|吃饭了吗|吃了吗|散步|电视|音乐|孩子|孙子|孙女|老伴|家人|睡得好|昨晚|今天过得|今天怎么样|你喜欢|你喜欢什么/.test(
-    normalized
+  return (
+    isEmotionalDiscomfortQuery(query) ||
+    /你好|您好|嗨|在吗|早上好|上午好|中午好|下午好|晚上好|谢谢|感谢|再见|晚安|心情|开心|难过|不高兴|烦|累|无聊|陪我|聊聊天|说说话|笑话|故事|唱歌|天气|下雨|太阳|新闻|吃饭了吗|吃了吗|散步|电视|音乐|孩子|孙子|孙女|老伴|家人|睡得好|昨晚|今天过得|今天怎么样|你喜欢|你喜欢什么/.test(
+      normalized
+    )
   );
 }
 
@@ -63,6 +80,9 @@ function dailyReply(
   const name = profile.name.trim();
   const greeting = name ? `${name}，` : "";
 
+  if (isEmotionalDiscomfortQuery(query)) {
+    return "听起来您现在心里有些难受，我愿意陪您慢慢说。是某件事让您烦心，还是一种说不清的压抑？如果这种痛苦已经难以承受，或出现伤害自己的念头，请马上联系家人并拨打 120。";
+  }
   if (/你好|您好|嗨|早上好|上午好|中午好|下午好|晚上好/.test(normalized)) {
     return `${greeting}您好，我在呢。今天想随便聊聊，还是想让我帮您看看用药问题？`;
   }

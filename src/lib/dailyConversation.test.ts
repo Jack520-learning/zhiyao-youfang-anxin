@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildDailyConversationResponse,
+  isEmotionalDiscomfortQuery,
   isContextualDailyReply,
   isDailyConversationQuery,
   resolveAdaptiveAnswerMode
@@ -47,6 +48,17 @@ describe("daily conversation", () => {
     expect(response.conversationOnly).toBe(true);
     expect(response.message).toContain("吃饭和睡觉");
     expect(response.message).not.toContain("资料不足");
+  });
+
+  it("distinguishes emotional discomfort from medication-related physical symptoms", () => {
+    expect(isEmotionalDiscomfortQuery("我心里不舒服怎么办")).toBe(true);
+    expect(isEmotionalDiscomfortQuery("我心里不舒服，而且胸口痛")).toBe(false);
+    const response = buildDailyConversationResponse(
+      "我心里不舒服怎么办",
+      profile
+    );
+    expect(response.message).toContain("愿意陪您");
+    expect(response.message).not.toContain("仅凭头晕");
   });
 
   it("upgrades emergency questions and deepens complex medical questions", () => {

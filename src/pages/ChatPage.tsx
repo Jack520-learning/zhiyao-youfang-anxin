@@ -674,6 +674,7 @@ export function ChatPage() {
     }
     const discomfortRegex = /(不舒服|头晕|难受|胸闷|恶心|心慌)/;
     if (
+      !dailyConversation &&
       discomfortRegex.test(clean) &&
       searchParams.get("concern") !== "1"
     ) {
