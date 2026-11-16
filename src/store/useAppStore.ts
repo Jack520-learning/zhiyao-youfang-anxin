@@ -25,7 +25,10 @@ import {
 import { createId } from "../lib/ids";
 import { nowIso } from "../lib/time";
 import { toChineseErrorMessage } from "../lib/userMessage";
-import { isTrackableRiskCheck } from "../lib/riskTracking";
+import {
+  collectTrackableRiskChecks,
+  isTrackableRiskCheck
+} from "../lib/riskTracking";
 import {
   captureWorkspace,
   createBlankWorkspace,
@@ -1082,7 +1085,7 @@ export const useAppStore = create<AppStore>()(
       addMedication: (medication, riskCheck) =>
         setState((state) => ({
           medications: [medication, ...state.medications],
-          riskChecks: [riskCheck, ...state.riskChecks].slice(0, 50),
+          riskChecks: [riskCheck, ...state.riskChecks].slice(0, 100),
           intakeDraft: undefined,
           lastLocalSaveAt: nowIso(),
           auditEvents: [
@@ -1133,7 +1136,7 @@ export const useAppStore = create<AppStore>()(
         }),
       addRiskCheck: (riskCheck) =>
         setState((state) => ({
-          riskChecks: [riskCheck, ...state.riskChecks].slice(0, 50),
+          riskChecks: [riskCheck, ...state.riskChecks].slice(0, 100),
           auditEvents: [
             auditEvent(
               "risk-checked",
@@ -1238,7 +1241,7 @@ export const useAppStore = create<AppStore>()(
             riskChecks:
               message.riskCheck &&
               isTrackableRiskCheck(message.riskCheck)
-              ? [message.riskCheck, ...state.riskChecks].slice(0, 50)
+              ? [message.riskCheck, ...state.riskChecks].slice(0, 100)
               : state.riskChecks
           };
         }),
@@ -1259,7 +1262,7 @@ export const useAppStore = create<AppStore>()(
           riskChecks:
             message.riskCheck &&
             isTrackableRiskCheck(message.riskCheck)
-            ? [message.riskCheck, ...state.riskChecks].slice(0, 50)
+            ? [message.riskCheck, ...state.riskChecks].slice(0, 100)
             : state.riskChecks
         })),
       createConversation: () => {
@@ -1372,6 +1375,10 @@ export const useAppStore = create<AppStore>()(
         const visibleMedications = state.medications.filter(
           (medication) => medication.status !== "stopped"
         );
+        const syncedRiskChecks = collectTrackableRiskChecks(
+          state.riskChecks,
+          state.conversations
+        );
         return {
           version: 1,
           familyCode: state.familyCode,
@@ -1405,10 +1412,10 @@ export const useAppStore = create<AppStore>()(
             ? state.doseEvents.slice(0, 100)
             : [],
           riskChecks: state.consent.shareHighRisk
-            ? state.riskChecks.slice(0, 20)
-            : state.riskChecks
+            ? syncedRiskChecks.slice(0, 100)
+            : syncedRiskChecks
                 .filter((riskCheck) => riskCheck.level !== "high")
-                .slice(0, 20),
+                .slice(0, 100),
           emergencyContacts: state.emergencyContacts,
           familyAlerts: state.consent.shareEmergency
             ? pruneHandledAlerts(state.familyAlerts).slice(0, 100)
@@ -1466,7 +1473,10 @@ export const useAppStore = create<AppStore>()(
           },
           medications: snapshot.medications,
           doseEvents: snapshot.doseEvents,
-          riskChecks: snapshot.riskChecks,
+          riskChecks: collectTrackableRiskChecks(
+            snapshot.riskChecks || [],
+            conversations
+          ),
           emergencyContacts: snapshot.emergencyContacts,
           familyAlerts,
           consent: snapshot.consent,

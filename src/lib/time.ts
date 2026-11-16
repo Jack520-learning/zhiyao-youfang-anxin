@@ -169,7 +169,10 @@ export function getTodayDoses(
   return medications
     .filter(
       (medication) =>
-        medication.status === "active" && medication.reminderEnabled !== false
+        medication.status === "active" &&
+        medication.reminderEnabled !== false &&
+        (!medication.startDate || medication.startDate <= key) &&
+        (!medication.endDate || medication.endDate >= key)
     )
     .flatMap((medication) =>
       medication.times.map((time) => {

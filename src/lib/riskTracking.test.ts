@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { RiskCheck } from "../types";
-import { isTrackableRiskCheck, trackableRiskChecks } from "./riskTracking";
+import type { Conversation, RiskCheck } from "../types";
+import {
+  collectTrackableRiskChecks,
+  isTrackableRiskCheck,
+  trackableRiskChecks
+} from "./riskTracking";
 
 function risk(
   id: string,
@@ -39,5 +43,35 @@ describe("risk summary tracking", () => {
     expect(isTrackableRiskCheck(risk("medical", ["src-user-profile"]))).toBe(
       true
     );
+  });
+
+  it("restores risk records omitted from the snapshot summary", () => {
+    const highRisk = {
+      ...risk("high-medication-risk", ["src-drug-catalog"]),
+      level: "high" as const,
+      createdAt: "2026-11-16T08:00:00.000Z"
+    };
+    const conversation: Conversation = {
+      id: "conversation-test",
+      title: "测试",
+      createdAt: highRisk.createdAt,
+      updatedAt: highRisk.createdAt,
+      messages: [
+        {
+          id: "message-test",
+          role: "assistant",
+          content: "高风险提醒",
+          createdAt: highRisk.createdAt,
+          riskCheck: highRisk
+        }
+      ]
+    };
+    const restored = collectTrackableRiskChecks(
+      [risk("recent", ["src-drug-catalog"])],
+      [conversation]
+    );
+    expect(restored.map((item) => item.id)).toContain("high-medication-risk");
+    expect(restored.find((item) => item.id === "high-medication-risk")?.level)
+      .toBe("high");
   });
 });

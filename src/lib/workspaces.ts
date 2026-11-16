@@ -1,4 +1,5 @@
 import { createInitialState } from "../data/seed";
+import { collectTrackableRiskChecks } from "./riskTracking";
 import type {
   AccountWorkspace,
   AppState,
@@ -127,7 +128,10 @@ export function workspaceFromCloud(
     consent: snapshot.consent,
     medications: snapshot.medications || [],
     doseEvents: snapshot.doseEvents || [],
-    riskChecks: snapshot.riskChecks || [],
+    riskChecks: collectTrackableRiskChecks(
+      snapshot.riskChecks || [],
+      snapshot.conversations || []
+    ),
     familyAlerts: snapshot.familyAlerts || [],
     conversations: snapshot.conversations || workspace.conversations,
     preferences: snapshot.preferences

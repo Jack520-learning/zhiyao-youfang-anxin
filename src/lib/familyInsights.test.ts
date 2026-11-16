@@ -80,6 +80,22 @@ describe("familyInsights", () => {
     expect(today?.confirmationRate).toBe(0);
   });
 
+  it("does not invent medication windows before the elder started the medicine", () => {
+    const startedMedicine: Medication = {
+      ...medication,
+      startDate: "2026-11-16"
+    };
+    const trend = buildMedicationTrend([startedMedicine], [], {
+      now: new Date("2026-11-17T04:00:00.000Z"),
+      timeZone: "Asia/Shanghai"
+    });
+    expect(trend.slice(0, 5).map((day) => day.scheduled)).toEqual([
+      0, 0, 0, 0, 0
+    ]);
+    expect(trend.at(-2)?.scheduled).toBe(1);
+    expect(trend.at(-1)?.scheduled).toBe(1);
+  });
+
   it("moves a cancelled confirmation back to pending in the family trend", () => {
     const cancelled: DoseEvent = {
       ...doseEvent("pending"),

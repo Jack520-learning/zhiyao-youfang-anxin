@@ -84,7 +84,7 @@ export function FamilyHealthCharts({
       <div className="section-heading">
         <div>
           <h2>近 7 天用药与风险概览</h2>
-          <p>用趋势快速看出服药确认情况和近期风险变化。</p>
+          <p>直接使用老人端最近同步的用药和风险记录。</p>
         </div>
         <ChartNoAxesColumnIncreasing
           size={24}
@@ -187,7 +187,7 @@ export function FamilyHealthCharts({
       </div>
 
       <p className="family-chart-footnote">
-        “待确认”不等于漏服；统计只反映已记录的状态，不用于疾病诊断。
+        “待确认”不等于漏服；只统计药品启用后的真实窗口和老人端已同步的核查记录，不用于疾病诊断。
       </p>
     </section>
   );
