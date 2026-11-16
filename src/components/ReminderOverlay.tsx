@@ -19,6 +19,25 @@ export function ReminderOverlay() {
     profile.timeZone
   );
   const [dismissedDoseId, setDismissedDoseId] = useState("");
+  // Force re-render every 15s so getNextDose is re-evaluated against wall-clock.
+  // Without this, the overlay can never detect that the due time has arrived.
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    if (role !== "elder") return;
+    const timer = window.setInterval(() => setTick((v) => v + 1), 15000);
+    return () => window.clearInterval(timer);
+  }, [role]);
+
+  // Re-check immediately when the tab becomes visible again (browsers throttle
+  // setInterval in background tabs).
+  useEffect(() => {
+    function onVisibility() {
+      if (!document.hidden) setTick((v) => v + 1);
+    }
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
 
   const minutesFromNow = nextDose
     ? (new Date(nextDose.scheduledAt).getTime() - Date.now()) / 60000
