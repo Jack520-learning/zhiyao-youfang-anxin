@@ -569,9 +569,9 @@ export function ChatPage() {
       !medicationActivityQuery &&
       isGeneralKnowledgeQuestion(contextualQuestion, Boolean(composerSkill));
     const effectiveAnswerMode =
-      dailyConversation || generalKnowledgeQuery
-      ? "quick"
-      : resolveAdaptiveAnswerMode(contextualQuestion, answerMode);
+      dailyConversation
+        ? "quick"
+        : resolveAdaptiveAnswerMode(contextualQuestion, answerMode);
     setThinkingLabel(
       dailyConversation
         ? "正在接着刚才的话题回答…"
@@ -614,7 +614,10 @@ export function ChatPage() {
           previousAssistantMessage?.content
         )
       : generalKnowledgeQuery
-        ? buildGeneralKnowledgeResponse(contextualQuestion)
+        ? buildGeneralKnowledgeResponse(
+            contextualQuestion,
+            effectiveAnswerMode
+          )
       : safetyResponseFromRuns(agentRuns) ??
         answerWithRules(contextualQuestion, activeMedications, profile, {
           answerMode: effectiveAnswerMode
@@ -855,7 +858,10 @@ export function ChatPage() {
           !isSkillAnswerCompliant(
             composerSkill,
             streamed,
-            localResponse.message
+            [
+              localResponse.message,
+              ...(localResponse.riskCheck.reasons || [])
+            ].join("\n")
           )
         ) {
           throw new Error("模型回答没有遵循所选技能，已切换技能对应回答");

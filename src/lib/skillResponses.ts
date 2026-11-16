@@ -479,18 +479,29 @@ export function buildSkillResponse(
         message:
           context.answerMode === "quick"
             ? quickAnswer
-            : [
-                `## 已识别 ${matchedHerbs.length} 种中药材`,
-                `**风险等级：${riskLabel(level)}**`,
-                ...herbSections,
-                "### 共同注意",
-                hasAnticoagulant
-                  ? "您当前有需要关注凝血风险的处方药，不要自行把上述药材加入日常服用；请先让医生或药师逐项核对。"
-                  : "中药材也需要结合体质、炮制方法和正在服用的药物判断，不能仅凭“补益”或“清热”自行长期服用。",
-                `老人特别说明：${context.profile.age >= 65 ? "您年龄较大，更应避免自行叠加药材和保健品。" : "使用前仍需核对年龄和基础疾病。"}`,
-                "### 现在先做",
-                `- ${nextStep}`
-              ].join("\n\n"),
+            : context.answerMode === "detailed"
+              ? [
+                  `## ${matchedHerbs.length} 种中药材的详细说明`,
+                  `**风险等级：${riskLabel(level)}**`,
+                  ...herbSections,
+                  "### 共同注意",
+                  hasAnticoagulant
+                    ? "您当前有需要关注凝血风险的处方药，不要自行把上述药材加入日常服用；请先让医生或药师逐项核对。"
+                    : "中药材也需要结合体质、炮制方法和正在服用的药物判断，不能仅凭“补益”或“清热”自行长期服用。",
+                  `老人特别说明：${context.profile.age >= 65 ? "您年龄较大，更应避免自行叠加药材和保健品。" : "使用前仍需核对年龄和基础疾病。"}`,
+                  "### 判断依据",
+                  `- 已分别匹配中药材：${herbNames}`,
+                  `- 当前基础疾病：${context.profile.conditions.join("、") || "未填写"}`,
+                  "### 下一步",
+                  `- ${nextStep}`
+                ].join("\n\n")
+              : [
+                  `## ${matchedHerbs.length} 种中药材安全问药`,
+                  `**风险等级：${riskLabel(level)}**`,
+                  ...herbSections,
+                  "### 现在先做",
+                  `- ${nextStep}`
+                ].join("\n\n"),
         riskCheck: {
           id: createId("skill-herbs"),
           level,
@@ -530,24 +541,39 @@ export function buildSkillResponse(
     }
 
     const herb = matchedHerbs[0];
+    const singleHerbMessage =
+      context.answerMode === "quick"
+        ? `直接回答：${herb.name}的传统作用是${herb.functions.join("、")}。${herb.safety[0] || nextStep}`
+        : context.answerMode === "detailed"
+          ? [
+              `## ${herb.name}的详细说明`,
+              `**风险等级：${riskLabel(level)}**`,
+              "### 药材基本信息",
+              `性味归经：${herb.nature} · ${herb.flavor} · 归${herb.meridians.join("、")}经`,
+              `传统作用：${herb.functions.join("、")}`,
+              herb.traditionalUse,
+              "### 辨识要点",
+              ...herb.identification.map((item) => `- ${item}`),
+              "### 安全提醒",
+              ...herb.safety.map((item) => `- ${item}`),
+              "### 判断依据",
+              `- 已匹配中药材：${herb.name}`,
+              `- 当前基础疾病：${context.profile.conditions.join("、") || "未填写"}`,
+              "### 下一步",
+              `- ${nextStep}`
+            ].join("\n\n")
+          : [
+              `## ${herb.name}安全问药`,
+              `**风险等级：${riskLabel(level)}**`,
+              `传统作用：${herb.functions.join("、")}`,
+              "",
+              "### 需要重点关注",
+              ...herb.safety.slice(0, 2).map((item) => `- ${item}`),
+              "### 现在先做",
+              `- ${nextStep}`
+            ].join("\n\n");
     return {
-      message: [
-        `## 识别到中药材：${herb.name}`,
-        `**风险等级：${riskLabel(level)}**`,
-        `性味归经：${herb.nature} · ${herb.flavor} · 归${herb.meridians.join("、")}经`,
-        `传统用途：${herb.functions.join("、")}`,
-        "",
-        "### 辨识要点",
-        ...herb.identification.map((item) => `- ${item}`),
-        "### 安全提醒",
-        ...herb.safety.map((item) => `- ${item}`),
-        "",
-        "### 现在先做",
-        hasAnticoagulant
-          ? "- 您当前有需要关注凝血风险的处方药，不要自行把这类中药材加入日常服用；请先让医生或药师核对。"
-          : "- 中药也需要结合体质、炮制方法和正在服用的药物核对，不能仅凭名称自行定量或长期服用。",
-        `老人特别说明：${context.profile.age >= 65 ? "您年龄较大，更应避免自行叠加药材和保健品。" : "使用前仍需核对年龄和基础疾病。"}`
-      ].join("\n"),
+      message: singleHerbMessage,
       riskCheck: {
         id: createId("skill-herb"),
         level,
@@ -599,11 +625,25 @@ export function isSkillAnswerCompliant(
   }
 
   if (skill === "herbs") {
-    const expectedHerbs = herbs.filter(
-      (herb) =>
-        groundingText.includes(`识别到中药材：${herb.name}`) ||
-        groundingText.includes(`### ${herb.name}`)
-    );
+    const matchedLine = groundingText.match(
+      /已(?:分别)?匹配中药材：([^\n]+)/
+    )?.[1];
+    const expectedNames = matchedLine
+      ? matchedLine.split(/[、，,]/).map((name) => name.trim()).filter(Boolean)
+      : [];
+    const expectedHerbs = expectedNames.length
+      ? expectedNames
+          .map((name) =>
+            herbs.find(
+              (herb) => herb.name === name || herb.aliases.includes(name)
+            )
+          )
+          .filter((herb): herb is (typeof herbs)[number] => Boolean(herb))
+      : herbs.filter(
+          (herb) =>
+            groundingText.includes(`识别到中药材：${herb.name}`) ||
+            groundingText.includes(`### ${herb.name}`)
+        );
     if (!expectedHerbs.length) {
       return /(中药材|药材|性味|归经|辨识|传统用途|配伍)/.test(text);
     }

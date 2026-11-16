@@ -40,18 +40,43 @@ export function withGeneralKnowledgeNotice(text: string): string {
 }
 
 export function buildGeneralKnowledgeResponse(
-  query: string
+  query: string,
+  answerMode: "quick" | "safety" | "detailed" = "quick"
 ): AssistantResponse {
-  void query;
-  const fallback =
+  const missing =
     "这个问题暂时无法准确回答，请补充更具体的背景或条件后再问。";
+  const message =
+    answerMode === "quick"
+      ? "暂时无法准确回答，请补充具体背景或条件。"
+      : answerMode === "safety"
+        ? [
+            "## 当前回答",
+            missing,
+            "",
+            "## 回答边界",
+            "这条问题不属于健康用药范围，因此只作为一般常识回答；没有可靠信息时不会猜测。"
+          ].join("\n")
+        : [
+            "## 当前问题的详细说明",
+            missing,
+            "",
+            "## 完整解释",
+            `您的问题是“${query.trim()}”。目前缺少足够背景，无法给出可靠且具体的常识结论。`,
+            "",
+            "## 判断依据",
+            "- 当前问题不属于健康用药范围",
+            "- 缺少可核实的背景或条件",
+            "",
+            "## 下一步",
+            "请补充事情发生的环境和具体条件后再问。"
+          ].join("\n\n");
   return {
-    message: fallback,
+    message,
     riskCheck: {
       id: `general-${Date.now()}-${Math.random().toString(16).slice(2)}`,
       level: "low",
       title: "一般常识问题",
-      summary: fallback,
+      summary: missing,
       nextStep: "",
       reasons: ["问题不属于健康用药范围"],
       sourceIds: ["src-chat"],

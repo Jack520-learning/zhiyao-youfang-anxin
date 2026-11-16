@@ -52,21 +52,7 @@ export function resolveAdaptiveAnswerMode(
   query: string,
   requestedMode: AnswerMode
 ): AnswerMode {
-  const normalized = normalize(query);
-  const emergency =
-    /胸痛|呼吸困难|喘不上|意识不清|昏迷|抽搐|大出血|嘴唇肿|快晕倒/.test(
-      normalized
-    );
-  if (requestedMode === "quick" && emergency) return "safety";
-  if (requestedMode === "detailed") return "detailed";
   if (isDailyConversationQuery(query)) return "quick";
-
-  const complexity =
-    normalized.length >= 34 ||
-    /(同时|一起|多个|全部|长期|全面|详细|为什么|怎么管理|有什么区别|副作用.*禁忌|相互作用.*注意|药.*药.*注意)/.test(
-      normalized
-    );
-  if (requestedMode === "safety" && complexity) return "detailed";
   return requestedMode;
 }
 

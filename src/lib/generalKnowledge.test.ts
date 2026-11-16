@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildGeneralKnowledgeResponse,
   GENERAL_KNOWLEDGE_NOTICE,
   isGeneralKnowledgeQuestion,
   withGeneralKnowledgeNotice
 } from "./generalKnowledge";
+import { isAnswerModeCompliant } from "./assistantAnswer";
 
 describe("general knowledge questions", () => {
   it("recognizes non-health knowledge questions", () => {
@@ -36,5 +38,17 @@ describe("general knowledge questions", () => {
     expect(withGeneralKnowledgeNotice("天空呈现蓝色与光散射有关。")).toBe(
       `> ${GENERAL_KNOWLEDGE_NOTICE}\n\n天空呈现蓝色与光散射有关。`
     );
+  });
+
+  it("builds distinct fallback shapes for all three answer modes", () => {
+    const quick = buildGeneralKnowledgeResponse("为什么天空是蓝色的", "quick");
+    const safety = buildGeneralKnowledgeResponse("为什么天空是蓝色的", "safety");
+    const detailed = buildGeneralKnowledgeResponse(
+      "为什么天空是蓝色的",
+      "detailed"
+    );
+    expect(isAnswerModeCompliant(quick.message, "quick")).toBe(true);
+    expect(isAnswerModeCompliant(safety.message, "safety")).toBe(true);
+    expect(isAnswerModeCompliant(detailed.message, "detailed")).toBe(true);
   });
 });

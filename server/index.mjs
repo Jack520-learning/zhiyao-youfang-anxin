@@ -901,11 +901,27 @@ function buildAssistantRequest(payload) {
     "general-knowledge":
       "直接回答与健康用药无关的一般常识问题，表达清楚、准确、简洁。"
   }[payload.skill] || "使用普通安全用药问答方式。";
-  const answerConfig = isGeneralKnowledge ? {
-    style: "直接回答用户的一般常识问题，使用两到五句简洁中文。围绕当前问题提供准确信息，不写健康风险模板，不推荐药物，不诊断疾病。不要自行添加免责声明，客户端会统一提示。",
-    maxTokens: 420,
-    temperature: 0.2
-  } : isDailyConversation ? {
+  const generalKnowledgeAnswerConfig = {
+    quick: {
+      style: "直接回答用户的一般常识问题，只说两三句话，第一句给结论，不写标题、列表或健康风险模板。围绕当前问题提供准确信息，不推荐药物，不诊断疾病。不要自行添加免责声明，客户端会统一提示。",
+      maxTokens: 360,
+      temperature: 0.2
+    },
+    safety: {
+      style: "直接回答用户的一般常识问题，使用「## 结论」和「## 回答边界」两个二级标题。结论必须具体，回答边界说明哪些条件无法确认或需要补充；不写健康用药模板，不推荐药物，不诊断疾病。不要自行添加免责声明，客户端会统一提示。",
+      maxTokens: 700,
+      temperature: 0.15
+    },
+    detailed: {
+      style: "详细回答用户的一般常识问题，先给一句话结论，再使用至少三个二级标题：「## 直接回答」「## 判断依据」「## 适用条件与限制」。内容必须围绕当前问题，不写健康用药模板，不推荐药物，不诊断疾病。不要自行添加免责声明，客户端会统一提示。",
+      maxTokens: 1200,
+      temperature: 0.2
+    }
+  };
+  const answerConfig = isGeneralKnowledge
+    ? generalKnowledgeAnswerConfig[payload.answerMode] ||
+      generalKnowledgeAnswerConfig.quick
+    : isDailyConversation ? {
     style: "像熟悉的朋友一样自然陪聊，直接回应用户说的话，用两到四句中文，最多问一个开放式问题。不要输出标题、列表、Markdown格式、风险等级或医疗建议。不要假装知道实时天气、位置或用户未提供的事实。",
     maxTokens: 280,
     temperature: 0.55

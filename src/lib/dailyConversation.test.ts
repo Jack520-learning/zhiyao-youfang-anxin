@@ -61,15 +61,18 @@ describe("daily conversation", () => {
     expect(response.message).not.toContain("仅凭头晕");
   });
 
-  it("upgrades emergency questions and deepens complex medical questions", () => {
+  it("keeps the answer mode exactly as selected for medical questions", () => {
     expect(
       resolveAdaptiveAnswerMode("突然胸痛并且呼吸困难", "quick")
-    ).toBe("safety");
+    ).toBe("quick");
     expect(
       resolveAdaptiveAnswerMode(
         "长期同时吃多种药，阿司匹林和其他药物一起用要注意什么",
         "safety"
       )
+    ).toBe("safety");
+    expect(
+      resolveAdaptiveAnswerMode("这款药漏服了怎么办", "detailed")
     ).toBe("detailed");
   });
 });
