@@ -278,7 +278,7 @@ export function ProfilePage() {
       const started = await testVoiceMode(mode, customVoiceId);
       if (requestVersion !== voicePreviewVersionRef.current) return;
       if (!started) {
-        setToast("当前浏览器没有可用的语音朗读功能");
+        setToast("当前音色暂时无法播放，请检查网络后重试");
         return;
       }
       setSpeechPlayback("speaking");

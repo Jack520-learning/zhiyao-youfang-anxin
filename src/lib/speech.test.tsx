@@ -81,36 +81,93 @@ describe("useSpeechRecognition hold behavior", () => {
 describe("speech playback start", () => {
   afterEach(() => {
     stopSpeaking();
+    vi.unstubAllGlobals();
   });
 
-  it("falls back to stable browser speech when server TTS is unavailable", async () => {
-    let spoken = 0;
-    const holder: {
-      utterance: {
-        onend: (() => void) | null;
-        onerror: (() => void) | null;
-      } | null;
-    } = { utterance: null };
+  it("uses the exact fixed voice for each system voice mode", async () => {
+    const expected = {
+      warm: "longanhuan_v3.1",
+      clear: "longxiaoxia_v3.1",
+      male: "longanyang_v3.1",
+      calm: "longcheng_v3.1"
+    } as const;
+    const requestedVoices: string[] = [];
 
-    class FakeUtterance {
-      lang = "";
-      voice: unknown = null;
-      rate = 1;
-      pitch = 1;
-      volume = 1;
-      onend: (() => void) | null = null;
+    class FakeAudio {
+      paused = false;
+      currentTime = 0;
+      onended: (() => void) | null = null;
       onerror: (() => void) | null = null;
-
-      constructor(public text: string) {}
+      constructor(public src: string) {}
+      play() {
+        return Promise.resolve();
+      }
+      pause() {
+        this.paused = true;
+      }
     }
 
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body || "{}")) as {
+          voiceMode: keyof typeof expected;
+        };
+        requestedVoices.push(expected[body.voiceMode]);
+        return new Response(
+          JSON.stringify({
+            audioUrl: `https://audio.example/${body.voiceMode}.wav`,
+            voice: expected[body.voiceMode]
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      })
+    );
+    vi.stubGlobal("Audio", FakeAudio);
+
+    for (const mode of ["warm", "clear", "male", "calm"] as const) {
+      await expect(
+        speakText(`固定音色测试-${mode}`, true, mode)
+      ).resolves.toBe(true);
+    }
+    expect(requestedVoices).toEqual([
+      expected.warm,
+      expected.clear,
+      expected.male,
+      expected.calm
+    ]);
+  });
+
+  it("does not play a mismatched voice returned by the service", async () => {
+    let browserSpeechCalls = 0;
+    class FakeAudio {
+      paused = false;
+      currentTime = 0;
+      onended: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      play() {
+        return Promise.resolve();
+      }
+      pause() {}
+    }
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            audioUrl: "https://audio.example/wrong.wav",
+            voice: "wrong_female_voice"
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      )
+    );
+    vi.stubGlobal("Audio", FakeAudio);
     Object.assign(window, {
-      SpeechSynthesisUtterance: FakeUtterance,
       speechSynthesis: {
         cancel: () => undefined,
-        speak: (next: FakeUtterance) => {
-          spoken += 1;
-          holder.utterance = next;
+        speak: () => {
+          browserSpeechCalls += 1;
         },
         getVoices: () => [],
         speaking: false,
@@ -118,51 +175,9 @@ describe("speech playback start", () => {
       }
     });
 
-    const playback = speakText("您好，我马上为您朗读。", true, "warm");
-    await vi.waitFor(() => expect(spoken).toBe(1));
-    expect(holder.utterance).not.toBeNull();
-    holder.utterance?.onend?.();
-    await expect(playback).resolves.toBe(true);
-  });
-
-  it("keeps the same Chinese voice when browser voices load later", async () => {
-    const spokenVoices: unknown[] = [];
-    let voiceReads = 0;
-    const firstVoice = { name: "Stable Voice A", lang: "zh-CN", localService: true };
-    const secondVoice = { name: "Different Voice B", lang: "zh-CN", localService: true };
-
-    class StableUtterance {
-      lang = "";
-      voice: unknown = null;
-      rate = 1;
-      pitch = 1;
-      volume = 1;
-      onend: (() => void) | null = null;
-      onerror: (() => void) | null = null;
-      constructor(public text: string) {}
-    }
-
-    Object.assign(window, {
-      SpeechSynthesisUtterance: StableUtterance,
-      speechSynthesis: {
-        cancel: () => undefined,
-        speak: (next: StableUtterance) => {
-          spokenVoices.push(next.voice);
-          next.onend?.();
-        },
-        getVoices: () => {
-          voiceReads += 1;
-          return [voiceReads === 1 ? firstVoice : secondVoice];
-        },
-        speaking: false,
-        paused: false
-      }
-    });
-
-    await speakText("第一段朗读", true, "clear");
-    await speakText("第二段朗读", true, "clear");
-    expect(spokenVoices).toHaveLength(2);
-    expect(spokenVoices[0]).toBe(firstVoice);
-    expect(spokenVoices[1]).toBe(firstVoice);
+    await expect(
+      speakText("音色不匹配测试", true, "male")
+    ).resolves.toBe(false);
+    expect(browserSpeechCalls).toBe(0);
   });
 });

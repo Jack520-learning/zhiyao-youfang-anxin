@@ -173,80 +173,20 @@ const speechUrlCache = new Map<
   string,
   { audioUrl: string; createdAt: number; voice: string }
 >();
-const browserVoiceLocks = new Map<VoiceMode, SpeechSynthesisVoice | null>();
-const speechEngineLocks = new Map<string, "server" | "browser">();
+const expectedSystemVoices: Record<
+  Exclude<VoiceMode, "custom">,
+  string
+> = {
+  warm: "longanhuan_v3.1",
+  clear: "longxiaoxia_v3.1",
+  male: "longanyang_v3.1",
+  calm: "longcheng_v3.1"
+};
 
 function emitSpeechState() {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("speech-state-change"));
   }
-}
-
-function scoreVoice(voice: SpeechSynthesisVoice, mode: VoiceMode): number {
-  const name = voice.name.toLowerCase();
-  const warmTerms = [
-    "ting-ting",
-    "tingting",
-    "婷婷",
-    "xiaoxiao",
-    "晓晓",
-    "mei-jia",
-    "美佳",
-    "huihui",
-    "慧慧",
-    "female",
-    "女"
-  ];
-  const clearTerms = [
-    "siri",
-    "google 普通话",
-    "mandarin",
-    "普通话",
-    "xiaoxiao",
-    "晓晓"
-  ];
-  const maleTerms = [
-    "yunxi",
-    "云希",
-    "yunyang",
-    "云扬",
-    "kangkang",
-    "康康",
-    "male",
-    "男"
-  ];
-  const terms =
-    mode === "warm"
-      ? warmTerms
-      : mode === "clear"
-        ? clearTerms
-        : maleTerms;
-  return (
-    (voice.lang.toLowerCase().startsWith("zh") ? 20 : 0) +
-    (voice.localService ? 5 : 0) +
-    terms.reduce((score, term) => score + (name.includes(term) ? 10 : 0), 0)
-  );
-}
-
-function pickChineseVoice(mode: VoiceMode): SpeechSynthesisVoice | undefined {
-  if (browserVoiceLocks.has(mode)) {
-    return browserVoiceLocks.get(mode) ?? undefined;
-  }
-  const voices = window.speechSynthesis
-    .getVoices()
-    .filter((voice) => voice.lang.toLowerCase().startsWith("zh"))
-    .sort((left, right) => scoreVoice(right, mode) - scoreVoice(left, mode));
-  const preferred = voices.find((voice) => scoreVoice(voice, mode) >= 20);
-  if (preferred) {
-    browserVoiceLocks.set(mode, preferred);
-    return preferred;
-  }
-  const fallbackIndex =
-    mode === "warm" ? 0 : mode === "clear" ? 1 : mode === "male" ? 0 : 0;
-  const fallback =
-    voices[Math.min(fallbackIndex, voices.length - 1)] ?? null;
-  browserVoiceLocks.set(mode, fallback);
-  return fallback ?? undefined;
 }
 
 function naturalSpeechText(text: string): string {
@@ -277,56 +217,20 @@ export async function speakText(
     if (cached) {
       return await playAudioUrl(cached.audioUrl, requestVersion);
     }
-    const engineKey =
-      voiceMode === "custom" && customVoiceId
-        ? `custom:${customVoiceId}`
-        : voiceMode;
-    if (speechEngineLocks.get(engineKey) === "browser") {
-      return await playBrowserVoice(
-        text,
-        voiceMode,
-        requestVersion
-      );
-    }
-    try {
-      const played = await playServerAudio(
-        text,
-        voiceMode,
-        customVoiceId,
-        requestVersion
-      );
-      speechEngineLocks.set(engineKey, "server");
-      return played;
-    } catch {
-      speechEngineLocks.set(engineKey, "browser");
-    }
-    return await playBrowserVoice(
+    return await playServerAudio(
       text,
       voiceMode,
+      customVoiceId,
       requestVersion
     );
+  } catch {
+    return false;
   } finally {
     if (requestVersion === speechRequestVersion) {
       speechPending = false;
       emitSpeechState();
     }
   }
-}
-
-async function playBrowserVoice(
-  text: string,
-  voiceMode: VoiceMode,
-  requestVersion: number
-): Promise<boolean> {
-  const browserPlayback = speakWithBrowserAndWait(
-    text,
-    voiceMode,
-    requestVersion
-  );
-  if (!browserPlayback) return false;
-  speechPending = false;
-  emitSpeechState();
-  return browserPlayback;
 }
 
 function getCachedSpeechAudio(
@@ -398,6 +302,12 @@ async function getSpeechAudioUrl(
     voice?: string;
   };
   if (!payload.audioUrl) throw new Error("没有返回音频");
+  if (voiceMode !== "custom") {
+    const expectedVoice = expectedSystemVoices[voiceMode];
+    if (payload.voice !== expectedVoice) {
+      throw new Error("语音服务返回了不匹配的音色");
+    }
+  }
   const result = {
     audioUrl: payload.audioUrl,
     voice: payload.voice || voiceMode
@@ -418,51 +328,9 @@ export async function preloadSpeech(
   await getSpeechAudioUrl(text, voiceMode, customVoiceId);
 }
 
-function speakWithBrowserAndWait(
-  text: string,
-  voiceMode: VoiceMode,
-  requestVersion: number
-): Promise<boolean> | null {
-  if (!("speechSynthesis" in window)) return null;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(naturalSpeechText(text));
-  utterance.lang = "zh-CN";
-  const fallbackMode = voiceMode === "custom" ? "warm" : voiceMode;
-  utterance.voice = pickChineseVoice(fallbackMode) ?? null;
-  utterance.rate =
-    fallbackMode === "warm"
-      ? 0.9
-      : fallbackMode === "clear"
-        ? 0.96
-        : fallbackMode === "male"
-          ? 0.94
-          : 0.82;
-  utterance.pitch =
-    fallbackMode === "warm"
-      ? 0.96
-      : fallbackMode === "clear"
-        ? 1.04
-        : fallbackMode === "male"
-          ? 0.9
-          : 0.84;
-  utterance.volume = 1;
-  return new Promise((resolve) => {
-    const finish = (played: boolean) => {
-      emitSpeechState();
-      resolve(played && requestVersion === speechRequestVersion);
-    };
-    utterance.onend = () => finish(true);
-    utterance.onerror = () => finish(false);
-    window.speechSynthesis.speak(utterance);
-    emitSpeechState();
-  });
-}
-
 export function getSpeechPlaybackState(): SpeechPlaybackState {
   if (currentAudio) return currentAudio.paused ? "paused" : "speaking";
-  if (!("speechSynthesis" in window)) return "idle";
-  if (!window.speechSynthesis.speaking) return "idle";
-  return window.speechSynthesis.paused ? "paused" : "speaking";
+  return "idle";
 }
 
 export function getSpeechStatus(): SpeechStatus {
@@ -476,12 +344,7 @@ export function pauseSpeaking(): boolean {
     emitSpeechState();
     return true;
   }
-  if (!("speechSynthesis" in window) || !window.speechSynthesis.speaking) {
-    return false;
-  }
-  window.speechSynthesis.pause();
-  emitSpeechState();
-  return true;
+  return false;
 }
 
 export function resumeSpeaking(): boolean {
@@ -490,12 +353,7 @@ export function resumeSpeaking(): boolean {
     emitSpeechState();
     return true;
   }
-  if (!("speechSynthesis" in window) || !window.speechSynthesis.paused) {
-    return false;
-  }
-  window.speechSynthesis.resume();
-  emitSpeechState();
-  return true;
+  return false;
 }
 
 export function stopSpeaking() {
@@ -506,7 +364,6 @@ export function stopSpeaking() {
     currentAudio.currentTime = 0;
     currentAudio = null;
   }
-  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   emitSpeechState();
 }
 
