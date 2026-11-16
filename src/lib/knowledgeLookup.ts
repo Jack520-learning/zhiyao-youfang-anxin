@@ -50,7 +50,7 @@ export function buildPublicKnowledgeResponse(
   const sources = (result.sources || [])
     .filter((source) => /^https:\/\//i.test(source.url))
     .slice(0, 4);
-  if (!result.found || !sources.length) {
+  if (!result.found) {
     const message = buildUnavailableAnswer(result.query);
     return {
       message,
@@ -95,11 +95,17 @@ export function buildPublicKnowledgeResponse(
     medicationSnapshot: [],
     createdAt: nowIso()
   };
-  const sourceBlock = [
-    "",
-    "### 公开资料来源",
-    ...sources.map((source) => `- ${cleanVisibleText(source.title)}：${source.url}`)
-  ];
+  const sourceBlock = sources.length
+    ? [
+        "",
+        "### 公开资料来源",
+        ...sources.map((source) => `- ${cleanVisibleText(source.title)}：${source.url}`)
+      ]
+    : [
+        "",
+        "### 检索说明",
+        "本次回答使用了搜索增强资料；服务未返回可点击链接，内容已标记为待专业复核。"
+      ];
   return {
     message: [
       `## ${riskCheck.title}`,

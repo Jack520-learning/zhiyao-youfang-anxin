@@ -1314,7 +1314,8 @@ async function lookupPublicKnowledge(query) {
   const data = await response.json();
   const parsed = parseModelJson(data.choices?.[0]?.message?.content);
   const sources = await publicSourceList(parsed.sources);
-  if (parsed.found === false || !sources.length) {
+  const summary = sanitizePublicText(parsed.summary, 500);
+  if (parsed.found === false || !summary) {
     return {
       found: false,
       query,
@@ -1334,10 +1335,13 @@ async function lookupPublicKnowledge(query) {
     queryKey,
     found: true,
     title: sanitizePublicText(parsed.title || "公开资料补充", 120),
-    summary: sanitizePublicText(parsed.summary, 500),
+    summary,
     plainText: sanitizePublicText(parsed.plainText, 2000),
     nextStep: sanitizePublicText(parsed.nextStep, 500),
     sources,
+    sourceStatus: sources.length
+      ? "validated-public-sources"
+      : "search-enhanced-without-accessible-link",
     fetchedAt: new Date().toISOString(),
     reviewStatus: "auto-public-source"
   };

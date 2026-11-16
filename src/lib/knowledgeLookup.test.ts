@@ -61,4 +61,22 @@ describe("dynamic public knowledge", () => {
     expect(response.message).not.toContain("知识库未更新");
     expect(response.message).not.toContain("知识库已根据公开资料完成更新");
   });
+
+  it("uses a search-enhanced answer even without an accessible link", () => {
+    const response = buildPublicKnowledgeResponse({
+      found: true,
+      query: "测试问题",
+      title: "搜索增强结果",
+      summary: "这是模型搜索后返回的实质回答。",
+      plainText: "补充说明。",
+      nextStep: "如涉及治疗调整，请咨询医生。",
+      sources: [],
+      fetchedAt: "2026-11-16T00:00:00.000Z",
+      cached: false
+    });
+    expect(response.message).toContain("模型搜索后返回的实质回答");
+    expect(response.message).toContain("搜索增强资料");
+    expect(response.message).toContain("知识库已根据公开资料完成更新");
+    expect(response.riskCheck.level).toBe("medium");
+  });
 });
