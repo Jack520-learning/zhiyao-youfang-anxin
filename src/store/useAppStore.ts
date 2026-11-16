@@ -1307,7 +1307,11 @@ export const useAppStore = create<AppStore>()(
             allergies: state.consent.shareMedicationSummary
               ? state.profile.allergies
               : [],
-            timeZone: state.profile.timeZone || "Asia/Shanghai"
+            timeZone: state.profile.timeZone || "Asia/Shanghai",
+            visionPreference: state.profile.visionPreference,
+            healthProfileCompleted: state.profile.healthProfileCompleted,
+            healthProfilePromptSeen: state.profile.healthProfilePromptSeen,
+            voiceEnabled: state.profile.voiceEnabled
           },
           consent: state.consent,
           medications: state.consent.shareMedicationSummary
@@ -1330,7 +1334,24 @@ export const useAppStore = create<AppStore>()(
           emergencyContacts: state.emergencyContacts,
           familyAlerts: state.consent.shareEmergency
             ? pruneHandledAlerts(state.familyAlerts).slice(0, 100)
-            : []
+            : [],
+          conversations: state.conversations.map((conversation) => ({
+            ...conversation,
+            messages: conversation.messages.map((message) => ({
+              ...message,
+              imageDataUrls: undefined
+            }))
+          })),
+          preferences: {
+            ...state.preferences,
+            customVoices: [...state.preferences.customVoices]
+          },
+          intakeDraft: state.intakeDraft
+            ? {
+                ...state.intakeDraft,
+                imageDataUrl: undefined
+              }
+            : undefined
         };
       },
       mergeFamilySummary: (snapshot) =>
@@ -1345,7 +1366,17 @@ export const useAppStore = create<AppStore>()(
             age: snapshot.profile.age,
             conditions: snapshot.profile.conditions,
             allergies: snapshot.profile.allergies,
-            timeZone: snapshot.profile.timeZone || state.profile.timeZone
+            timeZone: snapshot.profile.timeZone || state.profile.timeZone,
+            visionPreference:
+              snapshot.profile.visionPreference ?? state.profile.visionPreference,
+            healthProfileCompleted:
+              snapshot.profile.healthProfileCompleted ??
+              state.profile.healthProfileCompleted,
+            healthProfilePromptSeen:
+              snapshot.profile.healthProfilePromptSeen ??
+              state.profile.healthProfilePromptSeen,
+            voiceEnabled:
+              snapshot.profile.voiceEnabled ?? state.profile.voiceEnabled
           },
           medications: snapshot.medications,
           doseEvents: snapshot.doseEvents,
@@ -1353,6 +1384,17 @@ export const useAppStore = create<AppStore>()(
           emergencyContacts: snapshot.emergencyContacts,
           familyAlerts,
           consent: snapshot.consent,
+          conversations: snapshot.conversations ?? state.conversations,
+          preferences: snapshot.preferences
+            ? {
+                ...state.preferences,
+                ...snapshot.preferences,
+                customVoices:
+                  snapshot.preferences.customVoices ??
+                  state.preferences.customVoices
+              }
+            : state.preferences,
+          intakeDraft: snapshot.intakeDraft ?? state.intakeDraft,
           lastSyncedAt: snapshot.updatedAt,
           hydrated: true
           };

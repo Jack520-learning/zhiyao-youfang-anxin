@@ -24,6 +24,8 @@ export function useCloudSync() {
   const consent = useAppStore((state) => state.consent);
   const emergencyContacts = useAppStore((state) => state.emergencyContacts);
   const familyAlerts = useAppStore((state) => state.familyAlerts);
+  const conversations = useAppStore((state) => state.conversations);
+  const preferences = useAppStore((state) => state.preferences);
 
   useEffect(() => {
     const retry = () => setConnectionTick((value) => value + 1);
@@ -97,6 +99,8 @@ export function useCloudSync() {
     consent,
     emergencyContacts,
     familyAlerts,
+    conversations,
+    preferences,
     connectionTick
   ]);
 

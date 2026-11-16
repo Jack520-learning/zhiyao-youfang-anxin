@@ -113,8 +113,15 @@ export function workspaceFromCloud(
       conditions: snapshot.profile.conditions || [],
       allergies: snapshot.profile.allergies || [],
       timeZone: snapshot.profile.timeZone || workspace.profile.timeZone,
-      healthProfileCompleted: Boolean(snapshot.elderName),
-      healthProfilePromptSeen: Boolean(snapshot.elderName)
+      visionPreference:
+        snapshot.profile.visionPreference ?? workspace.profile.visionPreference,
+      healthProfileCompleted:
+        snapshot.profile.healthProfileCompleted ??
+        Boolean(snapshot.elderName),
+      healthProfilePromptSeen:
+        snapshot.profile.healthProfilePromptSeen ?? Boolean(snapshot.elderName),
+      voiceEnabled:
+        snapshot.profile.voiceEnabled ?? workspace.profile.voiceEnabled
     },
     emergencyContacts: snapshot.emergencyContacts || [],
     consent: snapshot.consent,
@@ -122,6 +129,17 @@ export function workspaceFromCloud(
     doseEvents: snapshot.doseEvents || [],
     riskChecks: snapshot.riskChecks || [],
     familyAlerts: snapshot.familyAlerts || [],
+    conversations: snapshot.conversations || workspace.conversations,
+    preferences: snapshot.preferences
+      ? {
+          ...workspace.preferences,
+          ...snapshot.preferences,
+          customVoices:
+            snapshot.preferences.customVoices ??
+            workspace.preferences.customVoices
+        }
+      : workspace.preferences,
+    intakeDraft: snapshot.intakeDraft ?? workspace.intakeDraft,
     lastSyncedAt: snapshot.updatedAt
   };
 }

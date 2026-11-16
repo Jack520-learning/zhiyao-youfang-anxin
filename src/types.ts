@@ -242,7 +242,14 @@ export interface CloudSnapshot {
   elderName: string;
   profile: Pick<
     ElderProfile,
-    "age" | "conditions" | "allergies" | "timeZone"
+    | "age"
+    | "conditions"
+    | "allergies"
+    | "timeZone"
+    | "visionPreference"
+    | "healthProfileCompleted"
+    | "healthProfilePromptSeen"
+    | "voiceEnabled"
   >;
   consent: ConsentSettings;
   medications: Medication[];
@@ -250,6 +257,9 @@ export interface CloudSnapshot {
   riskChecks: RiskCheck[];
   emergencyContacts: EmergencyContact[];
   familyAlerts?: FamilyAlert[];
+  conversations?: Conversation[];
+  preferences?: AppPreferences;
+  intakeDraft?: IntakeDraft;
 }
 
 export interface SharedKnowledgeBase {
