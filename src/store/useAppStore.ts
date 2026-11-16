@@ -243,6 +243,11 @@ interface AppActions {
     status: DoseStatus,
     doseId: string
   ) => void;
+  cancelDoseRecord: (
+    medicationId: string,
+    scheduledAt: string,
+    doseId: string
+  ) => void;
   addChatMessage: (message: ChatMessage, conversationId?: string) => void;
   replaceChatMessage: (
     id: string,
@@ -1161,6 +1166,21 @@ export const useAppStore = create<AppStore>()(
             ].slice(0, 100)
           };
         }),
+      cancelDoseRecord: (medicationId, scheduledAt, doseId) =>
+        setState((state) => ({
+          doseEvents: state.doseEvents.filter(
+            (item) => item.id !== doseId
+          ),
+          lastLocalSaveAt: nowIso(),
+          auditEvents: [
+            auditEvent(
+              "dose-updated",
+              "取消服药记录并恢复为尚未确认",
+              { medicationId, scheduledAt }
+            ),
+            ...state.auditEvents
+          ].slice(0, 100)
+        })),
       addChatMessage: (message, requestedConversationId) =>
         setState((state) => {
           const activeId =

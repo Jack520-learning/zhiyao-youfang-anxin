@@ -871,6 +871,17 @@ img {
   line-height: 1.55;
 }
 
+.dose-time-warning-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.dose-time-warning-copy > span {
+  margin-top: 2px;
+  color: inherit;
+  font-size: inherit;
+}
+
 .dose-time-warning > svg {
   flex: 0 0 auto;
   margin-top: 2px;
@@ -886,6 +897,25 @@ img {
   border-color: color-mix(in srgb, var(--red) 28%, var(--line));
   background: var(--red-soft);
   color: var(--red);
+}
+
+.dose-time-cancel {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 9px;
+  border: 1px solid color-mix(in srgb, var(--red) 40%, var(--line));
+  border-radius: 12px;
+  padding: 0 14px;
+  background: var(--surface);
+  color: var(--red);
+  font-size: calc(14px * var(--font-scale));
+  font-weight: 750;
+}
+
+.dose-time-cancel:hover {
+  background: var(--red-soft);
 }
 
 .status-pill {

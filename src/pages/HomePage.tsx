@@ -47,6 +47,7 @@ export function HomePage() {
   const medications = useAppStore((state) => state.medications);
   const doseEvents = useAppStore((state) => state.doseEvents);
   const updateDose = useAppStore((state) => state.updateDose);
+  const cancelDoseRecord = useAppStore((state) => state.cancelDoseRecord);
   const riskChecks = useAppStore((state) => state.riskChecks);
   const familyCode = useAppStore((state) => state.familyCode);
   const addFamilyAlert = useAppStore((state) => state.addFamilyAlert);
@@ -122,6 +123,23 @@ export function HomePage() {
       lastAction.doseId
     );
     setLastAction(undefined);
+  }
+
+  function cancelMistakenDose(
+    dose: (typeof todayDoses)[number]
+  ) {
+    cancelDoseRecord(
+      dose.medication.id,
+      dose.scheduledAt,
+      dose.doseId
+    );
+    setLastAction(undefined);
+    speakText(
+      `已取消${dose.medication.name}这次记录，恢复为尚未确认。`,
+      preferences.soundEnabled && profile.voiceEnabled,
+      preferences.voiceMode,
+      preferences.customVoiceId
+    );
   }
 
   async function reportDiscomfort() {
@@ -435,16 +453,25 @@ export function HomePage() {
                   {dose.medication.dosage} · {humanizeRelation(dose.medication.relation)}
                 </span>
                 {timingNotice ? (
-                  <span
+                  <div
                     className={`dose-time-warning ${timingNotice.kind}`}
                     role="status"
                   >
                     <AlertTriangle size={15} aria-hidden="true" />
-                    <span>
+                    <div className="dose-time-warning-copy">
                       <strong>{timingNotice.title}</strong>
-                      {timingNotice.detail}
-                    </span>
-                  </span>
+                      <span>{timingNotice.detail}</span>
+                      {dose.status !== "pending" ? (
+                        <button
+                          type="button"
+                          className="dose-time-cancel"
+                          onClick={() => cancelMistakenDose(dose)}
+                        >
+                          取消这次记录
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
                 ) : null}
               </div>
               <div className="timeline-status">
