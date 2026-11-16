@@ -250,6 +250,7 @@ interface AppActions {
   createConversation: () => string;
   setActiveConversation: (id: string) => void;
   deleteConversation: (id: string) => void;
+  deleteChatMessage: (messageId: string, conversationId?: string) => void;
   setConversationMedicineContext: (
     draft?: IntakeDraft,
     conversationId?: string
@@ -1240,6 +1241,22 @@ export const useAppStore = create<AppStore>()(
               auditEvent("settings-updated", "删除一条问药对话记录"),
               ...state.auditEvents
             ].slice(0, 100)
+          };
+        }),
+      deleteChatMessage: (messageId, conversationId) =>
+        setState((state) => {
+          const targetId = conversationId || state.activeConversationId;
+          return {
+            conversations: state.conversations.map((conversation) =>
+              conversation.id === targetId
+                ? {
+                    ...conversation,
+                    messages: conversation.messages.filter(
+                      (m) => m.id !== messageId
+                    )
+                  }
+                : conversation
+            )
           };
         }),
       setConversationMedicineContext: (draft, conversationId) =>

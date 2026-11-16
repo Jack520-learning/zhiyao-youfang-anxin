@@ -9,6 +9,7 @@ import {
   ChevronDown,
   CircleHelp,
   ClipboardList,
+  Copy,
   ExternalLink,
   LoaderCircle,
   Leaf,
@@ -18,11 +19,14 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  RotateCcw,
   Send,
   Search,
   ShieldCheck,
   Sparkles,
   Square,
+  ThumbsDown,
+  ThumbsUp,
   Trash2,
   Volume2,
   VolumeX
@@ -58,7 +62,7 @@ import {
 } from "../lib/vision";
 import { speakText, stopSpeaking } from "../lib/speech";
 import { useQwenSpeechRecognition } from "../lib/qwenSpeech";
-import { nowIso, getNextDose } from "../lib/time";
+import { nowIso, getNextDose, formatMessageTime } from "../lib/time";
 import { useAppStore } from "../store/useAppStore";
 import type {
   AssistantResponse,
@@ -309,6 +313,7 @@ export function ChatPage() {
   const saveIntakeDraft = useAppStore((state) => state.saveIntakeDraft);
   const createConversation = useAppStore((state) => state.createConversation);
   const deleteConversation = useAppStore((state) => state.deleteConversation);
+  const deleteChatMessage = useAppStore((state) => state.deleteChatMessage);
   const setActiveConversation = useAppStore(
     (state) => state.setActiveConversation
   );
@@ -337,6 +342,8 @@ export function ChatPage() {
     id: string;
     title: string;
   }>();
+  const [copiedMessageId, setCopiedMessageId] = useState("");
+  const [speakingMessageId, setSpeakingMessageId] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem("chat-sidebar-width");
@@ -1194,14 +1201,79 @@ export function ChatPage() {
         ? "详细解释"
         : "安全问药";
 
+  async function copyMessage(text: string, messageId: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedMessageId(messageId);
+      setTimeout(() => setCopiedMessageId(""), 1500);
+    } catch {
+      // fallback
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      setCopiedMessageId(messageId);
+      setTimeout(() => setCopiedMessageId(""), 1500);
+    }
+  }
+
+  async function toggleSpeakMessage(messageId: string, text: string) {
+    if (speakingMessageId === messageId) {
+      stopSpeaking();
+      setSpeakingMessageId("");
+      return;
+    }
+    stopSpeaking();
+    setSpeakingMessageId(messageId);
+    try {
+      await speakText(text);
+    } finally {
+      setSpeakingMessageId("");
+    }
+  }
+
+  function regenerateMessage(messageId: string) {
+    // 找到该 AI 消息前面的最近一条用户消息
+    const idx = messages.findIndex((m) => m.id === messageId);
+    if (idx < 0) return;
+    let userMsg: ChatMessage | undefined;
+    for (let i = idx - 1; i >= 0; i--) {
+      if (messages[i].role === "user") {
+        userMsg = messages[i];
+        break;
+      }
+    }
+    // 删除从这条 AI 消息到最后（可能还有后续 AI 回复）
+    const toDelete = messages.slice(idx).map((m) => m.id);
+    toDelete.forEach((id) => deleteChatMessage(id, activeConversationId));
+    if (userMsg) {
+      void submitQuestion(userMsg.content, true);
+    }
+  }
+
   function renderMessage(message: ChatMessage) {
+    const ts = formatMessageTime(message.createdAt);
+    const isStreaming = Boolean(message.pending);
+    const canRegenerate = message.role === "assistant" && !isStreaming;
+    const canSpeak =
+      (message.role === "assistant" || message.role === "user") &&
+      Boolean(message.content) &&
+      !isStreaming;
+    const isSpeaking = speakingMessageId === message.id;
+    const isCopied = copiedMessageId === message.id;
+
     return (
       <article
-        className={`message ${message.role} ${message.pending ? "streaming" : ""}`}
+        className={`message ${message.role} ${isStreaming ? "streaming" : ""}`}
         key={message.id}
       >
-        <div className="message-role">
-          {message.role === "assistant" ? "智药有方" : "您"}
+        <div className="message-header">
+          <div className="message-role">
+            {message.role === "assistant" ? "智药有方" : "您"}
+          </div>
+          {ts ? <div className="message-timestamp">{ts}</div> : null}
         </div>
         {message.role === "assistant" && message.riskCheck ? (
           <div className="answer-search-meta">
@@ -1216,10 +1288,10 @@ export function ChatPage() {
             <>
               {message.content ? (
                 <AssistantMarkdown content={message.content} />
-              ) : message.pending ? (
+              ) : isStreaming ? (
                 <span className="streaming-placeholder">正在生成回答…</span>
               ) : null}
-              {message.pending && message.content ? (
+              {isStreaming && message.content ? (
                 <span className="streaming-caret" aria-hidden="true" />
               ) : null}
             </>
@@ -1243,7 +1315,7 @@ export function ChatPage() {
         ) : null}
         {message.role === "assistant" &&
         message.riskCheck &&
-        !message.pending ? (
+        !isStreaming ? (
           <div className="answer-followups">
             <button
               type="button"
@@ -1258,6 +1330,67 @@ export function ChatPage() {
             >
               核对我现在的药
               <ChevronRight size={15} aria-hidden="true" />
+            </button>
+          </div>
+        ) : null}
+        {!isStreaming ? (
+          <div className="message-actions">
+            {message.content ? (
+              <button
+                type="button"
+                className="msg-action-btn"
+                title={isCopied ? "已复制" : "复制内容"}
+                onClick={() => void copyMessage(message.content, message.id)}
+              >
+                <Copy size={14} aria-hidden="true" />
+                {isCopied ? "已复制" : "复制"}
+              </button>
+            ) : null}
+            {canSpeak ? (
+              <button
+                type="button"
+                className={`msg-action-btn ${isSpeaking ? "active" : ""}`}
+                title={isSpeaking ? "停止朗读" : "朗读内容"}
+                onClick={() =>
+                  void toggleSpeakMessage(message.id, message.content)
+                }
+              >
+                {isSpeaking ? (
+                  <>
+                    <Square size={14} aria-hidden="true" />
+                    停止
+                  </>
+                ) : (
+                  <>
+                    <Volume2 size={14} aria-hidden="true" />
+                    朗读
+                  </>
+                )}
+              </button>
+            ) : null}
+            {canRegenerate ? (
+              <button
+                type="button"
+                className="msg-action-btn"
+                title="重新生成回答"
+                onClick={() => regenerateMessage(message.id)}
+              >
+                <RotateCcw size={14} aria-hidden="true" />
+                重新生成
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="msg-action-btn danger"
+              title="删除此条消息"
+              onClick={() => {
+                if (confirm("确定删除这条消息吗？")) {
+                  deleteChatMessage(message.id, activeConversationId);
+                }
+              }}
+            >
+              <Trash2 size={14} aria-hidden="true" />
+              删除
             </button>
           </div>
         ) : null}

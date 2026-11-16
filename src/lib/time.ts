@@ -75,6 +75,39 @@ export function formatTime(date: Date, timeZone = localTimeZone()): string {
   }).format(date);
 }
 
+/**
+ * 消息时间戳格式化：今天 HH:mm / 昨天 HH:mm / MM月DD日 HH:mm / YYYY年MM月DD日 HH:mm
+ */
+export function formatMessageTime(
+  isoOrDate: string | Date,
+  now = new Date(),
+  timeZone = localTimeZone()
+): string {
+  const date = typeof isoOrDate === "string" ? new Date(isoOrDate) : isoOrDate;
+  if (isNaN(date.getTime())) return "";
+  const parts = dateParts(date, timeZone);
+  const nowParts = dateParts(now, timeZone);
+  const time = formatTime(date, timeZone);
+  const sameDay =
+    parts.year === nowParts.year &&
+    parts.month === nowParts.month &&
+    parts.day === nowParts.day;
+  if (sameDay) return `今天 ${time}`;
+  // 昨天
+  const yesterday = new Date(now.getTime() - 86_400_000);
+  const yParts = dateParts(yesterday, timeZone);
+  if (
+    parts.year === yParts.year &&
+    parts.month === yParts.month &&
+    parts.day === yParts.day
+  )
+    return `昨天 ${time}`;
+  // 同一年
+  if (parts.year === nowParts.year)
+    return `${parts.month}月${parts.day}日 ${time}`;
+  return `${parts.year}年${parts.month}月${parts.day}日 ${time}`;
+}
+
 export function scheduledDateTime(
   time: string,
   day = new Date(),
