@@ -990,25 +990,6 @@ img {
   flex-direction: column;
 }
 
-.chat-history {
-  align-self: stretch;
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 14px;
-}
-
-.chat-history > summary {
-  cursor: pointer;
-  color: var(--primary);
-  font-size: calc(14px * var(--font-scale));
-  font-weight: 700;
-}
-
-.chat-history-list {
-  display: grid;
-  gap: 16px;
-  margin-top: 14px;
-}
-
 .chat-messages {
   display: flex;
   flex: 1;
@@ -5686,6 +5667,16 @@ img {
   opacity: 1;
 }
 
+@media (max-width: 840px), (hover: none) {
+  .message-actions {
+    opacity: 1;
+  }
+
+  .msg-action-btn {
+    min-height: 40px;
+  }
+}
+
 .msg-action-btn {
   display: inline-flex;
   align-items: center;
@@ -6251,11 +6242,11 @@ img {
   }
 
   .ai-skill-trigger strong {
-    font-size: calc(10px * var(--font-scale));
+    font-size: calc(12px * var(--font-scale));
   }
 
   .ai-skill-trigger small {
-    font-size: calc(9px * var(--font-scale));
+    font-size: calc(11px * var(--font-scale));
   }
 
   .ai-skill-menu {

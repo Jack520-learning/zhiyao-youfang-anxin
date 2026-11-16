@@ -379,8 +379,11 @@ export function ChatPage() {
 
   useEffect(() => {
     const container = messagesRef.current;
-    if (container) container.scrollTop = 0;
-  }, []);
+    if (!container) return;
+    container.scrollTop =
+      view === "conversation" ? container.scrollHeight : 0;
+    setShowScrollToBottom(false);
+  }, [activeConversationId, view]);
 
   useEffect(() => {
     const container = messagesRef.current;
@@ -1400,7 +1403,9 @@ export function ChatPage() {
     setPhotoNotice("");
     setComposerSkill(undefined);
     requestAnimationFrame(() => {
-      if (messagesRef.current) messagesRef.current.scrollTop = 0;
+      if (messagesRef.current) {
+        messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+      }
       setShowScrollToBottom(false);
     });
     if (window.innerWidth < 900) setSidebarOpen(false);
@@ -1416,8 +1421,6 @@ export function ChatPage() {
     setShowScrollToBottom(false);
   }
 
-  const recentMessages = messages.slice(-5);
-  const olderMessages = messages.slice(0, -5);
   const orderedConversations = [...conversations].sort(
     (left, right) =>
       new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
@@ -1929,15 +1932,7 @@ export function ChatPage() {
                 ref={messagesRef}
                 onScroll={updateScrollAvailability}
               >
-                {olderMessages.length ? (
-                  <details className="chat-history">
-                    <summary>查看更早的 {olderMessages.length} 条对话</summary>
-                    <div className="chat-history-list">
-                      {olderMessages.map(renderMessage)}
-                    </div>
-                  </details>
-                ) : null}
-                {recentMessages.map(renderMessage)}
+                {messages.map(renderMessage)}
                 {sending && !streamingMessageId ? (
                   <article className="message assistant">
                     <div className="message-role">智药有方</div>
