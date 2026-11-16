@@ -47,8 +47,12 @@ export const frequencyOptions = [
   { label: "每日 2 次", value: "每日 2 次", count: 2 },
   { label: "每日 3 次", value: "每日 3 次", count: 3 },
   { label: "每日 4 次", value: "每日 4 次", count: 4 },
-  { label: "按需服用", value: "按需服用", count: 1 }
+  { label: "按需服用", value: "按需服用", count: 0 }
 ];
+
+export function isAsNeededFrequency(frequency: string): boolean {
+  return frequency.trim() === "按需服用";
+}
 
 export function resizeTimes(times: string[], count: number): string[] {
   return Array.from({ length: count }, (_, index) => times[index] ?? "");

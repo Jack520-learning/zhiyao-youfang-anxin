@@ -1,4 +1,5 @@
 import { findBestMedicine } from "../catalog/retrieval";
+import { isAsNeededFrequency } from "./dosage";
 import type { IntakeDraft } from "../types";
 
 export interface VisionMedicine {
@@ -125,9 +126,11 @@ export function buildDraftsFromVision(
       dosage,
       frequency,
       times:
-        !multiple && fallbackDraft.times.length
-          ? fallbackDraft.times
-          : ["08:00"],
+        isAsNeededFrequency(frequency)
+          ? []
+          : !multiple && fallbackDraft.times.length
+            ? fallbackDraft.times
+            : ["08:00"],
       relation,
       instructions:
         cleanName(item.instructions) ||

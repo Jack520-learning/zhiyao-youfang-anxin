@@ -17,8 +17,9 @@ import { RiskBadge } from "../components/RiskBadge";
 import { SourcesBlock } from "../components/SourcesBlock";
 import { answerWithRules } from "../lib/riskEngine";
 import {
+  applyFrequencySelection,
   frequencyOptions,
-  resizeTimes,
+  isAsNeededFrequency,
   validateDosageText,
   validateTimes
 } from "../lib/dosage";
@@ -42,7 +43,11 @@ export function MedicationDetailPage() {
   const [dosage, setDosage] = useState(medication?.dosage ?? "");
   const [relation, setRelation] = useState(medication?.relation ?? "");
   const [frequency, setFrequency] = useState(medication?.frequency ?? "每日 1 次");
-  const [times, setTimes] = useState(medication?.times ?? ["08:00"]);
+  const [times, setTimes] = useState(
+    isAsNeededFrequency(medication?.frequency ?? "")
+      ? []
+      : medication?.times ?? ["08:00"]
+  );
   const [doseError, setDoseError] = useState("");
   const [checkingRisk, setCheckingRisk] = useState(false);
   const [checkedRisk, setCheckedRisk] = useState<
@@ -97,17 +102,21 @@ export function MedicationDetailPage() {
       setDoseError(dosageValidation.message ?? "剂量填写不正确");
       return;
     }
-    const timeValidation = validateTimes(times);
-    if (!timeValidation.valid) {
-      setDoseError(timeValidation.message ?? "用药时间填写不正确");
-      return;
+    const asNeeded = isAsNeededFrequency(frequency);
+    if (!asNeeded) {
+      const timeValidation = validateTimes(times);
+      if (!timeValidation.valid) {
+        setDoseError(timeValidation.message ?? "用药时间填写不正确");
+        return;
+      }
     }
     updateMedication(medication.id, {
       name,
       dosage,
       relation,
       frequency,
-      times
+      times: asNeeded ? [] : times,
+      reminderEnabled: asNeeded ? false : medication.reminderEnabled
     });
     setDoseError("");
     setEditing(false);
@@ -160,7 +169,9 @@ export function MedicationDetailPage() {
             <br />
             {medication.frequency}
             <br />
-            提醒时间：{medication.times.join("、")}
+            {isAsNeededFrequency(medication.frequency)
+              ? "用药时间：不固定时间服用"
+              : `提醒时间：${medication.times.join("、")}`}
             <br />
             参考价格：{medication.price || "暂无可靠价格"}
           </p>
@@ -171,20 +182,36 @@ export function MedicationDetailPage() {
             </span>
             <span className="chip">
               <Clock3 size={14} aria-hidden="true" />
-              {medication.reminderEnabled === false ? "提醒已关闭" : "提醒已开启"}
+              {isAsNeededFrequency(medication.frequency)
+                ? "按需服用，不设固定提醒"
+                : medication.reminderEnabled === false
+                  ? "提醒已关闭"
+                  : "提醒已开启"}
             </span>
           </div>
           <div className="settings-row" style={{ marginTop: 14 }}>
             <div className="settings-copy">
               <strong>吃药提醒</strong>
-              <span>{medication.reminderEnabled === false ? "当前不会提醒" : "按设置时间提醒"}</span>
+              <span>
+                {isAsNeededFrequency(medication.frequency)
+                  ? "按需服用不设置固定时间提醒"
+                  : medication.reminderEnabled === false
+                    ? "当前不会提醒"
+                    : "按设置时间提醒"}
+              </span>
             </div>
             <label className="switch">
               <span className="sr-only">吃药提醒</span>
               <input
                 type="checkbox"
-                checked={medication.reminderEnabled !== false}
-                disabled={role !== "elder"}
+                checked={
+                  !isAsNeededFrequency(medication.frequency) &&
+                  medication.reminderEnabled !== false
+                }
+                disabled={
+                  role !== "elder" ||
+                  isAsNeededFrequency(medication.frequency)
+                }
                 onChange={(event) =>
                   updateMedication(medication.id, {
                     reminderEnabled: event.target.checked
@@ -233,11 +260,12 @@ export function MedicationDetailPage() {
                     className="select"
                     value={frequency}
                     onChange={(event) => {
-                      const option = frequencyOptions.find(
-                        (item) => item.value === event.target.value
+                      const selection = applyFrequencySelection(
+                        times,
+                        event.target.value
                       );
-                      setFrequency(event.target.value);
-                      setTimes(resizeTimes(times, option?.count ?? 1));
+                      setFrequency(selection.frequency);
+                      setTimes(selection.times);
                     }}
                   >
                     {frequencyOptions.map((option) => (
@@ -247,26 +275,36 @@ export function MedicationDetailPage() {
                     ))}
                   </select>
                 </label>
-                <div className="field full">
-                  <span className="field-label">第几次用药的时间</span>
-                  <div className="time-slot-grid">
-                    {times.map((time, index) => (
-                      <label className="time-slot" key={`${index}-${time}`}>
-                        <span>第 {index + 1} 次</span>
-                        <input
-                          className="input"
-                          type="time"
-                          value={time}
-                          onChange={(event) => {
-                            const nextTimes = [...times];
-                            nextTimes[index] = event.target.value;
-                            setTimes(nextTimes);
-                          }}
-                        />
-                      </label>
-                    ))}
+                {isAsNeededFrequency(frequency) ? (
+                  <div className="field full">
+                    <span className="field-label">用药时间</span>
+                    <div className="notice">
+                      <Clock3 size={20} aria-hidden="true" />
+                      不固定时间服用：仅在需要时按处方或说明书使用，不设置每日固定提醒。
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="field full">
+                    <span className="field-label">第几次用药的时间</span>
+                    <div className="time-slot-grid">
+                      {times.map((time, index) => (
+                        <label className="time-slot" key={`${index}-${time}`}>
+                          <span>第 {index + 1} 次</span>
+                          <input
+                            className="input"
+                            type="time"
+                            value={time}
+                            onChange={(event) => {
+                              const nextTimes = [...times];
+                              nextTimes[index] = event.target.value;
+                              setTimes(nextTimes);
+                            }}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="field" style={{ alignSelf: "end" }}>
                   <button className="btn btn-primary" type="button" onClick={saveCorrection}>
                     保存纠正

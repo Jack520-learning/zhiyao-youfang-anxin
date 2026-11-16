@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   Camera,
   Check,
+  Clock3,
   FileImage,
   ImagePlus,
   LoaderCircle,
@@ -22,6 +23,7 @@ import { checkNewMedication } from "../lib/riskEngine";
 import {
   frequencyOptions,
   applyFrequencySelection,
+  isAsNeededFrequency,
   validateDosageText,
   validateTimes
 } from "../lib/dosage";
@@ -302,10 +304,13 @@ export function AddMedicationPage({
       setFormError("请选择饭前、饭后，或“说明书未注明”");
       return;
     }
-    const timeValidation = validateTimes(draft.times);
-    if (!timeValidation.valid) {
-      setFormError(timeValidation.message || "请检查每天用药时间");
-      return;
+    const asNeeded = isAsNeededFrequency(draft.frequency);
+    if (!asNeeded) {
+      const timeValidation = validateTimes(draft.times);
+      if (!timeValidation.valid) {
+        setFormError(timeValidation.message || "请检查每天用药时间");
+        return;
+      }
     }
     setFormError("");
     const createdAt = nowIso();
@@ -316,13 +321,17 @@ export function AddMedicationPage({
       ingredients: splitIngredients(draft.ingredientsText || draft.genericName || draft.name),
       dosage: draft.dosage.trim(),
       frequency: draft.frequency.trim(),
-      times: draft.times.length ? draft.times : ["08:00"],
+      times: isAsNeededFrequency(draft.frequency)
+        ? []
+        : draft.times.length
+          ? draft.times
+          : ["08:00"],
       relation: draft.relation.trim(),
       instructions: draft.instructions.trim(),
       price: draft.price?.trim(),
       startDate: dateKey(),
       status: "pending",
-      reminderEnabled: true,
+      reminderEnabled: !isAsNeededFrequency(draft.frequency),
       source: {
         type: draft.imageDataUrl ? "medicine-label" : "professional-note",
         title: draft.imageDataUrl ? "用户拍摄并确认的药盒/说明书" : "用户手动录入",
@@ -358,7 +367,11 @@ export function AddMedicationPage({
       ingredients: splitIngredients(draft.ingredientsText || draft.genericName || draft.name),
       dosage: draft.dosage.trim(),
       frequency: draft.frequency.trim(),
-      times: draft.times.length ? draft.times : ["08:00"],
+      times: isAsNeededFrequency(draft.frequency)
+        ? []
+        : draft.times.length
+          ? draft.times
+          : ["08:00"],
       relation: draft.relation.trim(),
       instructions: draft.instructions.trim(),
       price: draft.price?.trim(),
@@ -367,7 +380,7 @@ export function AddMedicationPage({
         riskCheck.level === "high" || riskCheck.level === "emergency"
           ? "pending"
           : "active",
-      reminderEnabled: true,
+      reminderEnabled: !isAsNeededFrequency(draft.frequency),
       source: {
         type: draft.imageDataUrl ? "medicine-label" : "professional-note",
         title: draft.imageDataUrl ? "用户拍摄并确认的药盒/说明书" : "用户手动录入",
@@ -677,29 +690,39 @@ export function AddMedicationPage({
                   <option value="按说明书">说明书未注明</option>
                 </select>
               </label>
-              <div className="field full">
-                <span className="field-label">每天用药时间</span>
-                <div className="time-slot-grid">
-                  {draft.times.map((time, index) => (
-                    <label className="time-slot" key={`${index}-${time}`}>
-                      <span>第 {index + 1} 次</span>
-                      <input
-                        className="input"
-                        type="time"
-                        value={time}
-                        onChange={(event) => {
-                          const nextTimes = [...draft.times];
-                          nextTimes[index] = event.target.value;
-                          updateField("times", nextTimes);
-                        }}
-                      />
-                    </label>
-                  ))}
+              {isAsNeededFrequency(draft.frequency) ? (
+                <div className="field full">
+                  <span className="field-label">用药时间</span>
+                  <div className="notice">
+                    <Clock3 size={20} aria-hidden="true" />
+                    不固定时间服用：仅在需要时按处方或说明书使用，不设置每日固定提醒。
+                  </div>
                 </div>
-                <span className="field-hint">
-                  修改每日次数后，会同步增减对应的时间选择框。
-                </span>
-              </div>
+              ) : (
+                <div className="field full">
+                  <span className="field-label">每天用药时间</span>
+                  <div className="time-slot-grid">
+                    {draft.times.map((time, index) => (
+                      <label className="time-slot" key={`${index}-${time}`}>
+                        <span>第 {index + 1} 次</span>
+                        <input
+                          className="input"
+                          type="time"
+                          value={time}
+                          onChange={(event) => {
+                            const nextTimes = [...draft.times];
+                            nextTimes[index] = event.target.value;
+                            updateField("times", nextTimes);
+                          }}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <span className="field-hint">
+                    修改每日次数后，会同步增减对应的时间选择框。
+                  </span>
+                </div>
+              )}
               <label className="field full">
                 <span className="field-label">识别到的说明文字</span>
                 <textarea className="textarea" value={draft.instructions} onChange={(event) => updateField("instructions", event.target.value)} />
@@ -728,7 +751,8 @@ export function AddMedicationPage({
                 {validateDosageText(draft.dosage).message}
               </p>
             ) : null}
-            {!validateTimes(draft.times).valid ? (
+            {!isAsNeededFrequency(draft.frequency) &&
+            !validateTimes(draft.times).valid ? (
               <p className="field-error" role="alert">
                 {validateTimes(draft.times).message}
               </p>

@@ -548,7 +548,9 @@ export function answerWithRules(
         reasons: [
           `当前档案：${medication.source.title}`,
           `每日次数：${medication.frequency}`,
-          `提醒时间：${medication.times.join("、")}`
+          medication.times.length
+            ? `提醒时间：${medication.times.join("、")}`
+            : "用药时间：不固定时间服用"
         ],
         sourceIds: highRisk
           ? ["src-user-profile", ...highRisk.sourceIds]
@@ -954,7 +956,10 @@ function humanizeMedicationUsage(medication: Medication): string {
         : medication.relation === "随餐"
           ? "吃饭时"
           : medication.relation || "按说明书或处方使用";
-  return `${relation}服用，每次 ${medication.dosage}，${medication.frequency}，时间 ${medication.times.join("、")}；参考价格：${medication.price || "暂无可靠价格数据"}`;
+  const schedule = medication.times.length
+    ? `时间 ${medication.times.join("、")}`
+    : "不固定时间服用";
+  return `${relation}服用，每次 ${medication.dosage}，${medication.frequency}，${schedule}；参考价格：${medication.price || "暂无可靠价格数据"}`;
 }
 
 export function summaryForFamily(

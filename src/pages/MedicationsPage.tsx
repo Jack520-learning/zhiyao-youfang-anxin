@@ -14,6 +14,7 @@ import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { AddMedicationPage } from "./AddMedicationPage";
 import { DosageFormSafetyNotice } from "../components/DosageFormSafetyNotice";
+import { isAsNeededFrequency } from "../lib/dosage";
 import { useAppStore } from "../store/useAppStore";
 
 export function MedicationsPage() {
@@ -160,7 +161,11 @@ export function MedicationsPage() {
               <span className="medication-info">
                 <h3>{medication.name}</h3>
                 <p>
-                  {medication.dosage} · {medication.times.join("、")} · {medication.relation}
+                  {medication.dosage} ·{" "}
+                  {isAsNeededFrequency(medication.frequency)
+                    ? "不固定时间服用"
+                    : medication.times.join("、")}{" "}
+                  · {medication.relation}
                 </p>
                 <span className="medication-meta">
                   <span className={medication.status === "active" ? "chip risk-low" : "chip"}>
@@ -195,11 +200,21 @@ export function MedicationsPage() {
                     ) : (
                       <BellRing size={18} aria-hidden="true" />
                     )}
-                    <span>{medication.reminderEnabled === false ? "提醒关" : "提醒开"}</span>
+                    <span>
+                      {isAsNeededFrequency(medication.frequency)
+                        ? "不固定提醒"
+                        : medication.reminderEnabled === false
+                          ? "提醒关"
+                          : "提醒开"}
+                    </span>
                     <span className="switch">
                       <input
                         type="checkbox"
-                        checked={medication.reminderEnabled !== false}
+                      checked={
+                        !isAsNeededFrequency(medication.frequency) &&
+                        medication.reminderEnabled !== false
+                      }
+                      disabled={isAsNeededFrequency(medication.frequency)}
                         aria-label={`${medication.name}吃药提醒`}
                         onChange={(event) =>
                           updateMedication(medication.id, {

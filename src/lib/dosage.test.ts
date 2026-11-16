@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyFrequencySelection,
+  isAsNeededFrequency,
   validateDosageText,
   validateTimes
 } from "./dosage";
@@ -28,5 +29,12 @@ describe("dosage validation", () => {
     const selected = applyFrequencySelection(["08:00"], "每日 3 次");
     expect(selected.frequency).toBe("每日 3 次");
     expect(selected.times).toEqual(["08:00", "", ""]);
+  });
+
+  it("uses no fixed time when the medicine is taken as needed", () => {
+    expect(isAsNeededFrequency("按需服用")).toBe(true);
+    const selected = applyFrequencySelection(["08:00"], "按需服用");
+    expect(selected.frequency).toBe("按需服用");
+    expect(selected.times).toEqual([]);
   });
 });
