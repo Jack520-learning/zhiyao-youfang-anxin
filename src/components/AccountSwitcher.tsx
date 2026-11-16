@@ -166,12 +166,19 @@ export function AccountSwitcher({
     setSettingUpPassword(true);
     setSetupPasswordError("");
     try {
-      // 验证密码是否正确
-      const valid = await verifyPassword(
-        setupPasswordValue,
-        account.passwordHash,
-        account.passwordSalt
-      );
+      // 先用本地 hash 验证
+      const localValid =
+        Boolean(account.passwordHash) &&
+        (await verifyPassword(
+          setupPasswordValue,
+          account.passwordHash,
+          account.passwordSalt
+        ));
+      let valid = localValid;
+      // 本地失败时 fallback 到服务端验证
+      if (!valid && account.serverAccountId) {
+        valid = await verifyAccountPassword(account.id, setupPasswordValue);
+      }
       if (!valid) {
         setSetupPasswordError("密码不正确");
         return;
