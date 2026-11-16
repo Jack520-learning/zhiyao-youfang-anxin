@@ -1798,9 +1798,6 @@ export function ChatPage() {
             </>
           ) : (
             <>
-              <div className="ai-conversation-head">
-                <strong>当前对话</strong>
-              </div>
               {photoNotice ? (
                 <div className="notice chat-unified-notice">
                   <Camera size={20} aria-hidden="true" />

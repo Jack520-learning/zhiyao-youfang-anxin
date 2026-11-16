@@ -5484,20 +5484,6 @@ img {
   text-align: left;
 }
 
-.ai-conversation-head {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 24px;
-  border-bottom: 1px solid var(--line);
-}
-
-.ai-conversation-head strong {
-  font-size: calc(14px * var(--font-scale));
-}
-
 .ai-chat-stage.is-conversation .chat-messages {
   flex: 1;
   padding: 18px 24px;
@@ -6147,10 +6133,6 @@ img {
     width: 100%;
   }
 
-  .ai-conversation-head {
-    padding: 9px 14px;
-  }
-
   .ai-chat-stage.is-conversation .chat-messages {
     padding: 12px 14px;
   }
@@ -6265,8 +6247,7 @@ body[data-fixed-view="chat"] .app-main {
 }
 
 .chat-page .ai-chat-brand small,
-.chat-page .ai-voice-status,
-.chat-page .ai-conversation-head strong {
+.chat-page .ai-voice-status {
   font-size: calc(12px * var(--chat-font-scale));
 }
 
