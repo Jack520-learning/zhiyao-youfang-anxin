@@ -92,6 +92,13 @@
       "type": "safety-policy",
       "excerpt": "日常陪伴只处理问候、情绪和生活话题，不推断疾病或提供药物建议；涉及健康问题时切换到安全问药。",
       "reviewed": true
+    },
+    {
+      "id": "src-dynamic-public-web",
+      "title": "动态公开资料检索",
+      "type": "professional-note",
+      "excerpt": "本地知识未覆盖时，从可追溯的公开网页补充一般健康与用药安全信息；动态资料会标记来源和更新时间，仍需专业复核。",
+      "reviewed": false
     }
   ],
   "articles": [

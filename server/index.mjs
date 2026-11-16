@@ -14,6 +14,7 @@ import * as webpush from "web-push";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const runtimeDir = join(root, "data", "runtime");
 const dataPath = join(runtimeDir, "store.json");
+const dynamicKnowledgePath = join(runtimeDir, "dynamic-knowledge.json");
 const vapidPath = join(root, "data", "vapid.json");
 const distDir = join(root, "dist");
 const port = Number(process.env.PORT || 8788);
@@ -30,9 +31,11 @@ const initialDatabase = {
 };
 
 let database = await loadDatabase();
+let dynamicKnowledge = await loadDynamicKnowledge();
 database.accounts ??= {};
 database.sessions ??= {};
 let writeQueue = Promise.resolve();
+let dynamicKnowledgeWriteQueue = Promise.resolve();
 const familyEventClients = new Map();
 const scrypt = promisify(scryptCallback);
 const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
@@ -65,6 +68,22 @@ async function loadDatabase() {
   } catch {
     return structuredClone(initialDatabase);
   }
+}
+
+async function loadDynamicKnowledge() {
+  try {
+    const parsed = JSON.parse(await readFile(dynamicKnowledgePath, "utf8"));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveDynamicKnowledge() {
+  dynamicKnowledgeWriteQueue = dynamicKnowledgeWriteQueue.then(() =>
+    writeFile(dynamicKnowledgePath, JSON.stringify(dynamicKnowledge, null, 2))
+  );
+  return dynamicKnowledgeWriteQueue;
 }
 
 function saveDatabase() {
@@ -1172,6 +1191,164 @@ async function suggestMedicationDose(payload) {
   };
 }
 
+function normalizeKnowledgeQuery(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[，。！？、,.!?；;：:（）()【】]/g, "");
+}
+
+function sanitizePublicText(value, limit = 1600) {
+  return String(value || "")
+    .replaceAll("\u5343\u95ee", "公开资料服务")
+    .replaceAll("\u901a\u4e49\u5343\u95ee", "智能资料服务")
+    .trim()
+    .slice(0, limit);
+}
+
+function isAllowedPublicUrl(value) {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:") return false;
+    const host = url.hostname.toLowerCase();
+    if (
+      host === "localhost" ||
+      host === "::1" ||
+      host.endsWith(".local") ||
+      /^(127\.|10\.|192\.168\.|169\.254\.|0\.)/.test(host)
+    ) {
+      return false;
+    }
+    const match = host.match(/^172\.(\d+)\./);
+    if (match && Number(match[1]) >= 16 && Number(match[1]) <= 31) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function publicSourceList(value) {
+  if (!Array.isArray(value)) return [];
+  const candidates = value
+    .filter(
+      (item) =>
+        item &&
+        typeof item.url === "string" &&
+        isAllowedPublicUrl(item.url)
+    )
+    .slice(0, 6)
+    .map((item) => ({
+      title: sanitizePublicText(item.title || item.url, 100),
+      url: String(item.url).slice(0, 500)
+    }));
+  const checked = await Promise.all(
+    candidates.map(async (source) => {
+      try {
+        const response = await fetch(source.url, {
+          method: "GET",
+          redirect: "follow",
+          signal: AbortSignal.timeout(6000),
+          headers: {
+            "User-Agent": "ZhiyaoYoufang/1.0 PublicSourceCheck"
+          }
+        });
+        return response.ok ? source : null;
+      } catch {
+        return null;
+      }
+    })
+  );
+  return checked.filter(Boolean).slice(0, 4);
+}
+
+async function lookupPublicKnowledge(query) {
+  const queryKey = normalizeKnowledgeQuery(query);
+  const now = Date.now();
+  const cached = dynamicKnowledge.find(
+    (entry) =>
+      entry &&
+      now - new Date(entry.fetchedAt).getTime() < 7 * 24 * 60 * 60 * 1000 &&
+      (entry.queryKey === queryKey ||
+        (queryKey.length >= 5 &&
+          (entry.queryKey.includes(queryKey) ||
+            queryKey.includes(entry.queryKey))))
+  );
+  if (cached) return { ...cached, cached: true };
+
+  const prompt = [
+    "请联网检索并回答用户问题。",
+    "只依据可访问的公开资料，不诊断疾病，不提供个体化处方、具体剂量、停药或补服决定。",
+    "只返回 JSON，不要 Markdown 代码块。",
+    '格式：{"found":true或false,"title":"具体主题","summary":"不超过180字的核心回答","plainText":"更完整的公开资料摘要，不超过1200字","nextStep":"何时应向医生或药师求助","sources":[{"title":"来源标题","url":"https://完整网址"}]}',
+    "至少提供一个真实可访问的 https 来源；找不到可靠来源时 found=false，sources 返回空数组。",
+    `用户问题：${String(query || "").slice(0, 800)}`
+  ].join("\n");
+  const makeRequest = (enableSearch) =>
+    fetch(`${getAiBaseUrl()}/chat/completions`, {
+      method: "POST",
+      signal: AbortSignal.timeout(15000),
+      headers: {
+        Authorization: `Bearer ${getAiKey()}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: getTextModel(),
+        temperature: 0.1,
+        max_tokens: 1200,
+        ...(enableSearch ? { enable_search: true } : {}),
+        messages: [
+          {
+            role: "system",
+            content:
+              "你是公开医学资料检索助手。必须优先使用可追溯网页来源，区分事实与不确定信息，不把未经证实的网页内容写成确定结论。"
+          },
+          { role: "user", content: prompt }
+        ]
+      })
+    });
+  let response = await makeRequest(true);
+  if (response.status === 400) response = await makeRequest(false);
+  if (!response.ok) throw new Error(`公开资料检索失败（${response.status}）`);
+  const data = await response.json();
+  const parsed = parseModelJson(data.choices?.[0]?.message?.content);
+  const sources = await publicSourceList(parsed.sources);
+  if (parsed.found === false || !sources.length) {
+    return {
+      found: false,
+      query,
+      title: "公开资料中没有找到足够可靠的内容",
+      summary:
+        "当前没有找到可直接追溯到公开网页的可靠资料，因此不会据此新增知识或生成推测结论。",
+      plainText: "",
+      nextStep: "请补充具体药名、疾病名称或说明书内容，或咨询医生或药师。",
+      sources: [],
+      fetchedAt: new Date().toISOString(),
+      cached: false
+    };
+  }
+  const entry = {
+    id: randomUUID(),
+    query,
+    queryKey,
+    found: true,
+    title: sanitizePublicText(parsed.title || "公开资料补充", 120),
+    summary: sanitizePublicText(parsed.summary, 500),
+    plainText: sanitizePublicText(parsed.plainText, 2000),
+    nextStep: sanitizePublicText(parsed.nextStep, 500),
+    sources,
+    fetchedAt: new Date().toISOString(),
+    reviewStatus: "auto-public-source"
+  };
+  dynamicKnowledge = [
+    entry,
+    ...dynamicKnowledge.filter((item) => item.queryKey !== queryKey)
+  ].slice(0, 200);
+  await saveDynamicKnowledge();
+  return { ...entry, cached: false };
+}
+
 async function callUnconstrainedModel(query) {
   const response = await fetch(`${getAiBaseUrl()}/chat/completions`, {
     method: "POST",
@@ -2237,6 +2414,29 @@ const server = createServer(async (request, response) => {
         return json(response, 502, {
           error:
             error instanceof Error ? error.message : "自动补充剂量失败"
+        });
+      }
+    }
+
+    if (
+      url.pathname === "/api/knowledge/query" &&
+      request.method === "POST"
+    ) {
+      if (!isAiConfigured()) {
+        return json(response, 503, { error: "公开资料检索服务尚未配置" });
+      }
+      const body = await readJson(request, 64 * 1024);
+      const query = String(body.query || "").trim().slice(0, 1000);
+      if (query.length < 2) {
+        return json(response, 400, { error: "请提供需要检索的问题" });
+      }
+      try {
+        const result = await lookupPublicKnowledge(query);
+        return json(response, 200, result);
+      } catch (error) {
+        return json(response, 502, {
+          error:
+            error instanceof Error ? error.message : "公开资料检索失败"
         });
       }
     }

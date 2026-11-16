@@ -79,6 +79,11 @@ import {
   buildContextualQuestion,
   shouldUseConversationContext
 } from "../lib/conversationMemory";
+import {
+  buildPublicKnowledgeResponse,
+  isKnowledgeGap,
+  lookupPublicKnowledge
+} from "../lib/knowledgeLookup";
 import { useAppStore } from "../store/useAppStore";
 import type {
   AssistantResponse,
@@ -629,6 +634,30 @@ export function ChatPage() {
         catalogResponse.riskCheck.level === "high")
     ) {
       localResponse = catalogResponse;
+    }
+    if (isKnowledgeGap(localResponse)) {
+      setThinkingLabel("正在检索可追溯的公开资料并更新知识库…");
+      try {
+        const publicKnowledge = await lookupPublicKnowledge(
+          contextualQuestion
+        );
+        localResponse = buildPublicKnowledgeResponse(publicKnowledge);
+      } catch {
+        localResponse = {
+          ...localResponse,
+          message:
+            "## 公开资料暂时无法检索\n\n本次没有获得可追溯的公开来源，因此不会生成猜测性答案，也不会把未核实内容加入知识库。\n\n### 下一步\n\n请稍后重试，或补充具体药名、疾病名称、说明书内容，并咨询医生或药师。",
+          riskCheck: {
+            ...localResponse.riskCheck,
+            title: "公开资料检索暂时不可用",
+            summary:
+              "本次没有获得可追溯的公开来源，因此没有更新知识库。",
+            nextStep:
+              "请稍后重试，或补充具体药名、疾病名称和说明书内容。"
+          },
+          groundingOnly: true
+        };
+      }
     }
     const discomfortRegex = /(不舒服|头晕|难受|胸闷|恶心|心慌)/;
     if (
