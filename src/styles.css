@@ -3968,6 +3968,10 @@ img {
   .sos-fab span {
     display: none;
   }
+
+  .sos-floating-button {
+    display: none;
+  }
 }
 
 @media (max-width: 680px) {
@@ -4023,6 +4027,27 @@ img {
     flex-direction: row;
   }
 
+  .knowledge-shortcuts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .knowledge-shortcuts .btn {
+    width: 100%;
+    min-height: 52px;
+  }
+
+  .elder-setting-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .elder-setting-row .voice-stop-button {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-height: 48px;
+  }
+
   .timeline-row {
     grid-template-columns: 64px minmax(0, 1fr);
     padding: 14px 0;
@@ -4064,6 +4089,10 @@ img {
     display: none;
   }
 
+  .profile-page .page-header .page-description {
+    white-space: normal;
+  }
+
   .chat-panel {
     height: min(620px, calc(100dvh - 420px));
     min-height: 320px;
@@ -4093,6 +4122,15 @@ img {
 
   .message {
     max-width: 96%;
+  }
+
+  .proactive-risk-title {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .proactive-risk-title b {
+    margin-left: auto;
   }
 
   .medication-card {
@@ -6040,7 +6078,7 @@ img {
 @media (max-width: 680px) {
   .chat-page {
     height: calc(100dvh - 188px);
-    min-height: 590px;
+    min-height: 0;
   }
 
   .ai-chat-header {
@@ -6089,9 +6127,14 @@ img {
     font-size: calc(13px * var(--font-scale));
   }
 
+  .ai-chat-brand {
+    display: none;
+  }
+
   .ai-chat-stage.is-home {
     display: flex;
     flex-direction: column;
+    justify-content: flex-start;
     padding: 20px 14px 10px;
   }
 
@@ -6107,7 +6150,7 @@ img {
   }
 
   .ai-chat-welcome h1 {
-    font-size: calc(29px * var(--font-scale));
+    font-size: calc(26px * var(--font-scale));
   }
 
   .ai-chat-welcome p {

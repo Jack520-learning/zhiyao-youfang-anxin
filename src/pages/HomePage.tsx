@@ -157,7 +157,6 @@ export function HomePage() {
             </p>
           </div>
         </header>
-        <ProactiveRiskPanel />
         <DiscomfortNotice
           status={concernStatus}
           contactName={firstContact?.name}
@@ -230,6 +229,7 @@ export function HomePage() {
         <section className="home-search-lower" aria-label="搜索与识别用药">
           <HomeSearch />
         </section>
+        <ProactiveRiskPanel />
       </div>
     );
   }
@@ -271,8 +271,6 @@ export function HomePage() {
           </span>
         </div>
       </header>
-
-      <ProactiveRiskPanel />
 
       <DiscomfortNotice
         status={concernStatus}
@@ -436,6 +434,7 @@ export function HomePage() {
       <section className="home-search-lower" aria-label="搜索与识别用药">
         <HomeSearch />
       </section>
+      <ProactiveRiskPanel />
     </div>
   );
 }
