@@ -5217,11 +5217,16 @@ img {
   overflow: hidden;
   border-right: 0 solid var(--line);
   padding: 0;
-  background: light-dark(#f8faf7, #111d19);
+  background: var(--surface);
+  color: var(--ink);
   opacity: 0;
   transition:
     opacity 150ms ease,
     padding 180ms ease;
+}
+
+.ai-sidebar-backdrop {
+  display: none;
 }
 
 .ai-chat-content.sidebar-open .ai-conversation-sidebar {
@@ -6106,7 +6111,27 @@ img {
     left: 0;
     width: min(290px, 84vw);
     border-right: 1px solid var(--line);
+    background: var(--surface);
     box-shadow: 18px 0 40px rgba(15, 35, 28, 0.14);
+  }
+
+  .ai-sidebar-backdrop {
+    position: absolute;
+    z-index: 39;
+    inset: 0;
+    display: block;
+    border: 0;
+    background: rgba(8, 20, 16, 0.34);
+    backdrop-filter: blur(2px);
+  }
+
+  .ai-conversation-item {
+    background: var(--surface);
+  }
+
+  .ai-conversation-item:hover,
+  .ai-conversation-item.active {
+    background: var(--surface-soft);
   }
 
   .ai-sidebar-resizer {

@@ -1786,6 +1786,14 @@ export function ChatPage() {
             "--sidebar-width": `${sidebarWidth}px`
           } as React.CSSProperties}
         >
+          {sidebarOpen ? (
+            <button
+              type="button"
+              className="ai-sidebar-backdrop"
+              aria-label="关闭对话记录"
+              onClick={() => setSidebarOpen(false)}
+            />
+          ) : null}
           <aside className="ai-conversation-sidebar" aria-label="历史对话记录">
             <div className="ai-sidebar-heading">
               <div>
