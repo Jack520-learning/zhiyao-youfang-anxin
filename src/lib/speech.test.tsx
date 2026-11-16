@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  consumeSpeechFallbackNotice,
   getSpeechStatus,
   preloadSpeech,
   speakText,
@@ -216,6 +217,54 @@ describe("speech playback start", () => {
         "qwen-audio-selected-custom"
       )
     ).resolves.toBe(false);
+  });
+
+  it("falls back to the default system voice when a custom voice has expired", async () => {
+    class FakeAudio {
+      paused = false;
+      currentTime = 0;
+      onended: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      play() {
+        return Promise.resolve();
+      }
+      pause() {}
+    }
+    vi.stubGlobal("Audio", FakeAudio);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body || "{}")) as {
+          voiceMode?: string;
+        };
+        if (body.voiceMode === "custom") {
+          return new Response(
+            JSON.stringify({
+              error: "专属音色失效",
+              code: "CUSTOM_VOICE_INVALID"
+            }),
+            { status: 422, headers: { "Content-Type": "application/json" } }
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            audioUrl: "https://audio.example/fallback-warm.wav",
+            voice: "longanhuan_v3.1"
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      })
+    );
+
+    await expect(
+      speakText(
+        "失效专属音色兜底",
+        true,
+        "custom",
+        "qwen-audio-expired-test"
+      )
+    ).resolves.toBe(true);
+    expect(consumeSpeechFallbackNotice()).toContain("已切换到温和女声");
   });
 
   it("aborts a pending speech request immediately when stopped", async () => {

@@ -71,6 +71,7 @@ import {
 } from "../lib/vision";
 import {
   getSpeechStatus,
+  consumeSpeechFallbackNotice,
   speakText,
   stopSpeaking
 } from "../lib/speech";
@@ -1004,6 +1005,11 @@ export function ChatPage() {
       setSpeakingMessageId(assistantMessageId);
       void autoPlayback.then((started) => {
         if (speechRunRef.current !== speechRunId) return;
+        const fallbackNotice = consumeSpeechFallbackNotice();
+        if (fallbackNotice) {
+          updatePreferences({ voiceMode: "warm" });
+          setSpeechNotice(fallbackNotice);
+        }
         if (!started) {
           setSpeakingMessageId("");
           setSpeechNotice("自动朗读暂未开始，可点击回答下方的朗读按钮重试。");
@@ -1507,6 +1513,11 @@ export function ChatPage() {
     setSpeakingMessageId(messageId);
     const started = await playback;
     if (speechRunRef.current !== speechRunId) return;
+    const fallbackNotice = consumeSpeechFallbackNotice();
+    if (fallbackNotice) {
+      updatePreferences({ voiceMode: "warm" });
+      setSpeechNotice(fallbackNotice);
+    }
     if (!started) {
       setSpeakingMessageId("");
       setSpeechNotice("朗读暂未开始，请检查网络后再次点击朗读。");

@@ -922,6 +922,15 @@ async function deleteCustomVoice(voiceId) {
   );
   if (!response.ok) {
     const payload = await response.text();
+    if (
+      /ResourceNotExist|Required resource not exist/i.test(payload)
+    ) {
+      return {
+        ok: true,
+        alreadyDeleted: true,
+        voiceId
+      };
+    }
     throw new Error(
       `专属音色删除失败（${response.status}）：${payload.slice(0, 180)}`
     );
@@ -2696,9 +2705,14 @@ const server = createServer(async (request, response) => {
         );
         return json(response, 200, result);
       } catch (error) {
-        return json(response, 502, {
-          error:
-            error instanceof Error ? error.message : "语音合成暂时不可用"
+        const message =
+          error instanceof Error ? error.message : "语音合成暂时不可用";
+        const customVoiceInvalid =
+          body.voiceMode === "custom" &&
+          /(InvalidParameter|Engine error|专属音色标识无效)/i.test(message);
+        return json(response, customVoiceInvalid ? 422 : 502, {
+          error: message,
+          code: customVoiceInvalid ? "CUSTOM_VOICE_INVALID" : "TTS_UNAVAILABLE"
         });
       }
     }

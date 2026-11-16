@@ -183,6 +183,8 @@ const speechAudioRequests = new Map<
   string,
   Promise<{ audioUrl: string; voice: string }>
 >();
+const unavailableCustomVoiceIds = new Set<string>();
+let speechFallbackNotice = "";
 const expectedSystemVoices: Record<
   Exclude<VoiceMode, "custom">,
   string
@@ -270,6 +272,12 @@ export async function speakText(
       emitSpeechState();
     }
   }
+}
+
+export function consumeSpeechFallbackNotice(): string {
+  const notice = speechFallbackNotice;
+  speechFallbackNotice = "";
+  return notice;
 }
 
 function getCachedSpeechAudio(
@@ -363,6 +371,13 @@ async function getSpeechAudioUrl(
   customVoiceId?: string,
   signal?: AbortSignal
 ): Promise<{ audioUrl: string; voice: string }> {
+  if (
+    voiceMode === "custom" &&
+    customVoiceId &&
+    unavailableCustomVoiceIds.has(customVoiceId)
+  ) {
+    return getSpeechAudioUrl(text, "warm", undefined, signal);
+  }
   const spokenText = naturalSpeechText(text);
   const cacheKey = `${voiceMode}:${customVoiceId || "default"}:${spokenText}`;
   const cached = getCachedSpeechAudio(text, voiceMode, customVoiceId);
@@ -381,7 +396,19 @@ async function getSpeechAudioUrl(
         customVoiceId
       })
     });
-    if (!response.ok) throw new Error("服务端语音合成不可用");
+    if (!response.ok) {
+      if (
+        voiceMode === "custom" &&
+        customVoiceId &&
+        response.status === 422
+      ) {
+        unavailableCustomVoiceIds.add(customVoiceId);
+        speechFallbackNotice =
+          "当前专属音色已失效，已切换到温和女声。可在“我的”中重新录制专属音色。";
+        return getSpeechAudioUrl(text, "warm", undefined, signal);
+      }
+      throw new Error("服务端语音合成不可用");
+    }
     const payload = (await response.json()) as {
       audioUrl?: string;
       voice?: string;
@@ -393,7 +420,12 @@ async function getSpeechAudioUrl(
         !/^qwen-audio-/.test(customVoiceId) ||
         payload.voice !== customVoiceId
       ) {
-        throw new Error("语音服务返回了不匹配的专属音色");
+        if (customVoiceId) {
+          unavailableCustomVoiceIds.add(customVoiceId);
+          speechFallbackNotice =
+            "当前专属音色不可用，已切换到温和女声。可在“我的”中重新录制专属音色。";
+        }
+        return getSpeechAudioUrl(text, "warm", undefined, signal);
       }
     } else {
       const expectedVoice = expectedSystemVoices[voiceMode];
