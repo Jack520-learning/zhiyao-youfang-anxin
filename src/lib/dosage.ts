@@ -54,6 +54,17 @@ export function resizeTimes(times: string[], count: number): string[] {
   return Array.from({ length: count }, (_, index) => times[index] ?? "");
 }
 
+export function applyFrequencySelection(
+  times: string[],
+  frequencyValue: string
+): { frequency: string; times: string[] } {
+  const option = frequencyOptions.find((item) => item.value === frequencyValue);
+  return {
+    frequency: option?.value ?? frequencyValue,
+    times: resizeTimes(times, option?.count ?? 1)
+  };
+}
+
 export function validateTimes(times: string[]): ValidationResult {
   if (!times.length) return { valid: false, message: "请至少添加一个用药时间" };
   if (times.length > 6) {

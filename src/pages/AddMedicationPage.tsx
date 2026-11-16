@@ -21,7 +21,7 @@ import { createId } from "../lib/ids";
 import { checkNewMedication } from "../lib/riskEngine";
 import {
   frequencyOptions,
-  resizeTimes,
+  applyFrequencySelection,
   validateDosageText,
   validateTimes
 } from "../lib/dosage";
@@ -225,6 +225,27 @@ export function AddMedicationPage({
       [field]: value,
       lowConfidenceFields: draft.lowConfidenceFields.filter(
         (item) => item !== String(field)
+      )
+    };
+    setDraft(nextDraft);
+    setFormError("");
+    setDetectedDrafts((current) =>
+      current.length
+        ? current.map((item, index) =>
+            index === activeDraftIndex ? nextDraft : item
+          )
+        : [nextDraft]
+    );
+  }
+
+  function updateFields(fields: Partial<IntakeDraft>) {
+    if (!draft) return;
+    const changedFieldNames = new Set(Object.keys(fields));
+    const nextDraft = {
+      ...draft,
+      ...fields,
+      lowConfidenceFields: draft.lowConfidenceFields.filter(
+        (item) => !changedFieldNames.has(item)
       )
     };
     setDraft(nextDraft);
@@ -630,14 +651,11 @@ export function AddMedicationPage({
                       : "每日 1 次"
                   }
                   onChange={(event) => {
-                    const option = frequencyOptions.find(
-                      (item) => item.value === event.target.value
+                    const selection = applyFrequencySelection(
+                      draft.times,
+                      event.target.value
                     );
-                    updateField("frequency", event.target.value);
-                    updateField(
-                      "times",
-                      resizeTimes(draft.times, option?.count ?? 1)
-                    );
+                    updateFields(selection);
                   }}
                 >
                   {frequencyOptions.map((option) => (

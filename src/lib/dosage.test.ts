@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { validateDosageText, validateTimes } from "./dosage";
+import {
+  applyFrequencySelection,
+  validateDosageText,
+  validateTimes
+} from "./dosage";
 
 describe("dosage validation", () => {
   it("accepts a normal dose with unit", () => {
@@ -18,5 +22,11 @@ describe("dosage validation", () => {
   it("rejects duplicate daily time slots", () => {
     expect(validateTimes(["08:00", "08:00"]).valid).toBe(false);
     expect(validateTimes(["08:00", "18:30"]).valid).toBe(true);
+  });
+
+  it("updates frequency and time slots together without reverting the selection", () => {
+    const selected = applyFrequencySelection(["08:00"], "每日 3 次");
+    expect(selected.frequency).toBe("每日 3 次");
+    expect(selected.times).toEqual(["08:00", "", ""]);
   });
 });
