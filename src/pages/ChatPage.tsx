@@ -84,6 +84,10 @@ import {
   isKnowledgeGap,
   lookupPublicKnowledge
 } from "../lib/knowledgeLookup";
+import {
+  buildMedicationActivityResponse,
+  isMedicationActivityQuery
+} from "../lib/medicationActivity";
 import { useAppStore } from "../store/useAppStore";
 import type {
   AssistantResponse,
@@ -319,6 +323,7 @@ export function ChatPage() {
   );
   const messages = activeConversation?.messages ?? [];
   const medications = useAppStore((state) => state.medications);
+  const doseEvents = useAppStore((state) => state.doseEvents);
   const profile = useAppStore((state) => state.profile);
   const preferences = useAppStore((state) => state.preferences);
   const updateProfile = useAppStore((state) => state.updateProfile);
@@ -560,6 +565,8 @@ export function ChatPage() {
       medicalFollowUp && previousUserMessage
         ? buildContextualQuestion(clean, previousUserMessage.content)
         : draftContextQuestion;
+    const medicationActivityQuery =
+      !dailyConversation && isMedicationActivityQuery(contextualQuestion);
     const effectiveAnswerMode = dailyConversation
       ? "quick"
       : resolveAdaptiveAnswerMode(contextualQuestion, answerMode);
@@ -572,7 +579,7 @@ export function ChatPage() {
             ? "正在整理详细解释…"
             : "正在思考并组织回答…"
     );
-    const plannedTools = dailyConversation
+    const plannedTools = dailyConversation || medicationActivityQuery
       ? []
       : planAgentTools(
           contextualQuestion,
@@ -590,7 +597,14 @@ export function ChatPage() {
       summary: run.summary,
       durationMs: run.durationMs
     }));
-    let localResponse = dailyConversation
+    let localResponse = medicationActivityQuery
+      ? buildMedicationActivityResponse(
+          contextualQuestion,
+          activeMedications,
+          doseEvents,
+          profile
+        )
+      : dailyConversation
       ? buildDailyConversationResponse(
           contextualQuestion,
           profile,
@@ -608,7 +622,7 @@ export function ChatPage() {
           activeMedications.map((medication) => medication.name)
         ) ?? localResponse;
     }
-    const catalogResponse = dailyConversation
+    const catalogResponse = dailyConversation || medicationActivityQuery
       ? null
       : catalogResponseFromRuns(agentRuns) ??
         answerFromDrugCatalog(

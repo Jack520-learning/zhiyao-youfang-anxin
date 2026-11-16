@@ -92,9 +92,11 @@ export function buildPublicKnowledgeResponse(
       riskCheck.nextStep,
       ...sourceBlock,
       "",
-      result.cached
-        ? "知识库中已有这一主题的动态资料，本次直接复用并更新了回答。"
-        : "知识库已根据公开资料完成更新，本次回答已同步使用新增内容。"
+      !result.found || !sources.length
+        ? "本次没有获得可访问的可靠来源，知识库未更新。"
+        : result.cached
+          ? "知识库中已有这一主题的动态资料，本次直接复用并更新了回答。"
+          : "知识库已根据公开资料完成更新，本次回答已同步使用新增内容。"
     ]
       .filter(Boolean)
       .join("\n\n"),

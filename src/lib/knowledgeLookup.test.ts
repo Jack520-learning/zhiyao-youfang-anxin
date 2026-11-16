@@ -44,4 +44,18 @@ describe("dynamic public knowledge", () => {
     expect(response.message).toContain("https://example.org");
     expect(response.groundingOnly).toBe(true);
   });
+
+  it("does not claim an update when no source was found", () => {
+    const response = buildPublicKnowledgeResponse({
+      found: false,
+      query: "测试问题",
+      title: "没有可靠来源",
+      summary: "未找到可靠资料。",
+      sources: [],
+      fetchedAt: "2026-11-16T00:00:00.000Z",
+      cached: false
+    });
+    expect(response.message).toContain("知识库未更新");
+    expect(response.message).not.toContain("知识库已根据公开资料完成更新");
+  });
 });
