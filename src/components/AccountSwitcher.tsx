@@ -220,104 +220,95 @@ export function AccountSwitcher({
                     const isRevealed = revealAccountId === account.id;
                     return (
                       <div key={account.id}>
-                      <div
-                        className={`account-switch-row ${
-                          active ? "active" : ""
-                        }`}
-                      >
-                        <button
-                          type="button"
-                          className="account-switch-main"
-                          onClick={() => void switchTo(account)}
-                        >
-                          <span>
-                            <strong>{account.displayName}</strong>
-                            <small>
-                              {account.username}
-                              {account.role === "family"
-                                ? ` · 关联 ${linkedCount} 位老人`
-                                : ` · ${account.familyCode}`}
-                            </small>
-                          </span>
-                          <ArrowLeftRight size={19} aria-hidden="true" />
-                        </button>
-                        <button
-                          type="button"
-                          className="account-delete-button"
-                          aria-label={
-                            revealAccountId === account.id
-                              ? "隐藏密码"
-                              : "查看密码"
-                          }
-                          title={
-                            revealAccountId === account.id
-                              ? "隐藏密码"
-                              : "查看密码"
-                          }
-                          onClick={() => void toggleRevealPassword(account)}
-                        >
-                          {revealing && revealAccountId !== account.id ? (
-                            <LoaderCircle size={18} aria-hidden="true" />
-                          ) : revealAccountId === account.id ? (
-                            <EyeOff size={18} aria-hidden="true" />
-                          ) : (
-                            <Eye size={18} aria-hidden="true" />
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          className="account-delete-button"
-                          aria-label={`删除账号：${account.displayName}`}
-                          title="删除账号"
-                          onClick={() => {
-                            setDeleteTarget(account);
-                            setDeletePassword("");
-                            setShowPassword(false);
-                            setDeleteError("");
-                            setDeleteNotice("");
-                          }}
-                        >
-                          <Trash2 size={18} aria-hidden="true" />
-                        </button>
-                      </div>
-                      {isRevealed ? (
                         <div
-                          className="account-delete-panel"
-                          style={{ marginTop: 8 }}
+                          className={`account-switch-row ${
+                            active ? "active" : ""
+                          }`}
+                          style={{ gridTemplateColumns: "minmax(0, 1fr) 40px 40px" }}
                         >
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 8
+                          <button
+                            type="button"
+                            className="account-switch-main"
+                            onClick={() => void switchTo(account)}
+                          >
+                            <span>
+                              <strong>{account.displayName}</strong>
+                              <small>
+                                {account.username}
+                                {account.role === "family"
+                                  ? ` · 关联 ${linkedCount} 位老人`
+                                  : ` · ${account.familyCode}`}
+                              </small>
+                            </span>
+                            <ArrowLeftRight size={19} aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            className="account-delete-button"
+                            aria-label={
+                              isRevealed ? "隐藏密码" : "查看密码"
+                            }
+                            title={isRevealed ? "隐藏密码" : "查看密码"}
+                            onClick={() => void toggleRevealPassword(account)}
+                            disabled={revealing}
+                          >
+                            {revealing ? (
+                              <LoaderCircle size={16} aria-hidden="true" />
+                            ) : isRevealed ? (
+                              <EyeOff size={16} aria-hidden="true" />
+                            ) : (
+                              <Eye size={16} aria-hidden="true" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            className="account-delete-button"
+                            aria-label={`删除账号：${account.displayName}`}
+                            title="删除账号"
+                            onClick={() => {
+                              setDeleteTarget(account);
+                              setDeletePassword("");
+                              setShowPassword(false);
+                              setDeleteError("");
+                              setDeleteNotice("");
                             }}
                           >
-                            <KeyRound size={18} aria-hidden="true" />
-                            <strong>账号密码</strong>
-                          </div>
-                          {revealedPassword ? (
-                            <div
+                            <Trash2 size={16} aria-hidden="true" />
+                          </button>
+                        </div>
+                        {isRevealed && revealedPassword ? (
+                          <div
+                            style={{
+                              marginTop: 4,
+                              padding: "4px 10px",
+                              fontSize: 12,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                              background: "var(--bg)",
+                              borderRadius: 6
+                            }}
+                          >
+                            <KeyRound size={12} aria-hidden="true" />
+                            <span
                               style={{
-                                marginTop: 8,
-                                padding: "10px 14px",
-                                background: "var(--bg)",
-                                borderRadius: 8,
                                 fontFamily: "monospace",
-                                fontSize: 18,
-                                letterSpacing: 1,
-                                wordBreak: "break-all"
+                                fontSize: 13,
+                                letterSpacing: 0.5
                               }}
                             >
                               {revealedPassword}
-                            </div>
-                          ) : null}
-                          {revealError ? (
-                            <p className="error" style={{ marginTop: 8 }}>
-                              {revealError}
-                            </p>
-                          ) : null}
-                        </div>
-                      ) : null}
+                            </span>
+                          </div>
+                        ) : null}
+                        {isRevealed && revealError ? (
+                          <p
+                            className="error"
+                            style={{ marginTop: 4, fontSize: 12 }}
+                          >
+                            {revealError}
+                          </p>
+                        ) : null}
                       </div>
                     );
                   })
