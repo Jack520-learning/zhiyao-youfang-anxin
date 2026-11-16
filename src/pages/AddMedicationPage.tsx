@@ -196,13 +196,20 @@ export function AddMedicationPage({
     }
     progressTickerRef.current = window.setInterval(() => {
       setProgress((current) =>
-        Math.min(0.94, current + (0.94 - current) * 0.08 + 0.0015)
+        Math.min(0.985, current + (0.985 - current) * 0.08 + 0.0015)
       );
     }, 120);
+    const visionController = new AbortController();
+    let visionTimedOut = false;
+    const visionTimeout = window.setTimeout(() => {
+      visionTimedOut = true;
+      visionController.abort();
+    }, 8000);
     try {
       const visionPromise = fetch("/api/vision-identify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: visionController.signal,
         body: JSON.stringify({ imageDataUrl: dataUrl, mode: "medicine" })
       })
         .then(async (response) => {
@@ -226,8 +233,13 @@ export function AddMedicationPage({
         recognized = createManualDraft(dataUrl);
       }
       setProgress((current) => Math.max(current, 0.58));
-      setProgressLabel("正在匹配药名、规格、单次剂量和包装信息");
+      setProgressLabel(
+        visionTimedOut
+          ? "智能识别等待超时，正在使用本地文字识别结果"
+          : "正在匹配药名、规格、单次剂量和包装信息"
+      );
       const vision = await visionPromise;
+      window.clearTimeout(visionTimeout);
       const visionMedicines = getVisionMedicines(vision);
       const medicalText = `${recognized.rawText} ${
         vision?.summary || ""
@@ -287,6 +299,7 @@ export function AddMedicationPage({
       );
       setPhase("review");
     } finally {
+      window.clearTimeout(visionTimeout);
       if (progressTickerRef.current) {
         window.clearInterval(progressTickerRef.current);
         progressTickerRef.current = undefined;
