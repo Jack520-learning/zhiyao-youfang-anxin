@@ -3,7 +3,7 @@ import {
   currentCatalogCompanionSlugs
 } from "../catalog/chatBridge";
 import { findBestMedicine } from "../catalog/retrieval";
-import { answerWithRules } from "./riskEngine";
+import { answerWithRules, type AnswerMode } from "./riskEngine";
 import type {
   AssistantResponse,
   ElderProfile,
@@ -28,6 +28,7 @@ interface ToolContext {
   query: string;
   profile: ElderProfile;
   medications: Medication[];
+  answerMode?: AnswerMode;
 }
 
 const toolLabels: Record<AgentToolName, string> = {
@@ -88,7 +89,8 @@ export function executeAgentTool(
         activeMedications.map(
           (medication) => medication.genericName || medication.name
         )
-      )
+      ),
+      context.answerMode
     );
     return {
       name,
@@ -105,7 +107,8 @@ export function executeAgentTool(
     const response = answerWithRules(
       context.query,
       activeMedications,
-      context.profile
+      context.profile,
+      { answerMode: context.answerMode }
     );
     return {
       name,

@@ -1,5 +1,6 @@
 import type { RiskCheck, RiskLevel } from "../types";
 import type { AssistantResponse } from "../types";
+import { buildRulesMessage, type AnswerMode } from "../lib/riskEngine";
 import { buildLocalGuidance } from "./guidance";
 import { medicines } from "./medicines";
 import { findBestMedicine } from "./retrieval";
@@ -19,7 +20,8 @@ export function answerFromDrugCatalog(
   query: string,
   profile: { age: number; conditions: string[] },
   currentMedicineNames: string[],
-  currentCompanionSlugs: string[] = []
+  currentCompanionSlugs: string[] = [],
+  answerMode: AnswerMode = "safety"
 ): AssistantResponse | null {
   const primaryMatch = findBestMedicine(query);
   const primary = primaryMatch?.medicine;
@@ -104,7 +106,7 @@ export function answerFromDrugCatalog(
   };
 
   return {
-    message: `${check.summary}\n\n${check.nextStep}`,
+    message: buildRulesMessage(check, answerMode),
     riskCheck: check,
     stages: [
       { id: "match", label: `匹配药品百科：${primary.displayName}`, status: "done" },

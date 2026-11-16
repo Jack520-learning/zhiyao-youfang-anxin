@@ -844,11 +844,30 @@ function buildAssistantRequest(payload) {
     "multi-drug":
       "逐项核对重复成分、同类重复、相互作用和错峰服用，不自行决定停药或改剂量。"
   }[payload.skill] || "使用普通安全用药问答方式。";
-  const answerStyle = {
-    quick: "用两三句话直接回答，先给结论和下一步。",
-    safety: "先核对用药风险，再给结论、原因和下一步。",
-    detailed: "先给结论，再分层解释原因、注意点和下一步，仍保持简洁。"
-  }[payload.answerMode] || "先给结论，再说明原因和下一步。";
+  const answerConfig = {
+    quick: {
+      style: "只说两三句话，第一句直接给结论，最后一句给一个最该做的下一步。不展开原理，不列清单，不重复用户问题。",
+      maxTokens: 500,
+      temperature: 0.05
+    },
+    safety: {
+      style: "必须先做风险核对：1)明确这件事的风险等级（低/中/高）；2)列出与当前在用药物可能的相互作用或禁忌；3)指出什么情况绝不能这么做。然后给结论、原因和下一步。结构用「⚠️风险核对」「结论」「下一步」三段，每段不超过三句话。",
+      maxTokens: 1000,
+      temperature: 0.05
+    },
+    detailed: {
+      style: "先给结论，然后分小节展开：1)是什么/为什么；2)用法用量与时间；3)注意事项与禁忌；4)可能的副作用；5)特殊人群（老人/孕妇/肝肾功能）；6)储存与有效期；7)下一步建议。每个小节用「## 标题」开头，内容要具体、有可操作性，但不诊断、不开处方、不调整剂量。",
+      maxTokens: 2000,
+      temperature: 0.2
+    }
+  }[payload.answerMode] || {
+    style: "先给结论，再说明原因和下一步，用简短、温和、老人能理解的中文回答。",
+    maxTokens: 1200,
+    temperature: 0.1
+  };
+  const answerStyle = answerConfig.style;
+  const answerMaxTokens = answerConfig.maxTokens;
+  const answerTemperature = answerConfig.temperature;
   const context = {
     age: payload.profile?.age,
     conditions: payload.profile?.conditions || [],
@@ -905,7 +924,9 @@ function buildAssistantRequest(payload) {
     model: getTextModel(),
     context,
     skillFocus,
-    answerStyle
+    answerStyle,
+    answerMaxTokens,
+    answerTemperature
   };
 }
 
@@ -995,7 +1016,7 @@ function executeAssistantTool(payload, name) {
 }
 
 async function requestAiAssistant(payload, options = {}) {
-  const { baseUrl, model, context, skillFocus, answerStyle } =
+  const { baseUrl, model, context, skillFocus, answerStyle, answerMaxTokens, answerTemperature } =
     buildAssistantRequest(payload);
   return fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
@@ -1006,8 +1027,8 @@ async function requestAiAssistant(payload, options = {}) {
     },
     body: JSON.stringify({
       model,
-      temperature: 0.1,
-      max_tokens: 1200,
+      temperature: answerTemperature,
+      max_tokens: answerMaxTokens,
       stream: Boolean(options.stream),
       ...(options.tools?.length
         ? {

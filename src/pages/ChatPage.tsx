@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Copy,
   ExternalLink,
+  FileText,
   LoaderCircle,
   Leaf,
   MessageCircleHeart,
@@ -29,7 +30,8 @@ import {
   ThumbsUp,
   Trash2,
   Volume2,
-  VolumeX
+  VolumeX,
+  Zap
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
@@ -90,14 +92,6 @@ const composerSkills: Array<{
   researchPath: string;
   researchLabel: string;
 }> = [
-  {
-    id: "photo",
-    label: "拍照识药",
-    icon: Camera,
-    placeholder: "拍药盒后继续问：这个药怎么吃？和我现在的药冲突吗？",
-    researchPath: "/add-medication?from=chat",
-    researchLabel: "打开加药核对"
-  },
   {
     id: "catalog",
     label: "药品百科",
@@ -521,7 +515,8 @@ export function ChatPage() {
     const agentRuns = runAgentPlan(plannedTools, {
       query: contextualQuestion,
       profile,
-      medications: activeMedications
+      medications: activeMedications,
+      answerMode
     });
     const agentTrace = agentRuns.map((run) => ({
       id: `tool-${run.name}`,
@@ -531,7 +526,9 @@ export function ChatPage() {
     }));
     let localResponse =
       safetyResponseFromRuns(agentRuns) ??
-      answerWithRules(contextualQuestion, activeMedications, profile);
+      answerWithRules(contextualQuestion, activeMedications, profile, {
+        answerMode
+      });
     if (composerSkill === "herbs") {
       localResponse =
         herbSkillAnswer(
@@ -545,7 +542,9 @@ export function ChatPage() {
       answerFromDrugCatalog(
         contextualQuestion,
         profile,
-        activeMedications.map((medication) => medication.name)
+        activeMedications.map((medication) => medication.name),
+        undefined,
+        answerMode
       );
     const mentionsCurrentMedication = activeMedications.some((medication) =>
       clean.includes(medication.name) ||
@@ -943,7 +942,8 @@ export function ChatPage() {
               `${catalogMatch.displayName} 请给出使用方法、危害、注意事项和当前同服风险`,
               profile,
               activeMedications.map((medication) => medication.name),
-              companionSlugs
+              companionSlugs,
+              answerMode
             )
           : null;
         const catalogGuidance = catalogMatch
@@ -1735,6 +1735,15 @@ export function ChatPage() {
                   <Plus size={21} aria-hidden="true" />
                 </button>
                 <button
+                  className="ai-round-tool"
+                  type="button"
+                  aria-label="拍照识药"
+                  title="拍照识药"
+                  onClick={startCameraScan}
+                >
+                  <Camera size={21} aria-hidden="true" />
+                </button>
+                <button
                   type="button"
                   className={`ai-mic-button ${speech.listening ? "listening" : ""}`}
                   aria-label="按住说话，松开结束"
@@ -1810,11 +1819,11 @@ export function ChatPage() {
                       <p>回答方式</p>
                       {(
                         [
-                          ["safety", "安全问药"],
-                          ["quick", "快速回答"],
-                          ["detailed", "详细解释"]
-                        ] as Array<[AnswerMode, string]>
-                      ).map(([value, label]) => (
+                          ["safety", "安全问药", ShieldCheck],
+                          ["quick", "快速回答", Zap],
+                          ["detailed", "详细解释", FileText]
+                        ] as Array<[AnswerMode, string, typeof ShieldCheck]>
+                      ).map(([value, label, Icon]) => (
                         <button
                           type="button"
                           className={answerMode === value ? "active" : ""}
@@ -1824,7 +1833,7 @@ export function ChatPage() {
                             setSkillMenuOpen(false);
                           }}
                         >
-                          <MessageCircleHeart size={18} aria-hidden="true" />
+                          <Icon size={18} aria-hidden="true" />
                           {label}
                         </button>
                       ))}

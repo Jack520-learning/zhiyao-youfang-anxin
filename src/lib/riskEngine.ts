@@ -270,19 +270,39 @@ function findArticle(query: string) {
   );
 }
 
+export type AnswerMode = "quick" | "safety" | "detailed";
+
+export function buildRulesMessage(check: RiskCheck, mode: AnswerMode): string {
+  if (mode === "quick") {
+    // 快速回答：只给结论标题 + 一句核心建议，不超过两句话
+    const firstSentence = check.summary.split(/[。！？\n]/)[0] || check.summary;
+    return `${check.title}：${firstSentence}。${check.nextStep.split(/[。！？\n]/)[0] || ""}`.trim();
+  }
+  if (mode === "detailed") {
+    // 详细解释：标题 + 完整摘要 + 原因列表 + 下一步
+    const reasons = check.reasons?.length
+      ? "\n\n**依据：**\n" + check.reasons.map((r) => `• ${r}`).join("\n")
+      : "";
+    return `**${check.title}**\n\n${check.summary}${reasons}\n\n**下一步：**${check.nextStep}`;
+  }
+  // safety（默认）：摘要 + 下一步
+  return `${check.summary}\n\n${check.nextStep}`;
+}
+
 export function answerWithRules(
   query: string,
   currentMedications: Medication[],
   profile: ElderProfile,
-  options?: { missedMedication?: Medication }
+  options?: { missedMedication?: Medication; answerMode?: AnswerMode }
 ): AssistantResponse {
   const started = nowIso();
   void started;
+  const mode: AnswerMode = options?.answerMode || "safety";
 
   if (options?.missedMedication) {
     const check = handleMissedDose(options.missedMedication, currentMedications);
     return {
-      message: `${check.summary}\n\n${check.nextStep}`,
+      message: buildRulesMessage(check, mode),
       riskCheck: check,
       stages: [
         { id: "intent", label: "识别漏服问题", status: "done" },
@@ -312,7 +332,7 @@ export function answerWithRules(
       currentMedications
     );
     return {
-      message: `${check.summary}\n\n${check.nextStep}`,
+      message: buildRulesMessage(check, mode),
       riskCheck: check,
       stages: [
         { id: "intent", label: "识别身体不适", status: "done" },
@@ -354,7 +374,7 @@ export function answerWithRules(
       currentMedications
     );
     return {
-      message: `${check.summary}\n\n${check.nextStep}`,
+      message: buildRulesMessage(check, mode),
       riskCheck: check,
       stages: [
         { id: "intent", label: "理解用药问题", status: "done" },
@@ -384,7 +404,7 @@ export function answerWithRules(
     const medication = mentionedMedications[0];
     const check = handleMissedDose(medication, currentMedications);
     return {
-      message: `${check.summary}\n\n${check.nextStep}`,
+      message: buildRulesMessage(check, mode),
       riskCheck: check,
       stages: [
         { id: "intent", label: `识别${medication.name}漏服问题`, status: "done" },
@@ -423,7 +443,7 @@ export function answerWithRules(
       currentMedications
     );
     return {
-      message: `${check.summary}\n\n${check.nextStep}`,
+      message: buildRulesMessage(check, mode),
       riskCheck: check,
       stages: [
         { id: "intent", label: "识别具体药物问题", status: "done" },
@@ -455,7 +475,7 @@ export function answerWithRules(
       currentMedications
     );
     return {
-      message: `${check.summary}\n\n${check.nextStep}`,
+      message: buildRulesMessage(check, mode),
       riskCheck: check,
       stages: [
         { id: "intent", label: "识别全量用药问题", status: "done" },
@@ -483,7 +503,7 @@ export function answerWithRules(
       currentMedications
     );
     return {
-      message: `${check.summary}\n\n${check.nextStep}`,
+      message: buildRulesMessage(check, mode),
       riskCheck: check,
       stages: [
         { id: "intent", label: "发现问题缺少具体药名", status: "done" },
@@ -515,7 +535,7 @@ export function answerWithRules(
       currentMedications
     );
     return {
-      message: `${check.summary}\n\n${check.nextStep}`,
+      message: buildRulesMessage(check, mode),
       riskCheck: check,
       stages: [
         { id: "intent", label: "识别常见用药安全问题", status: "done" },
@@ -551,7 +571,7 @@ export function answerWithRules(
       currentMedications
     );
     return {
-      message: `${check.summary}\n\n${check.nextStep}`,
+      message: buildRulesMessage(check, mode),
       riskCheck: check,
       stages: [
         { id: "intent", label: "理解用药问题", status: "done" },
@@ -579,7 +599,7 @@ export function answerWithRules(
       currentMedications
     );
     return {
-      message: `${check.summary}\n\n${check.nextStep}`,
+      message: buildRulesMessage(check, mode),
       riskCheck: check,
       stages: [
         { id: "intent", label: "识别身体不适", status: "done" },
@@ -762,7 +782,7 @@ export function answerWithRules(
       currentMedications
     );
     return {
-      message: `${check.summary}\n\n${check.nextStep}`,
+      message: buildRulesMessage(check, mode),
       riskCheck: check,
       stages: [
         { id: "intent", label: "识别症状咨询", status: "done" },
