@@ -1257,10 +1257,8 @@ export function ChatPage() {
   }
 
   function stopGeneration() {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
   }
 
   function regenerateMessage(messageId: string) {
@@ -1420,11 +1418,6 @@ export function ChatPage() {
               <Trash2 size={14} aria-hidden="true" />
               删除
             </button>
-          </div>
-        ) : null}
-        {ts ? (
-          <div className={`message-footer ${message.role}`}>
-            <div className="message-timestamp">{ts}</div>
           </div>
         ) : null}
       </article>

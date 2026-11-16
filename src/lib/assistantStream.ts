@@ -33,23 +33,10 @@ export interface AssistantStreamHandlers {
   signal?: AbortSignal;
 }
 
-function isAbort(err: unknown): boolean {
-  if (err instanceof DOMException && err.name === "AbortError") return true;
-  if (err instanceof Error && err.name === "AbortError") return true;
-  if (typeof err === "object" && err !== null) {
-    const name = (err as { name?: unknown }).name;
-    if (name === "AbortError") return true;
-  }
-  return false;
-}
-
 export async function streamAssistantAnswer(
   payload: AssistantStreamPayload,
   handlers: AssistantStreamHandlers
 ): Promise<string> {
-  if (handlers.signal?.aborted) {
-    throw new DOMException("Aborted", "AbortError");
-  }
   const response = await fetch("/api/assistant/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -57,16 +44,9 @@ export async function streamAssistantAnswer(
     signal: handlers.signal
   });
   if (!response.ok || !response.body) {
-    // 避免 abort 后 response.json() 抛 Unexpected end of JSON input
-    if (handlers.signal?.aborted) {
-      throw new DOMException("Aborted", "AbortError");
-    }
-    let errorBody: { error?: string } = {};
-    try {
-      errorBody = (await response.json()) as { error?: string };
-    } catch {
-      /* 响应体不是合法 JSON，忽略 */
-    }
+    const errorBody = (await response.json().catch(() => ({}))) as {
+      error?: string;
+    };
     throw new Error(errorBody.error || `AI 流式回答失败：${response.status}`);
   }
 
@@ -76,21 +56,7 @@ export async function streamAssistantAnswer(
   let fullText = "";
 
   while (true) {
-    if (handlers.signal?.aborted) {
-      // 主动 abort：抛出 AbortError，让调用方捕获并使用 fullText 截断
-      throw new DOMException("Aborted", "AbortError");
-    }
-    let readResult: ReadableStreamReadResult<Uint8Array>;
-    try {
-      readResult = await reader.read();
-    } catch (err) {
-      if (isAbort(err)) {
-        // fetch 层 abort 导致的 reader 拒绝
-        throw new DOMException("Aborted", "AbortError");
-      }
-      throw err;
-    }
-    const { done, value } = readResult;
+    const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
     const blocks = buffer.split(/\r?\n\r?\n/);
@@ -103,18 +69,12 @@ export async function streamAssistantAnswer(
         if (line.startsWith("data:")) data += line.slice(5).trim();
       }
       if (!data) continue;
-      let payloadData: {
+      const payloadData = JSON.parse(data) as {
         text?: string;
         id?: string;
         label?: string;
         error?: string;
-      } = {};
-      try {
-        payloadData = JSON.parse(data);
-      } catch {
-        // 数据块不完整或解析失败，跳过
-        continue;
-      }
+      };
       if (event === "delta" && payloadData.text) {
         fullText += payloadData.text;
         handlers.onDelta(payloadData.text, fullText);
@@ -130,19 +90,6 @@ export async function streamAssistantAnswer(
       } else if (event === "error") {
         throw new Error(payloadData.error || "AI 流式回答失败");
       }
-    }
-  }
-  // 结束前 flush 剩余 buffer
-  if (buffer.trim()) {
-    let payloadData: { text?: string } = {};
-    try {
-      payloadData = JSON.parse(buffer.trim());
-    } catch {
-      /* ignore */
-    }
-    if (payloadData.text) {
-      fullText += payloadData.text;
-      handlers.onDelta(payloadData.text, fullText);
     }
   }
   return fullText;
