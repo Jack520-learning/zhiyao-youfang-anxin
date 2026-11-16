@@ -82,7 +82,8 @@ export function buildGeneralKnowledgeResponse(
       sourceIds: ["src-chat"],
       involvedMedicationIds: [],
       medicationSnapshot: [],
-      createdAt: nowIso()
+      createdAt: nowIso(),
+      trackInRiskSummary: false
     },
     stages: [
       { id: "general-intent", label: "识别为一般常识问题", status: "done" },

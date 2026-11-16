@@ -39,7 +39,8 @@ function doseEvent(status: DoseEvent["status"]): DoseEvent {
 function riskCheck(
   id: string,
   level: RiskCheck["level"],
-  createdAt: string
+  createdAt: string,
+  sourceIds: string[] = []
 ): RiskCheck {
   return {
     id,
@@ -48,7 +49,7 @@ function riskCheck(
     summary: "",
     nextStep: "",
     reasons: [],
-    sourceIds: [],
+    sourceIds,
     involvedMedicationIds: [],
     medicationSnapshot: [],
     createdAt
@@ -95,5 +96,34 @@ describe("familyInsights", () => {
     expect(shared.find((item) => item.key === "medium")?.count).toBe(1);
     expect(shared.find((item) => item.key === "low")?.count).toBe(0);
     expect(restricted.find((item) => item.key === "high")?.count).toBe(0);
+  });
+
+  it("does not count general knowledge or public informational results as health risk", () => {
+    const checks = [
+      riskCheck(
+        "general",
+        "medium",
+        "2026-11-15T00:00:00.000Z",
+        ["src-chat"]
+      ),
+      riskCheck(
+        "public",
+        "medium",
+        "2026-11-15T00:00:00.000Z",
+        ["src-dynamic-public-web"]
+      ),
+      riskCheck(
+        "medical",
+        "medium",
+        "2026-11-15T00:00:00.000Z",
+        ["src-drug-catalog"]
+      )
+    ];
+    const distribution = buildRiskDistribution(checks, {
+      now: new Date("2026-11-16T12:00:00.000Z")
+    });
+    expect(
+      distribution.find((item) => item.key === "medium")?.count
+    ).toBe(1);
   });
 });

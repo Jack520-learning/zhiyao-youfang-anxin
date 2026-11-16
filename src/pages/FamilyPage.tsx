@@ -19,6 +19,7 @@ import { FamilyHealthCharts } from "../components/FamilyHealthCharts";
 import { formatChineseDate, getTodayDoses } from "../lib/time";
 import { useAppStore } from "../store/useAppStore";
 import { updateFamilyAlertStatus } from "../lib/cloud";
+import { trackableRiskChecks } from "../lib/riskTracking";
 
 export function FamilyPage() {
   const navigate = useNavigate();
@@ -49,7 +50,7 @@ export function FamilyPage() {
   );
   const taken = doses.filter((dose) => dose.status === "taken").length;
   const unconfirmed = doses.filter((dose) => dose.status === "pending").length;
-  const unresolvedRisks = riskChecks.filter(
+  const unresolvedRisks = trackableRiskChecks(riskChecks).filter(
     (riskCheck) =>
       riskCheck.level === "high" ||
       riskCheck.level === "medium" ||

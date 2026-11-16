@@ -74,6 +74,7 @@ export interface RiskCheck {
   involvedMedicationIds: string[];
   medicationSnapshot: string[];
   createdAt: string;
+  trackInRiskSummary?: boolean;
 }
 
 export interface ChatMessage {

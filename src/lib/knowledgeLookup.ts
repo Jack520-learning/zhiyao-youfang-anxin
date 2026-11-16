@@ -76,7 +76,8 @@ export function buildPublicKnowledgeResponse(
         sourceIds: ["src-no-evidence"],
         involvedMedicationIds: [],
         medicationSnapshot: [],
-        createdAt: nowIso()
+        createdAt: nowIso(),
+        trackInRiskSummary: false
       },
       stages: [
         { id: "knowledge-gap", label: "发现本地知识缺口", status: "done" },
@@ -105,7 +106,8 @@ export function buildPublicKnowledgeResponse(
     sourceIds: ["src-dynamic-public-web"],
     involvedMedicationIds: [],
     medicationSnapshot: [],
-    createdAt: nowIso()
+    createdAt: nowIso(),
+    trackInRiskSummary: false
   };
   const sourceBlock = sources.length
     ? [

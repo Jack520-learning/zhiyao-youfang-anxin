@@ -4,6 +4,7 @@ import type {
   Medication,
   RiskCheck
 } from "../types";
+import { trackableRiskChecks } from "./riskTracking";
 
 export interface ProactiveRiskInsight {
   id: string;
@@ -123,7 +124,7 @@ export function buildProactiveRiskInsights({
     });
   }
 
-  const recentHighRisk = riskChecks.find(
+  const recentHighRisk = trackableRiskChecks(riskChecks).find(
     (riskCheck) =>
       (riskCheck.level === "high" || riskCheck.level === "emergency") &&
       withinDays(riskCheck.createdAt, 14, now)

@@ -25,6 +25,7 @@ import {
 import { createId } from "../lib/ids";
 import { nowIso } from "../lib/time";
 import { toChineseErrorMessage } from "../lib/userMessage";
+import { isTrackableRiskCheck } from "../lib/riskTracking";
 import {
   captureWorkspace,
   createBlankWorkspace,
@@ -1191,7 +1192,9 @@ export const useAppStore = create<AppStore>()(
             activeConversationId: requestedConversationId
               ? state.activeConversationId
               : updated.id,
-            riskChecks: message.riskCheck
+            riskChecks:
+              message.riskCheck &&
+              isTrackableRiskCheck(message.riskCheck)
               ? [message.riskCheck, ...state.riskChecks].slice(0, 50)
               : state.riskChecks
           };
@@ -1210,7 +1213,9 @@ export const useAppStore = create<AppStore>()(
                 }
               : conversation
           ),
-          riskChecks: message.riskCheck
+          riskChecks:
+            message.riskCheck &&
+            isTrackableRiskCheck(message.riskCheck)
             ? [message.riskCheck, ...state.riskChecks].slice(0, 50)
             : state.riskChecks
         })),

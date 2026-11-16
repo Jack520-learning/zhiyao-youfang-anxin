@@ -3,16 +3,18 @@ import { useNavigate } from "react-router-dom";
 import { RiskBadge } from "../components/RiskBadge";
 import { SourcesBlock } from "../components/SourcesBlock";
 import { useAppStore } from "../store/useAppStore";
+import { trackableRiskChecks } from "../lib/riskTracking";
 
 export function SafetyPage() {
   const navigate = useNavigate();
   const riskChecks = useAppStore((state) => state.riskChecks);
   const role = useAppStore((state) => state.role);
   const consent = useAppStore((state) => state.consent);
+  const trackedRisks = trackableRiskChecks(riskChecks);
   const risks =
     role === "family" && !consent.shareHighRisk
-      ? riskChecks.filter((riskCheck) => riskCheck.level !== "high")
-      : riskChecks;
+      ? trackedRisks.filter((riskCheck) => riskCheck.level !== "high")
+      : trackedRisks;
 
   return (
     <div className="page">

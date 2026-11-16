@@ -27,6 +27,7 @@ import { sendConcernAlert } from "../lib/cloud";
 import { createId } from "../lib/ids";
 import { matchMedicines } from "../catalog/retrieval";
 import { searchHerbs } from "../catalog/herbs";
+import { trackableRiskChecks } from "../lib/riskTracking";
 import { useAppStore } from "../store/useAppStore";
 import type { DoseStatus } from "../types";
 
@@ -62,7 +63,7 @@ export function HomePage() {
     new Date(),
     profile.timeZone
   );
-  const latestRisk = riskChecks[0];
+  const latestRisk = trackableRiskChecks(riskChecks)[0];
   const now = new Date();
   const [lastAction, setLastAction] = useState<{
     medicationId: string;

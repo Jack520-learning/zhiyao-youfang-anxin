@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { buildEmergencyCardData } from "../lib/emergencyCard";
+import { trackableRiskChecks } from "../lib/riskTracking";
 import { useAppStore } from "../store/useAppStore";
 
 export function EmergencyCardPage() {
@@ -21,7 +22,7 @@ export function EmergencyCardPage() {
     profile,
     medications,
     emergencyContacts,
-    riskChecks
+    riskChecks: trackableRiskChecks(riskChecks)
   });
   const updatedAt = new Date().toLocaleString("zh-CN", {
     timeZone: profile.timeZone,

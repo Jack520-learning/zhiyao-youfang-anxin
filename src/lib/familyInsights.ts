@@ -1,5 +1,6 @@
 import type { DoseEvent, Medication, RiskCheck } from "../types";
 import { getTodayDoses } from "./time";
+import { trackableRiskChecks } from "./riskTracking";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -82,7 +83,7 @@ export function buildRiskDistribution(
   const includeHighRisk = options?.includeHighRisk ?? true;
   const days = Math.max(1, Math.min(options?.days ?? 30, 365));
   const cutoff = (options?.now ?? new Date()).getTime() - days * DAY_MS;
-  const visible = riskChecks.filter((riskCheck) => {
+  const visible = trackableRiskChecks(riskChecks).filter((riskCheck) => {
     const createdAt = new Date(riskCheck.createdAt).getTime();
     return (
       Number.isFinite(createdAt) &&

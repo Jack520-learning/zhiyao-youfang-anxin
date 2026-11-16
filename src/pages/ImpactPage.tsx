@@ -11,6 +11,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { DiscoveryNav } from "../components/DiscoveryNav";
 import { buildProactiveRiskInsights } from "../lib/proactiveRisk";
+import { trackableRiskChecks } from "../lib/riskTracking";
 import { useAppStore } from "../store/useAppStore";
 
 export function ImpactPage() {
@@ -23,6 +24,7 @@ export function ImpactPage() {
   const activeMedications = medications.filter(
     (medication) => medication.status === "active"
   );
+  const trackedRiskChecks = trackableRiskChecks(riskChecks);
   const takenCount = doseEvents.filter(
     (event) => event.status === "taken"
   ).length;
@@ -42,7 +44,7 @@ export function ImpactPage() {
     },
     {
       label: "安全核查",
-      value: riskChecks.length,
+      value: trackedRiskChecks.length,
       note: "次规则交叉核对"
     },
     {

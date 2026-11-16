@@ -147,7 +147,8 @@ export function buildDailyConversationResponse(
       sourceIds: ["src-chat"],
       involvedMedicationIds: [],
       medicationSnapshot: [],
-      createdAt: nowIso()
+      createdAt: nowIso(),
+      trackInRiskSummary: false
     },
     stages: [
       { id: "daily-intent", label: "理解日常话题", status: "done" },

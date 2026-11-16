@@ -101,4 +101,38 @@ describe("proactive risk trends", () => {
     expect(insights).toHaveLength(1);
     expect(insights[0].level).toBe("low");
   });
+
+  it("ignores legacy general knowledge records in family risk trends", () => {
+    const insights = buildProactiveRiskInsights({
+      medications: [medication("1", "氨氯地平片", "氨氯地平")],
+      doseEvents: [
+        {
+          id: "dose-1",
+          medicationId: "1",
+          scheduledAt: "2026-11-15T00:00:00.000Z",
+          status: "taken",
+          updatedAt: "2026-11-15T01:00:00.000Z"
+        }
+      ],
+      riskChecks: [
+        {
+          id: "public-sports",
+          level: "high",
+          title: "运动对健康的影响",
+          summary: "一般常识",
+          nextStep: "",
+          reasons: [],
+          sourceIds: ["src-dynamic-public-web"],
+          involvedMedicationIds: [],
+          medicationSnapshot: [],
+          createdAt: "2026-11-15T00:00:00.000Z"
+        }
+      ],
+      familyAlerts: [],
+      now
+    });
+    expect(
+      insights.some((item) => item.id === "recent-high-risk")
+    ).toBe(false);
+  });
 });
