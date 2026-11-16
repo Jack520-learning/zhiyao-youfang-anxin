@@ -168,7 +168,6 @@ export type SpeechStatus = SpeechPlaybackState | "loading";
 
 let preferredVoiceMode: VoiceMode = DEFAULT_VOICE_MODE;
 let currentAudio: HTMLAudioElement | null = null;
-let browserSpeechUtterance: SpeechSynthesisUtterance | null = null;
 let speechRequestVersion = 0;
 let speechPending = false;
 let speechAbortController: AbortController | null = null;
@@ -189,13 +188,6 @@ const expectedSystemVoices: Record<
   male: "longanyang_v3.1",
   calm: "longcheng_v3.1"
 };
-const systemVoiceGender: Partial<Record<VoiceMode, "female" | "male">> = {
-  warm: "female",
-  clear: "female",
-  male: "male",
-  calm: "male"
-};
-
 function emitSpeechState() {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("speech-state-change"));
@@ -213,73 +205,30 @@ function naturalSpeechText(text: string): string {
     .trim();
 }
 
-function selectBrowserVoice(voiceMode: VoiceMode) {
-  if (
-    typeof window === "undefined" ||
-    !window.speechSynthesis ||
-    typeof window.SpeechSynthesisUtterance !== "function"
-  ) {
-    return null;
-  }
-  const voices = window.speechSynthesis.getVoices?.() || [];
-  const chineseVoices = voices.filter((voice) => /^zh/i.test(voice.lang));
-  const gender = systemVoiceGender[voiceMode];
-  if (!gender) return chineseVoices[0] || null;
-  const maleName = /yunxi|yunjian|kangkang|liang|male|男/i;
-  const femaleName = /xiaoxiao|huihui|yaoyao|female|女/i;
-  return (
-    chineseVoices.find((voice) =>
-      gender === "male"
-        ? maleName.test(voice.name)
-        : femaleName.test(voice.name)
-    ) || null
-  );
-}
-
-function playWithBrowserVoice(
-  text: string,
-  requestVersion: number,
-  voiceMode: VoiceMode
-): boolean {
-  if (requestVersion !== speechRequestVersion) return false;
-  const voice = selectBrowserVoice(voiceMode);
-  if (!voice) return false;
-  const synth = window.speechSynthesis!;
-  synth.cancel();
-  const utterance = new window.SpeechSynthesisUtterance(
-    naturalSpeechText(text)
-  );
-  utterance.lang = "zh-CN";
-  utterance.rate = 0.94;
-  utterance.pitch = 1;
-  utterance.voice = voice;
-  const clear = () => {
-    if (browserSpeechUtterance === utterance) {
-      browserSpeechUtterance = null;
-      emitSpeechState();
+function splitSpeechChunks(text: string, maxLength = 180): string[] {
+  const sentences =
+    naturalSpeechText(text).match(/[^。！？；!?;]+[。！？；!?;]?/g) || [];
+  const chunks: string[] = [];
+  let current = "";
+  for (const sentence of sentences) {
+    const clean = sentence.trim();
+    if (!clean) continue;
+    if (current && current.length + clean.length > maxLength) {
+      chunks.push(current);
+      current = clean;
+    } else {
+      current += clean;
     }
-  };
-  utterance.onend = clear;
-  utterance.onerror = clear;
-  browserSpeechUtterance = utterance;
-  emitSpeechState();
-  try {
-    synth.speak(utterance);
-    return true;
-  } catch {
-    clear();
-    return false;
   }
+  if (current) chunks.push(current);
+  return chunks.length ? chunks : [naturalSpeechText(text)];
 }
 
 export async function speakText(
   text: string,
   enabled = true,
   voiceMode: VoiceMode = "warm",
-  customVoiceId?: string,
-  options?: {
-    fallbackAfterMs?: number;
-  }
+  customVoiceId?: string
 ): Promise<boolean> {
   if (!enabled || !text.trim()) return Promise.resolve(false);
   stopSpeaking();
@@ -292,38 +241,17 @@ export async function speakText(
   const cached = getCachedSpeechAudio(text, voiceMode, customVoiceId);
   try {
     if (cached) {
-      try {
-        if (await playAudioUrl(cached.audioUrl, requestVersion)) return true;
-      } catch {
-        // Continue with the local browser voice if autoplay fails.
-      }
-      return playWithBrowserVoice(text, requestVersion, voiceMode);
+      return await playAudioUrl(cached.audioUrl, requestVersion);
     }
-    const serverPlayback = playServerAudio(
+    return await playServerAudio(
       text,
       voiceMode,
       customVoiceId,
       requestVersion,
       abortController.signal
-    ).catch(() => false);
-    if (!selectBrowserVoice(voiceMode)) {
-      return await serverPlayback;
-    }
-    let fallbackTimer: number | undefined;
-    const browserFallback = new Promise<boolean>((resolve) => {
-      fallbackTimer = window.setTimeout(() => {
-        abortController.abort();
-        resolve(
-          playWithBrowserVoice(text, requestVersion, voiceMode)
-        );
-      }, Math.max(1000, options?.fallbackAfterMs ?? 4500));
-    });
-    const started = await Promise.race([serverPlayback, browserFallback]);
-    if (fallbackTimer) window.clearTimeout(fallbackTimer);
-    if (started) return true;
-    return playWithBrowserVoice(text, requestVersion, voiceMode);
+    );
   } catch {
-    return playWithBrowserVoice(text, requestVersion, voiceMode);
+    return false;
   } finally {
     if (speechAbortController === abortController) {
       speechAbortController = null;
@@ -351,7 +279,8 @@ function getCachedSpeechAudio(
 
 async function playAudioUrl(
   audioUrl: string,
-  requestVersion: number
+  requestVersion: number,
+  onEnded?: () => void
 ): Promise<boolean> {
   if (requestVersion !== speechRequestVersion) return false;
   const audio = new Audio(audioUrl);
@@ -359,6 +288,7 @@ async function playAudioUrl(
   audio.onended = () => {
     if (currentAudio === audio) currentAudio = null;
     emitSpeechState();
+    onEnded?.();
   };
   audio.onerror = () => {
     if (currentAudio === audio) currentAudio = null;
@@ -381,14 +311,41 @@ async function playServerAudio(
   requestVersion: number,
   signal: AbortSignal
 ): Promise<boolean> {
-  const payload = await getSpeechAudioUrl(
-    text,
-    voiceMode,
-    customVoiceId,
-    signal
-  );
-  if (requestVersion !== speechRequestVersion) return false;
-  return playAudioUrl(payload.audioUrl, requestVersion);
+  const chunks = splitSpeechChunks(text);
+  async function playChunk(
+    index: number,
+    preparedUrl?: Promise<{ audioUrl: string; voice: string }>
+  ): Promise<boolean> {
+    const payload = await (
+      preparedUrl ||
+      getSpeechAudioUrl(
+        chunks[index],
+        voiceMode,
+        customVoiceId,
+        signal
+      )
+    );
+    if (requestVersion !== speechRequestVersion) return false;
+    const nextPrepared =
+      index + 1 < chunks.length
+        ? getSpeechAudioUrl(
+            chunks[index + 1],
+            voiceMode,
+            customVoiceId,
+            signal
+          )
+        : undefined;
+    return playAudioUrl(payload.audioUrl, requestVersion, () => {
+      if (
+        requestVersion !== speechRequestVersion ||
+        index + 1 >= chunks.length
+      ) {
+        return;
+      }
+      void playChunk(index + 1, nextPrepared).catch(() => undefined);
+    });
+  }
+  return playChunk(0);
 }
 
 async function getSpeechAudioUrl(
@@ -465,9 +422,6 @@ export async function preloadSpeech(
 }
 
 export function getSpeechPlaybackState(): SpeechPlaybackState {
-  if (browserSpeechUtterance) {
-    return window.speechSynthesis?.paused ? "paused" : "speaking";
-  }
   if (currentAudio) return currentAudio.paused ? "paused" : "speaking";
   return "idle";
 }
@@ -478,11 +432,6 @@ export function getSpeechStatus(): SpeechStatus {
 }
 
 export function pauseSpeaking(): boolean {
-  if (browserSpeechUtterance && window.speechSynthesis) {
-    window.speechSynthesis.pause();
-    emitSpeechState();
-    return true;
-  }
   if (currentAudio) {
     currentAudio.pause();
     emitSpeechState();
@@ -492,11 +441,6 @@ export function pauseSpeaking(): boolean {
 }
 
 export function resumeSpeaking(): boolean {
-  if (browserSpeechUtterance && window.speechSynthesis) {
-    window.speechSynthesis.resume();
-    emitSpeechState();
-    return true;
-  }
   if (currentAudio?.paused) {
     void currentAudio.play();
     emitSpeechState();
@@ -508,10 +452,6 @@ export function resumeSpeaking(): boolean {
 export function stopSpeaking() {
   speechRequestVersion += 1;
   speechPending = false;
-  if (browserSpeechUtterance) {
-    window.speechSynthesis?.cancel();
-    browserSpeechUtterance = null;
-  }
   speechAbortController?.abort();
   speechAbortController = null;
   if (currentAudio) {

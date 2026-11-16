@@ -268,9 +268,8 @@ describe("speech playback start", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("falls back to the matching browser voice when server audio is slow", async () => {
+  it("never substitutes an unregistered browser voice when cloud synthesis fails", async () => {
     let spoken = 0;
-    let selectedVoiceName = "";
     class FakeUtterance {
       lang = "";
       rate = 1;
@@ -289,7 +288,6 @@ describe("speech playback start", () => {
         resume: () => undefined,
         speak: (utterance: FakeUtterance) => {
           spoken += 1;
-          selectedVoiceName = utterance.voice?.name || "";
         },
         getVoices: () => [
           { lang: "zh-CN", name: "Microsoft Yunxi" },
@@ -299,25 +297,18 @@ describe("speech playback start", () => {
     });
     vi.stubGlobal(
       "fetch",
-      vi.fn(
-        (_url: string, init?: RequestInit) =>
-          new Promise<Response>((_resolve, reject) => {
-            init?.signal?.addEventListener(
-              "abort",
-              () => reject(new DOMException("slow", "AbortError")),
-              { once: true }
-            );
-          })
+      vi.fn(async () =>
+        new Response(JSON.stringify({ error: "暂时不可用" }), {
+          status: 502,
+          headers: { "Content-Type": "application/json" }
+        })
       )
     );
 
     await expect(
-      speakText("慢速朗读兜底", true, "warm", undefined, {
-        fallbackAfterMs: 20
-      })
-    ).resolves.toBe(true);
-    expect(spoken).toBe(1);
-    expect(selectedVoiceName).toBe("Microsoft Huihui");
-    expect(getSpeechStatus()).toBe("speaking");
+      speakText("禁用未知音色", true, "warm")
+    ).resolves.toBe(false);
+    expect(spoken).toBe(0);
+    expect(getSpeechStatus()).toBe("idle");
   });
 });

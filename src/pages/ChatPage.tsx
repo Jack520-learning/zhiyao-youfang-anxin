@@ -949,8 +949,7 @@ export function ChatPage() {
         finalMessageContent,
         true,
         preferences.voiceMode,
-        preferences.customVoiceId,
-        { fallbackAfterMs: 3500 }
+        preferences.customVoiceId
       );
       setSpeakingMessageId(assistantMessageId);
       void autoPlayback.then((started) => {
@@ -1453,8 +1452,7 @@ export function ChatPage() {
       text,
       true,
       preferences.voiceMode,
-      preferences.customVoiceId,
-      { fallbackAfterMs: 6000 }
+      preferences.customVoiceId
     );
     setSpeakingMessageId(messageId);
     const started = await playback;
