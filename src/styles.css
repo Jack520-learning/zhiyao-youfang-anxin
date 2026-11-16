@@ -5537,15 +5537,6 @@ img {
   color: var(--ink);
 }
 
-.answer-search-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 8px 0 2px;
-  color: var(--muted);
-  font-size: calc(12px * var(--font-scale));
-}
-
 .assistant-markdown {
   color: var(--ink);
   font-size: calc(16px * var(--font-scale));

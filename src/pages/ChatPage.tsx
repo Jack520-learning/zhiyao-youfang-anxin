@@ -22,7 +22,6 @@ import {
   Plus,
   RotateCcw,
   Send,
-  Search,
   ShieldCheck,
   Sparkles,
   Square,
@@ -1543,18 +1542,6 @@ export function ChatPage() {
             {message.role === "assistant" ? "智药有方" : "您"}
           </div>
         </div>
-        {message.role === "assistant" &&
-        !isStreaming &&
-        message.riskCheck &&
-        message.riskCheck.level !== "unknown" &&
-        !isQuickAnswer ? (
-          <div className="answer-search-meta">
-            <Search size={15} aria-hidden="true" />
-            核对 {message.riskCheck.medicationSnapshot.length} 种药物，参考{" "}
-            {Math.max(1, message.riskCheck.sourceIds.length)} 份资料
-            <ChevronRight size={14} aria-hidden="true" />
-          </div>
-        ) : null}
         <div className="message-bubble">
           {message.role === "assistant" ? (
             <>
