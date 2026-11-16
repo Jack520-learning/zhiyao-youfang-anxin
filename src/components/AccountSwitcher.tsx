@@ -14,7 +14,11 @@ import {
   deleteCloudFamily,
   unsubscribeFromPush
 } from "../lib/cloud";
-import { decryptPassword } from "../lib/auth";
+import {
+  decryptPassword,
+  encryptPassword,
+  verifyPassword
+} from "../lib/auth";
 import { getLinkedFamilyCodes } from "../lib/workspaces";
 import { useAppStore } from "../store/useAppStore";
 import type { LocalAccount, UserRole } from "../types";
@@ -47,6 +51,10 @@ export function AccountSwitcher({
   const [revealedPassword, setRevealedPassword] = useState("");
   const [revealError, setRevealError] = useState("");
   const [revealing, setRevealing] = useState(false);
+  const [setupPasswordAccountId, setSetupPasswordAccountId] = useState<string>();
+  const [setupPasswordValue, setSetupPasswordValue] = useState("");
+  const [setupPasswordError, setSetupPasswordError] = useState("");
+  const [settingUpPassword, setSettingUpPassword] = useState(false);
 
   useEffect(() => {
     if (open) return;
@@ -59,6 +67,9 @@ export function AccountSwitcher({
     setRevealAccountId(undefined);
     setRevealedPassword("");
     setRevealError("");
+    setSetupPasswordAccountId(undefined);
+    setSetupPasswordValue("");
+    setSetupPasswordError("");
   }, [open]);
 
   if (!open) return null;
@@ -101,10 +112,19 @@ export function AccountSwitcher({
     setRevealAccountId(undefined);
     setRevealedPassword("");
     setRevealError("");
+    setSetupPasswordAccountId(undefined);
+    setSetupPasswordValue("");
+    setSetupPasswordError("");
     onClose();
   }
 
   async function toggleRevealPassword(account: LocalAccount) {
+    // 只能查看当前登录账号的密码
+    if (account.id !== sessionAccountId) {
+      setRevealError("只能查看当前登录账号的密码");
+      return;
+    }
+    // 再次点击同一账号 → 隐藏
     if (revealAccountId === account.id) {
       setRevealAccountId(undefined);
       setRevealedPassword("");
@@ -114,23 +134,72 @@ export function AccountSwitcher({
     setRevealing(true);
     setRevealError("");
     try {
-      if (!account.encryptedPassword) {
-        throw new Error("该账号未保存可查看的密码，请重新登录后再试");
+      if (account.encryptedPassword) {
+        const password = await decryptPassword(
+          account.encryptedPassword,
+          account.username
+        );
+        setRevealAccountId(account.id);
+        setRevealedPassword(password);
+      } else {
+        // 旧账号没有加密密码，需要让用户输入一次来补存
+        setSetupPasswordAccountId(account.id);
+        setSetupPasswordValue("");
+        setSetupPasswordError("");
       }
-      const password = await decryptPassword(
-        account.encryptedPassword,
-        account.username
-      );
-      setRevealAccountId(account.id);
-      setRevealedPassword(password);
     } catch (error) {
       setRevealError(
-        error instanceof Error ? error.message : "无法解密密码，请重新登录后再试"
+        error instanceof Error ? error.message : "无法解密密码，请重试"
       );
       setRevealAccountId(undefined);
       setRevealedPassword("");
     } finally {
       setRevealing(false);
+    }
+  }
+
+  async function confirmSetupPassword(account: LocalAccount) {
+    if (!setupPasswordValue) {
+      setSetupPasswordError("请输入该账号的密码");
+      return;
+    }
+    setSettingUpPassword(true);
+    setSetupPasswordError("");
+    try {
+      // 验证密码是否正确
+      const valid = await verifyPassword(
+        setupPasswordValue,
+        account.passwordHash,
+        account.passwordSalt
+      );
+      if (!valid) {
+        setSetupPasswordError("密码不正确");
+        return;
+      }
+      // 加密保存
+      const encrypted = await encryptPassword(
+        setupPasswordValue,
+        account.username
+      );
+      // 更新 store 中该账号
+      useAppStore.setState((state) => ({
+        accounts: state.accounts.map((item) =>
+          item.id === account.id
+            ? { ...item, encryptedPassword: encrypted }
+            : item
+        )
+      }));
+      // 直接显示
+      setSetupPasswordAccountId(undefined);
+      setSetupPasswordValue("");
+      setRevealAccountId(account.id);
+      setRevealedPassword(setupPasswordValue);
+    } catch (error) {
+      setSetupPasswordError(
+        error instanceof Error ? error.message : "保存失败，请重试"
+      );
+    } finally {
+      setSettingUpPassword(false);
     }
   }
 
@@ -218,6 +287,8 @@ export function AccountSwitcher({
                     const active = account.id === sessionAccountId;
                     const linkedCount = getLinkedFamilyCodes(account).length;
                     const isRevealed = revealAccountId === account.id;
+                    const isSetup = setupPasswordAccountId === account.id;
+                    const canReveal = active; // 只有当前登录账号才能查看密码
                     return (
                       <div key={account.id}>
                         <div
@@ -246,11 +317,26 @@ export function AccountSwitcher({
                             type="button"
                             className="account-delete-button"
                             aria-label={
-                              isRevealed ? "隐藏密码" : "查看密码"
+                              !canReveal
+                                ? "仅当前登录账号可查看密码"
+                                : isRevealed
+                                ? "隐藏密码"
+                                : "查看密码"
                             }
-                            title={isRevealed ? "隐藏密码" : "查看密码"}
+                            title={
+                              !canReveal
+                                ? "仅当前登录账号可查看密码"
+                                : isRevealed
+                                ? "隐藏密码"
+                                : "查看密码"
+                            }
                             onClick={() => void toggleRevealPassword(account)}
-                            disabled={revealing}
+                            disabled={!canReveal || revealing || settingUpPassword}
+                            style={
+                              !canReveal
+                                ? { opacity: 0.35, cursor: "not-allowed" }
+                                : undefined
+                            }
                           >
                             {revealing ? (
                               <LoaderCircle size={16} aria-hidden="true" />
@@ -301,13 +387,64 @@ export function AccountSwitcher({
                             </span>
                           </div>
                         ) : null}
-                        {isRevealed && revealError ? (
-                          <p
-                            className="error"
-                            style={{ marginTop: 4, fontSize: 12 }}
+                        {isSetup ? (
+                          <div
+                            style={{
+                              marginTop: 4,
+                              padding: 8,
+                              background: "var(--bg)",
+                              borderRadius: 6,
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 6
+                            }}
                           >
-                            {revealError}
-                          </p>
+                            <span style={{ fontSize: 12, color: "var(--muted)" }}>
+                              首次查看需输入密码验证并保存
+                            </span>
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <input
+                                className="input"
+                                type="password"
+                                value={setupPasswordValue}
+                                onChange={(e) =>
+                                  setSetupPasswordValue(e.target.value)
+                                }
+                                placeholder="输入该账号密码"
+                                autoComplete="current-password"
+                                style={{ flex: 1, padding: "6px 10px", fontSize: 13 }}
+                              />
+                              <button
+                                className="btn"
+                                type="button"
+                                disabled={settingUpPassword}
+                                onClick={() => void confirmSetupPassword(account)}
+                                style={{ padding: "6px 12px", fontSize: 13 }}
+                              >
+                                {settingUpPassword ? "保存中" : "确认"}
+                              </button>
+                              <button
+                                className="btn"
+                                type="button"
+                                onClick={() => {
+                                  setSetupPasswordAccountId(undefined);
+                                  setSetupPasswordValue("");
+                                  setSetupPasswordError("");
+                                }}
+                                style={{ padding: "6px 10px", fontSize: 13 }}
+                              >
+                                取消
+                              </button>
+                            </div>
+                            {setupPasswordError ? (
+                              <p
+                                className="error"
+                                style={{ margin: 0, fontSize: 12 }}
+                              >
+                                {setupPasswordError}
+                              </p>
+                            ) : null}
+                          </div>
                         ) : null}
                       </div>
                     );
