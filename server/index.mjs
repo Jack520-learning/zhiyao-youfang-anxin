@@ -2265,9 +2265,45 @@ const server = createServer(async (request, response) => {
         snapshot: null,
         subscriptions: []
       });
-      family.snapshot = publicSnapshot(body);
-      family.snapshot.familyCode = familyCode;
-      family.updatedAt = new Date().toISOString();
+      const previousSnapshot = family.snapshot;
+      const nextSnapshot = publicSnapshot(body);
+      const previousRisks = new Map(
+        (previousSnapshot?.riskChecks || []).map((riskCheck) => [
+          riskCheck.id,
+          riskCheck
+        ])
+      );
+      const previousAlerts = new Map(
+        (previousSnapshot?.familyAlerts || []).map((alert) => [alert.id, alert])
+      );
+      nextSnapshot.riskChecks = Array.isArray(nextSnapshot.riskChecks)
+        ? nextSnapshot.riskChecks.map((riskCheck) => {
+            const previousReview =
+              previousRisks.get(riskCheck.id)?.familyReview;
+            return previousReview && !riskCheck.familyReview
+              ? { ...riskCheck, familyReview: previousReview }
+              : riskCheck;
+          })
+        : [];
+      nextSnapshot.familyAlerts = Array.isArray(nextSnapshot.familyAlerts)
+        ? nextSnapshot.familyAlerts.map((alert) => {
+            const previousHandled = previousAlerts.get(alert.id);
+            return previousHandled?.handledAt && !alert.handledAt
+              ? {
+                  ...alert,
+                  handledAt: previousHandled.handledAt,
+                  handledBy: previousHandled.handledBy
+                }
+              : alert;
+          })
+        : [];
+      const updatedAt = new Date().toISOString();
+      family.snapshot = {
+        ...nextSnapshot,
+        familyCode,
+        updatedAt
+      };
+      family.updatedAt = updatedAt;
       family.revision = (family.revision || 0) + 1;
       await saveDatabase();
       broadcastFamily(familyCode, {
@@ -2317,10 +2353,45 @@ const server = createServer(async (request, response) => {
         request.method === "PUT" && pathParts.at(-1) === "contacts";
       const isAlertUpdate =
         request.method === "PUT" && pathParts[3] === "alerts" && pathParts[4];
+      const isRiskReview =
+        request.method === "PUT" && pathParts[3] === "risks" && pathParts[4];
       const familyCode = sanitizeFamilyCode(
         isContactsUpdate ? pathParts.at(-2) : pathParts[2]
       );
       const family = database.families[familyCode];
+      if (isRiskReview) {
+        if (!family?.snapshot) return json(response, 404, { error: "未找到家庭" });
+        const body = await readJson(request, 128 * 1024);
+        const riskCheck = (family.snapshot.riskChecks || []).find(
+          (item) => item.id === pathParts[4]
+        );
+        if (!riskCheck) return json(response, 404, { error: "未找到风险记录" });
+        if (body.reviewed === false) {
+          delete riskCheck.familyReview;
+        } else {
+          riskCheck.familyReview = {
+            reviewedAt:
+              typeof body.reviewedAt === "string" &&
+              Number.isFinite(new Date(body.reviewedAt).getTime())
+                ? body.reviewedAt
+                : new Date().toISOString(),
+            reviewedBy: String(body.reviewedBy || "家属").slice(0, 30)
+          };
+        }
+        family.snapshot.updatedAt = new Date().toISOString();
+        family.revision = (family.revision || 0) + 1;
+        await saveDatabase();
+        broadcastFamily(familyCode, {
+          type: "update",
+          revision: family.revision,
+          familyCode
+        });
+        return json(response, 200, {
+          ok: true,
+          familyReview: riskCheck.familyReview,
+          revision: family.revision
+        });
+      }
       if (isAlertUpdate) {
         if (!family?.snapshot) return json(response, 404, { error: "未找到家庭" });
         const body = await readJson(request, 128 * 1024);

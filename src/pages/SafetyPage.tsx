@@ -2,6 +2,7 @@ import { ArrowLeft, Clock3, ShieldAlert, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { RiskBadge } from "../components/RiskBadge";
 import { SourcesBlock } from "../components/SourcesBlock";
+import { FamilyRiskReviewButton } from "../components/FamilyRiskReviewButton";
 import { useAppStore } from "../store/useAppStore";
 import { trackableRiskChecks } from "../lib/riskTracking";
 
@@ -63,6 +64,9 @@ export function SafetyPage() {
                   <span className="chip" key={reason}>{reason}</span>
                 ))}
               </div>
+              {role === "family" ? (
+                <FamilyRiskReviewButton riskCheck={riskCheck} />
+              ) : null}
               <details style={{ marginTop: 14 }}>
                 <summary className="text-link">查看核查依据</summary>
                 <SourcesBlock sourceIds={riskCheck.sourceIds} />

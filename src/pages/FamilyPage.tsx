@@ -1,14 +1,15 @@
 import {
-  Activity,
   AlertTriangle,
   BellOff,
   BellRing,
   CalendarCheck,
   CheckCircle2,
   ChevronRight,
+  Clock3,
   FileHeart,
   HeartPulse,
   PhoneCall,
+  RefreshCw,
   ShieldAlert,
   UsersRound
 } from "lucide-react";
@@ -16,6 +17,7 @@ import { useNavigate } from "react-router-dom";
 import { RiskBadge } from "../components/RiskBadge";
 import { ProactiveRiskPanel } from "../components/ProactiveRiskPanel";
 import { FamilyHealthCharts } from "../components/FamilyHealthCharts";
+import { FamilyRiskReviewButton } from "../components/FamilyRiskReviewButton";
 import { formatChineseDate, getTodayDoses } from "../lib/time";
 import { useAppStore } from "../store/useAppStore";
 import { updateFamilyAlertStatus } from "../lib/cloud";
@@ -32,6 +34,7 @@ export function FamilyPage() {
   const consent = useAppStore((state) => state.consent);
   const contacts = useAppStore((state) => state.emergencyContacts);
   const familyAlerts = useAppStore((state) => state.familyAlerts);
+  const lastSyncedAt = useAppStore((state) => state.lastSyncedAt);
   const preferences = useAppStore((state) => state.preferences);
   const updatePreferences = useAppStore((state) => state.updatePreferences);
   const sessionAccountId = useAppStore((state) => state.sessionAccountId);
@@ -59,6 +62,20 @@ export function FamilyPage() {
   const visibleRisks = consent.shareHighRisk
     ? unresolvedRisks
     : unresolvedRisks.filter((riskCheck) => riskCheck.level !== "high");
+  const pendingReviewRisks = visibleRisks.filter(
+    (riskCheck) => !riskCheck.familyReview
+  );
+  const reviewedRisks = visibleRisks.filter(
+    (riskCheck) => riskCheck.familyReview
+  );
+  const doseUpdates = doses
+    .filter((dose) => dose.recordedAt)
+    .sort(
+      (left, right) =>
+        new Date(right.recordedAt || 0).getTime() -
+        new Date(left.recordedAt || 0).getTime()
+    )
+    .slice(0, 5);
   const openAlerts = familyAlerts.filter((alert) => !alert.handledAt);
   const handledAlerts = familyAlerts.filter((alert) => alert.handledAt);
 
@@ -100,7 +117,20 @@ export function FamilyPage() {
             这里只显示老人授权的摘要和需要介入的异常，不展示完整对话与逐条隐私日志。
           </p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div className="family-header-actions">
+          <span className="family-live-status" aria-live="polite">
+            <RefreshCw size={15} aria-hidden="true" />
+            实时同步
+            {lastSyncedAt ? (
+              <small>
+                {new Date(lastSyncedAt).toLocaleTimeString("zh-CN", {
+                  timeZone: profile.timeZone,
+                  hour: "2-digit",
+                  minute: "2-digit"
+                })}
+              </small>
+            ) : null}
+          </span>
           <button
             className="icon-btn"
             type="button"
@@ -139,10 +169,14 @@ export function FamilyPage() {
         </section>
         <section className="card metric">
           <div className="metric-label">需要家人处理</div>
-          <div className="metric-value" style={{ color: visibleRisks.length ? "var(--red)" : undefined }}>
-            {visibleRisks.length}
+          <div className="metric-value" style={{ color: pendingReviewRisks.length ? "var(--red)" : undefined }}>
+            {pendingReviewRisks.length}
           </div>
-          <div className="metric-note">高危提示不可由家属关闭</div>
+          <div className="metric-note">
+            {reviewedRisks.length
+              ? `另有 ${reviewedRisks.length} 项已核对，风险仍保留`
+              : "高危提示不可由家属关闭"}
+          </div>
         </section>
       </div>
 
@@ -155,6 +189,87 @@ export function FamilyPage() {
         shareMissedDose={consent.shareMissedDose}
         shareHighRisk={consent.shareHighRisk}
       />
+
+      {consent.shareMissedDose ? (
+        <section
+          className="card card-pad family-dose-updates"
+          aria-live="polite"
+        >
+          <div className="section-heading">
+            <div>
+              <h2>今日服药动态</h2>
+              <p>
+                老人确认、取消确认或记录漏服后，这里会按最新状态更新。
+              </p>
+            </div>
+            <Clock3 size={22} color="var(--primary)" aria-hidden="true" />
+          </div>
+          {doseUpdates.length ? (
+            <div className="family-dose-update-list">
+              {doseUpdates.map((dose) => {
+                const wasCancelled =
+                  dose.status === "pending" &&
+                  Boolean(dose.note?.includes("取消"));
+                const statusLabel = wasCancelled
+                  ? "取消确认"
+                  : dose.status === "taken"
+                    ? "已确认服用"
+                    : dose.status === "skipped"
+                      ? "记录未服用"
+                      : dose.status === "unsure"
+                        ? "状态不确定"
+                        : dose.status === "later"
+                          ? "稍后提醒"
+                          : "等待确认";
+                return (
+                  <article
+                    className={`family-dose-update ${dose.status} ${
+                      wasCancelled ? "cancelled" : ""
+                    }`}
+                    key={dose.doseId}
+                  >
+                    <span
+                      className="family-dose-update-icon"
+                      aria-hidden="true"
+                    >
+                      <Clock3 size={18} />
+                    </span>
+                    <div>
+                      <div className="family-dose-update-title">
+                        <strong>{dose.medication.name}</strong>
+                        <span>{statusLabel}</span>
+                      </div>
+                      <p>
+                        {dose.note ||
+                          `${dose.medication.dosage} · ${
+                            wasCancelled
+                              ? "已恢复为尚未确认"
+                              : "老人已在老人端更新"
+                          }`}
+                      </p>
+                    </div>
+                    <time dateTime={dose.recordedAt}>
+                      {new Date(dose.recordedAt || "").toLocaleTimeString(
+                        "zh-CN",
+                        {
+                          timeZone: profile.timeZone,
+                          hour: "2-digit",
+                          minute: "2-digit"
+                        }
+                      )}
+                    </time>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="notice">
+              <Clock3 size={20} aria-hidden="true" />
+              老人今天还没有提交服药状态。未操作不等于漏服。
+            </div>
+          )}
+        </section>
+      ) : null}
 
       {!consent.shareMedicationSummary ? (
         <div className="notice warm" style={{ marginTop: 16 }}>
@@ -252,6 +367,7 @@ export function FamilyPage() {
                   </div>
                   <p>{riskCheck.summary}</p>
                   <p>{riskCheck.nextStep}</p>
+                  <FamilyRiskReviewButton riskCheck={riskCheck} />
                 </article>
               ))
             ) : unconfirmed ? (

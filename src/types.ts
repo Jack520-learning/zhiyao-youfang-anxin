@@ -63,6 +63,11 @@ export interface DoseEvent {
   note?: string;
 }
 
+export interface FamilyRiskReview {
+  reviewedAt: string;
+  reviewedBy: string;
+}
+
 export interface RiskCheck {
   id: string;
   level: RiskLevel;
@@ -75,6 +80,7 @@ export interface RiskCheck {
   medicationSnapshot: string[];
   createdAt: string;
   trackInRiskSummary?: boolean;
+  familyReview?: FamilyRiskReview;
 }
 
 export interface ChatMessage {

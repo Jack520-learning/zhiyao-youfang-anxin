@@ -83,6 +83,33 @@ export async function updateFamilyAlertStatus(input: {
   if (!response.ok) throw new Error(`记录状态同步失败：${response.status}`);
 }
 
+export async function updateFamilyRiskReview(input: {
+  familyCode: string;
+  riskCheckId: string;
+  reviewedBy: string;
+  reviewedAt?: string;
+}): Promise<{ reviewedAt: string; reviewedBy: string }> {
+  const response = await fetch(
+    `/api/family/${encodeURIComponent(
+      input.familyCode.toUpperCase()
+    )}/risks/${encodeURIComponent(input.riskCheckId)}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reviewed: true,
+        reviewedBy: input.reviewedBy,
+        reviewedAt: input.reviewedAt
+      })
+    }
+  );
+  if (!response.ok) throw new Error(`核对状态同步失败：${response.status}`);
+  const payload = (await response.json()) as {
+    familyReview: { reviewedAt: string; reviewedBy: string };
+  };
+  return payload.familyReview;
+}
+
 function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding)

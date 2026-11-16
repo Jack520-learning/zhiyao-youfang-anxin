@@ -50,6 +50,7 @@ import type {
   ElderProfile,
   EmergencyContact,
   FamilyAlert,
+  FamilyRiskReview,
   IntakeDraft,
   LocalAccount,
   Medication,
@@ -237,6 +238,7 @@ interface AppActions {
   updateMedication: (id: string, patch: Partial<Medication>) => void;
   deleteMedication: (id: string) => void;
   addRiskCheck: (riskCheck: RiskCheck) => void;
+  markRiskReviewed: (riskCheckId: string, review: FamilyRiskReview) => void;
   updateDose: (
     medicationId: string,
     scheduledAt: string,
@@ -1141,6 +1143,15 @@ export const useAppStore = create<AppStore>()(
             ...state.auditEvents
           ].slice(0, 100)
         })),
+      markRiskReviewed: (riskCheckId, review) =>
+        setState((state) => ({
+          riskChecks: state.riskChecks.map((riskCheck) =>
+            riskCheck.id === riskCheckId
+              ? { ...riskCheck, familyReview: review }
+              : riskCheck
+          ),
+          lastLocalSaveAt: nowIso()
+        })),
       updateDose: (medicationId, scheduledAt, status, doseId) =>
         setState((state) => {
           const event: DoseEvent = {
@@ -1167,20 +1178,32 @@ export const useAppStore = create<AppStore>()(
           };
         }),
       cancelDoseRecord: (medicationId, scheduledAt, doseId) =>
-        setState((state) => ({
-          doseEvents: state.doseEvents.filter(
-            (item) => item.id !== doseId
-          ),
-          lastLocalSaveAt: nowIso(),
-          auditEvents: [
-            auditEvent(
-              "dose-updated",
-              "取消服药记录并恢复为尚未确认",
-              { medicationId, scheduledAt }
-            ),
-            ...state.auditEvents
-          ].slice(0, 100)
-        })),
+        setState((state) => {
+          const cancelledAt = nowIso();
+          const cancellation: DoseEvent = {
+            id: doseId,
+            medicationId,
+            scheduledAt,
+            status: "pending",
+            updatedAt: cancelledAt,
+            note: "老人取消了服药确认，已恢复为尚未确认"
+          };
+          return {
+            doseEvents: [
+              cancellation,
+              ...state.doseEvents.filter((item) => item.id !== doseId)
+            ].slice(0, 500),
+            lastLocalSaveAt: cancelledAt,
+            auditEvents: [
+              auditEvent(
+                "dose-updated",
+                "取消服药记录并恢复为尚未确认",
+                { medicationId, scheduledAt }
+              ),
+              ...state.auditEvents
+            ].slice(0, 100)
+          };
+        }),
       addChatMessage: (message, requestedConversationId) =>
         setState((state) => {
           const activeId =

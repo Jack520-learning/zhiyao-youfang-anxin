@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DoseEvent, Medication, RiskCheck } from "../types";
 import { buildMedicationTrend, buildRiskDistribution } from "./familyInsights";
+import { getTodayDoses } from "./time";
 
 const medication: Medication = {
   id: "med-test",
@@ -77,6 +78,29 @@ describe("familyInsights", () => {
     expect(today?.taken).toBe(0);
     expect(today?.pending).toBe(1);
     expect(today?.confirmationRate).toBe(0);
+  });
+
+  it("moves a cancelled confirmation back to pending in the family trend", () => {
+    const cancelled: DoseEvent = {
+      ...doseEvent("pending"),
+      updatedAt: "2026-11-16T00:10:00.000Z",
+      note: "老人取消了服药确认，已恢复为尚未确认"
+    };
+    const today = buildMedicationTrend([medication], [cancelled], {
+      now: new Date("2026-11-16T12:00:00.000Z"),
+      timeZone: "Asia/Shanghai"
+    }).at(-1);
+    const todayDose = getTodayDoses(
+      [medication],
+      [cancelled],
+      new Date("2026-11-16T12:00:00.000Z"),
+      "Asia/Shanghai"
+    )[0];
+    expect(today?.taken).toBe(0);
+    expect(today?.pending).toBe(1);
+    expect(today?.confirmationRate).toBe(0);
+    expect(todayDose?.status).toBe("pending");
+    expect(todayDose?.note).toContain("取消");
   });
 
   it("groups recent risk records and respects high-risk sharing", () => {

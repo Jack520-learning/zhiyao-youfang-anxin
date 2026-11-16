@@ -163,6 +163,7 @@ export function getTodayDoses(
   status: DoseStatus;
   doseId: string;
   recordedAt?: string;
+  note?: string;
 }> {
   const key = dateKey(day, timeZone);
   return medications
@@ -181,7 +182,8 @@ export function getTodayDoses(
           scheduledAt,
           status: event?.status ?? "pending",
           doseId,
-          recordedAt: event?.updatedAt
+          recordedAt: event?.updatedAt,
+          note: event?.note
         };
       })
     )

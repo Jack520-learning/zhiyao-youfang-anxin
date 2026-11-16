@@ -176,11 +176,20 @@ export function useCloudSync() {
     };
     const interval = window.setInterval(() => {
       void loadElderSnapshot();
-    }, 30_000);
+    }, 10_000);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        void loadElderSnapshot();
+      }
+    };
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
       cancelled = true;
       source.close();
       window.clearInterval(interval);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [hydrated, sessionAccountId, role, familyCode, connectionTick]);
 
@@ -231,11 +240,20 @@ export function useCloudSync() {
     };
     const interval = window.setInterval(() => {
       void loadFamily(false);
-    }, 30_000);
+    }, 10_000);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        void loadFamily(false);
+      }
+    };
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
       cancelled = true;
       source.close();
       window.clearInterval(interval);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [hydrated, sessionAccountId, role, familyCode, connectionTick]);
 
