@@ -696,11 +696,10 @@ export function ChatPage() {
       const streamedMessage: ChatMessage = {
         id: streamedAssistantMessageId,
         role: "assistant",
-        content: localResponse.message,
+        content: "",
         createdAt: nowIso(),
         answerMode: effectiveAnswerMode,
-        riskCheck: localResponse.riskCheck,
-        pending: false
+        pending: true
       };
       addChatMessage(streamedMessage, targetConversationId);
       setStreamingMessageId(streamedAssistantMessageId);
@@ -1444,6 +1443,7 @@ export function ChatPage() {
           </div>
         </div>
         {message.role === "assistant" &&
+        !isStreaming &&
         message.riskCheck &&
         !isQuickAnswer ? (
           <div className="answer-search-meta">
@@ -1459,7 +1459,9 @@ export function ChatPage() {
               {message.content ? (
                 <AssistantMarkdown content={message.content} />
               ) : isStreaming ? (
-                <span className="streaming-placeholder">正在生成回答…</span>
+                <span className="streaming-placeholder">
+                  正在完整思考并核对回答，请稍候…
+                </span>
               ) : null}
               {isStreaming && message.content ? (
                 <span className="streaming-caret" aria-hidden="true" />
