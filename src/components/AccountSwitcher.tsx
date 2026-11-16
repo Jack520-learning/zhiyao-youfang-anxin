@@ -1,5 +1,7 @@
 import {
   ArrowLeftRight,
+  Eye,
+  EyeOff,
   LogIn,
   LoaderCircle,
   Trash2,
@@ -35,6 +37,7 @@ export function AccountSwitcher({
   const logoutAccount = useAppStore((state) => state.logoutAccount);
   const [deleteTarget, setDeleteTarget] = useState<LocalAccount>();
   const [deletePassword, setDeletePassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [deleteNotice, setDeleteNotice] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -43,6 +46,7 @@ export function AccountSwitcher({
     if (open) return;
     setDeleteTarget(undefined);
     setDeletePassword("");
+    setShowPassword(false);
     setDeleteError("");
     setDeleteNotice("");
     setDeleting(false);
@@ -82,6 +86,7 @@ export function AccountSwitcher({
   function closeSwitcher() {
     setDeleteTarget(undefined);
     setDeletePassword("");
+    setShowPassword(false);
     setDeleteError("");
     setDeleteNotice("");
     onClose();
@@ -120,6 +125,7 @@ export function AccountSwitcher({
       }
       setDeleteTarget(undefined);
       setDeletePassword("");
+      setShowPassword(false);
       if (wasCurrent) {
         closeSwitcher();
         navigate("/");
@@ -200,6 +206,7 @@ export function AccountSwitcher({
                           onClick={() => {
                             setDeleteTarget(account);
                             setDeletePassword("");
+                            setShowPassword(false);
                             setDeleteError("");
                             setDeleteNotice("");
                           }}
@@ -235,14 +242,38 @@ export function AccountSwitcher({
             </div>
             <label className="field">
               <span className="field-label">输入该账号密码确认</span>
-              <input
-                className="input"
-                type="password"
-                value={deletePassword}
-                onChange={(event) => setDeletePassword(event.target.value)}
-                autoComplete="current-password"
-                placeholder={`账号：${deleteTarget.username}`}
-              />
+              <div style={{ position: "relative" }}>
+                <input
+                  className="input"
+                  type={showPassword ? "text" : "password"}
+                  value={deletePassword}
+                  onChange={(event) => setDeletePassword(event.target.value)}
+                  autoComplete="current-password"
+                  placeholder={`账号：${deleteTarget.username}`}
+                  style={{ paddingRight: 42 }}
+                />
+                <button
+                  type="button"
+                  className="icon-btn"
+                  style={{
+                    position: "absolute",
+                    right: 6,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "transparent",
+                    border: "none"
+                  }}
+                  aria-label={showPassword ? "隐藏密码" : "显示密码"}
+                  title={showPassword ? "隐藏密码" : "显示密码"}
+                  onClick={() => setShowPassword((value) => !value)}
+                >
+                  {showPassword ? (
+                    <EyeOff size={18} aria-hidden="true" />
+                  ) : (
+                    <Eye size={18} aria-hidden="true" />
+                  )}
+                </button>
+              </div>
             </label>
             {deleteError ? (
               <p className="auth-error" role="alert">
@@ -270,6 +301,7 @@ export function AccountSwitcher({
                 onClick={() => {
                   setDeleteTarget(undefined);
                   setDeletePassword("");
+                  setShowPassword(false);
                   setDeleteError("");
                 }}
               >

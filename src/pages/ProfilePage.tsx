@@ -1,4 +1,5 @@
 import {
+  BellOff,
   BellRing,
   Check,
   Cloud,
@@ -108,6 +109,12 @@ export function ProfilePage() {
   }, [toast]);
 
   useEffect(() => {
+    if (preferences.notificationsEnabled) {
+      setNotificationState("granted");
+    }
+  }, [preferences.notificationsEnabled]);
+
+  useEffect(() => {
     setCodeInput(familyCode);
   }, [familyCode]);
 
@@ -150,6 +157,30 @@ export function ProfilePage() {
     } catch {
       setNotificationState("denied");
       setToast("通知订阅未完成，请确认使用本地预览或 HTTPS 环境");
+    }
+  }
+
+  async function toggleReminders() {
+    const next = !preferences.remindersEnabled;
+    updatePreferences({ remindersEnabled: next });
+    if (next) {
+      await enableNotifications();
+    } else {
+      await unsubscribeFromPush().catch(() => undefined);
+      updatePreferences({ notificationsEnabled: false });
+      setNotificationState("idle");
+      setToast("已关闭吃药提醒");
+    }
+  }
+
+  async function toggleSystemNotifications() {
+    if (preferences.notificationsEnabled || notificationState === "granted") {
+      await unsubscribeFromPush().catch(() => undefined);
+      updatePreferences({ notificationsEnabled: false });
+      setNotificationState("idle");
+      setToast("已取消系统通知订阅");
+    } else {
+      await enableNotifications();
     }
   }
 
@@ -708,12 +739,16 @@ export function ProfilePage() {
 
           <section className="card card-pad elder-setting-row">
             <span className="quick-action-icon">
-              <BellRing size={25} aria-hidden="true" />
+              {preferences.remindersEnabled ? (
+                <BellRing size={25} aria-hidden="true" />
+              ) : (
+                <BellOff size={25} aria-hidden="true" />
+              )}
             </span>
             <span className="settings-copy">
               <strong>吃药提醒通知</strong>
               <span>
-                {preferences.notificationsEnabled ? "已经开启" : "还没开启"} ·
+                {preferences.remindersEnabled ? "已经开启" : "已关闭"} ·
                 时区 {profile.timeZone}
               </span>
             </span>
@@ -721,9 +756,13 @@ export function ProfilePage() {
               className="btn"
               type="button"
               disabled={notificationState === "loading"}
-              onClick={enableNotifications}
+              onClick={() => void toggleReminders()}
             >
-              {notificationState === "loading" ? "正在打开" : "打开"}
+              {notificationState === "loading"
+                ? "正在处理"
+                : preferences.remindersEnabled
+                ? "关闭提醒"
+                : "打开提醒"}
             </button>
           </section>
 
@@ -1286,14 +1325,20 @@ export function ProfilePage() {
               className="btn"
               type="button"
               disabled={notificationState === "loading"}
-              onClick={enableNotifications}
+              onClick={() => void toggleSystemNotifications()}
             >
-              <BellRing size={18} aria-hidden="true" />
-              {notificationState === "granted"
-                ? "已订阅"
-                : notificationState === "loading"
-                  ? "正在订阅"
-                  : "开启通知"}
+              {preferences.notificationsEnabled ||
+              notificationState === "granted" ? (
+                <BellOff size={18} aria-hidden="true" />
+              ) : (
+                <BellRing size={18} aria-hidden="true" />
+              )}
+              {notificationState === "loading"
+                ? "正在处理"
+                : preferences.notificationsEnabled ||
+                  notificationState === "granted"
+                ? "取消订阅"
+                : "开启通知"}
             </button>
           </div>
         </section>
