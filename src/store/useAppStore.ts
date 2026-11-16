@@ -6,7 +6,11 @@ import {
   type StateStorage
 } from "zustand/middleware";
 import { createInitialState } from "../data/seed";
-import { createPasswordRecord, verifyPassword } from "../lib/auth";
+import {
+  createPasswordRecord,
+  encryptPassword,
+  verifyPassword
+} from "../lib/auth";
 import {
   createServerLinkedAccount,
   deleteServerAccount,
@@ -328,6 +332,7 @@ export const useAppStore = create<AppStore>()(
           };
         }
         const passwordRecord = await createPasswordRecord(password);
+        const encryptedPassword = await encryptPassword(password, normalizedUsername);
         const cleanDisplayName = displayName.trim() || normalizedUsername;
         const account: LocalAccount = {
           ...accountFromServer(
@@ -336,6 +341,7 @@ export const useAppStore = create<AppStore>()(
             serverSession.token
           ),
           ...passwordRecord,
+          encryptedPassword,
           displayName: cleanDisplayName
         };
         const latest = getState();
@@ -471,10 +477,12 @@ export const useAppStore = create<AppStore>()(
           };
         }
         const passwordRecord = await createPasswordRecord(password);
+        const encryptedPassword = await encryptPassword(password, normalizedUsername);
         const cleanDisplayName = displayName.trim() || normalizedUsername;
         const account = {
           ...accountFromServer(serverResult.account),
           ...passwordRecord,
+          encryptedPassword,
           displayName: cleanDisplayName
         };
         let accounts = mergeServerAccounts(
@@ -566,9 +574,14 @@ export const useAppStore = create<AppStore>()(
           if (accountIdx < 0) return { ok: false, error: "账号数据不完整" };
           // 登录成功后写本地密码 hash，确保以后可在本地验证密码（删除账号等场景）
           const currentPasswordRecord = await createPasswordRecord(password);
+          const encryptedPassword = await encryptPassword(
+            password,
+            accounts[accountIdx].username
+          );
           const account = {
             ...accounts[accountIdx],
-            ...currentPasswordRecord
+            ...currentPasswordRecord,
+            encryptedPassword
           };
           accounts[accountIdx] = account;
           const workspaces = saveActiveWorkspace(state);

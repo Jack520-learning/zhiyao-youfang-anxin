@@ -4,6 +4,7 @@ import {
   EyeOff,
   LogIn,
   LoaderCircle,
+  KeyRound,
   Trash2,
   X
 } from "lucide-react";
@@ -13,6 +14,7 @@ import {
   deleteCloudFamily,
   unsubscribeFromPush
 } from "../lib/cloud";
+import { decryptPassword } from "../lib/auth";
 import { getLinkedFamilyCodes } from "../lib/workspaces";
 import { useAppStore } from "../store/useAppStore";
 import type { LocalAccount, UserRole } from "../types";
@@ -41,6 +43,10 @@ export function AccountSwitcher({
   const [deleteError, setDeleteError] = useState("");
   const [deleteNotice, setDeleteNotice] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [revealAccountId, setRevealAccountId] = useState<string>();
+  const [revealedPassword, setRevealedPassword] = useState("");
+  const [revealError, setRevealError] = useState("");
+  const [revealing, setRevealing] = useState(false);
 
   useEffect(() => {
     if (open) return;
@@ -50,6 +56,9 @@ export function AccountSwitcher({
     setDeleteError("");
     setDeleteNotice("");
     setDeleting(false);
+    setRevealAccountId(undefined);
+    setRevealedPassword("");
+    setRevealError("");
   }, [open]);
 
   if (!open) return null;
@@ -89,7 +98,40 @@ export function AccountSwitcher({
     setShowPassword(false);
     setDeleteError("");
     setDeleteNotice("");
+    setRevealAccountId(undefined);
+    setRevealedPassword("");
+    setRevealError("");
     onClose();
+  }
+
+  async function toggleRevealPassword(account: LocalAccount) {
+    if (revealAccountId === account.id) {
+      setRevealAccountId(undefined);
+      setRevealedPassword("");
+      setRevealError("");
+      return;
+    }
+    setRevealing(true);
+    setRevealError("");
+    try {
+      if (!account.encryptedPassword) {
+        throw new Error("该账号未保存可查看的密码，请重新登录后再试");
+      }
+      const password = await decryptPassword(
+        account.encryptedPassword,
+        account.username
+      );
+      setRevealAccountId(account.id);
+      setRevealedPassword(password);
+    } catch (error) {
+      setRevealError(
+        error instanceof Error ? error.message : "无法解密密码，请重新登录后再试"
+      );
+      setRevealAccountId(undefined);
+      setRevealedPassword("");
+    } finally {
+      setRevealing(false);
+    }
   }
 
   async function confirmDelete() {
@@ -175,12 +217,13 @@ export function AccountSwitcher({
                   group.accounts.map((account) => {
                     const active = account.id === sessionAccountId;
                     const linkedCount = getLinkedFamilyCodes(account).length;
+                    const isRevealed = revealAccountId === account.id;
                     return (
+                      <div key={account.id}>
                       <div
                         className={`account-switch-row ${
                           active ? "active" : ""
                         }`}
-                        key={account.id}
                       >
                         <button
                           type="button"
@@ -201,6 +244,29 @@ export function AccountSwitcher({
                         <button
                           type="button"
                           className="account-delete-button"
+                          aria-label={
+                            revealAccountId === account.id
+                              ? "隐藏密码"
+                              : "查看密码"
+                          }
+                          title={
+                            revealAccountId === account.id
+                              ? "隐藏密码"
+                              : "查看密码"
+                          }
+                          onClick={() => void toggleRevealPassword(account)}
+                        >
+                          {revealing && revealAccountId !== account.id ? (
+                            <LoaderCircle size={18} aria-hidden="true" />
+                          ) : revealAccountId === account.id ? (
+                            <EyeOff size={18} aria-hidden="true" />
+                          ) : (
+                            <Eye size={18} aria-hidden="true" />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          className="account-delete-button"
                           aria-label={`删除账号：${account.displayName}`}
                           title="删除账号"
                           onClick={() => {
@@ -213,6 +279,45 @@ export function AccountSwitcher({
                         >
                           <Trash2 size={18} aria-hidden="true" />
                         </button>
+                      </div>
+                      {isRevealed ? (
+                        <div
+                          className="account-delete-panel"
+                          style={{ marginTop: 8 }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8
+                            }}
+                          >
+                            <KeyRound size={18} aria-hidden="true" />
+                            <strong>账号密码</strong>
+                          </div>
+                          {revealedPassword ? (
+                            <div
+                              style={{
+                                marginTop: 8,
+                                padding: "10px 14px",
+                                background: "var(--bg)",
+                                borderRadius: 8,
+                                fontFamily: "monospace",
+                                fontSize: 18,
+                                letterSpacing: 1,
+                                wordBreak: "break-all"
+                              }}
+                            >
+                              {revealedPassword}
+                            </div>
+                          ) : null}
+                          {revealError ? (
+                            <p className="error" style={{ marginTop: 8 }}>
+                              {revealError}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
                       </div>
                     );
                   })

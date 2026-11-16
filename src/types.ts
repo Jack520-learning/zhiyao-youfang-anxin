@@ -102,6 +102,7 @@ export interface LocalAccount {
   sessionToken?: string;
   passwordHash: string;
   passwordSalt: string;
+  encryptedPassword?: string;
   createdAt: string;
 }
 
