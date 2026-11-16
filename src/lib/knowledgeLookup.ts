@@ -1,5 +1,6 @@
 import type { AssistantResponse, RiskCheck } from "../types";
 import { nowIso } from "./time";
+import { buildUnavailableAnswer } from "./unavailableAnswer";
 
 export interface PublicKnowledgeSource {
   title: string;
@@ -49,17 +50,35 @@ export function buildPublicKnowledgeResponse(
   const sources = (result.sources || [])
     .filter((source) => /^https:\/\//i.test(source.url))
     .slice(0, 4);
+  if (!result.found || !sources.length) {
+    const message = buildUnavailableAnswer(result.query);
+    return {
+      message,
+      riskCheck: {
+        id: `web-knowledge-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        level: "unknown",
+        title: "这个问题目前无法准确回答",
+        summary: message,
+        nextStep: "",
+        reasons: ["没有获得可追溯的可靠公开来源"],
+        sourceIds: ["src-no-evidence"],
+        involvedMedicationIds: [],
+        medicationSnapshot: [],
+        createdAt: nowIso()
+      },
+      stages: [
+        { id: "knowledge-gap", label: "发现本地知识缺口", status: "done" },
+        { id: "public-search", label: "核对可追溯公开资料", status: "done" }
+      ],
+      mode: "rules",
+      groundingOnly: true
+    };
+  }
   const riskCheck: RiskCheck = {
     id: `web-knowledge-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    level: result.found && sources.length ? "medium" : "unknown",
-    title:
-      result.found && sources.length
-        ? cleanVisibleText(result.title)
-        : "公开资料中没有找到足够可靠的内容",
-    summary:
-      result.found && sources.length
-        ? cleanVisibleText(result.summary)
-        : "没有找到可追溯的可靠公开资料，因此未把推测内容加入知识库。",
+    level: "medium",
+    title: cleanVisibleText(result.title),
+    summary: cleanVisibleText(result.summary),
     nextStep:
       cleanVisibleText(
         result.nextStep ||
@@ -76,13 +95,11 @@ export function buildPublicKnowledgeResponse(
     medicationSnapshot: [],
     createdAt: nowIso()
   };
-  const sourceBlock = sources.length
-    ? [
-        "",
-        "### 公开资料来源",
-        ...sources.map((source) => `- ${cleanVisibleText(source.title)}：${source.url}`)
-      ]
-    : [];
+  const sourceBlock = [
+    "",
+    "### 公开资料来源",
+    ...sources.map((source) => `- ${cleanVisibleText(source.title)}：${source.url}`)
+  ];
   return {
     message: [
       `## ${riskCheck.title}`,
@@ -92,11 +109,9 @@ export function buildPublicKnowledgeResponse(
       riskCheck.nextStep,
       ...sourceBlock,
       "",
-      !result.found || !sources.length
-        ? "本次没有获得可访问的可靠来源，知识库未更新。"
-        : result.cached
-          ? "知识库中已有这一主题的动态资料，本次直接复用并更新了回答。"
-          : "知识库已根据公开资料完成更新，本次回答已同步使用新增内容。"
+      result.cached
+        ? "知识库中已有这一主题的动态资料，本次直接复用并更新了回答。"
+        : "知识库已根据公开资料完成更新，本次回答已同步使用新增内容。"
     ]
       .filter(Boolean)
       .join("\n\n"),

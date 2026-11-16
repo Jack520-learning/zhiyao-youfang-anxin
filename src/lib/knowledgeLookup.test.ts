@@ -45,7 +45,7 @@ describe("dynamic public knowledge", () => {
     expect(response.groundingOnly).toBe(true);
   });
 
-  it("does not claim an update when no source was found", () => {
+  it("returns a short fallback without an explanation when no source was found", () => {
     const response = buildPublicKnowledgeResponse({
       found: false,
       query: "测试问题",
@@ -55,7 +55,10 @@ describe("dynamic public knowledge", () => {
       fetchedAt: "2026-11-16T00:00:00.000Z",
       cached: false
     });
-    expect(response.message).toContain("知识库未更新");
+    expect(response.message).toContain("无法准确回答");
+    expect(response.message.split(/\n/)).toHaveLength(1);
+    expect(response.message.length).toBeLessThan(100);
+    expect(response.message).not.toContain("知识库未更新");
     expect(response.message).not.toContain("知识库已根据公开资料完成更新");
   });
 });

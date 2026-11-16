@@ -88,6 +88,7 @@ import {
   buildMedicationActivityResponse,
   isMedicationActivityQuery
 } from "../lib/medicationActivity";
+import { buildUnavailableAnswer } from "../lib/unavailableAnswer";
 import { useAppStore } from "../store/useAppStore";
 import type {
   AssistantResponse,
@@ -657,17 +658,15 @@ export function ChatPage() {
         );
         localResponse = buildPublicKnowledgeResponse(publicKnowledge);
       } catch {
+        const unavailable = buildUnavailableAnswer(contextualQuestion);
         localResponse = {
           ...localResponse,
-          message:
-            "## 公开资料暂时无法检索\n\n本次没有获得可追溯的公开来源，因此不会生成猜测性答案，也不会把未核实内容加入知识库。\n\n### 下一步\n\n请稍后重试，或补充具体药名、疾病名称、说明书内容，并咨询医生或药师。",
+          message: unavailable,
           riskCheck: {
             ...localResponse.riskCheck,
-            title: "公开资料检索暂时不可用",
-            summary:
-              "本次没有获得可追溯的公开来源，因此没有更新知识库。",
-            nextStep:
-              "请稍后重试，或补充具体药名、疾病名称和说明书内容。"
+            title: "这个问题目前无法准确回答",
+            summary: unavailable,
+            nextStep: ""
           },
           groundingOnly: true
         };
@@ -1488,6 +1487,7 @@ export function ChatPage() {
         {message.role === "assistant" &&
         !isStreaming &&
         message.riskCheck &&
+        message.riskCheck.level !== "unknown" &&
         !isQuickAnswer ? (
           <div className="answer-search-meta">
             <Search size={15} aria-hidden="true" />
@@ -1530,6 +1530,7 @@ export function ChatPage() {
         ) : null}
         {message.role === "assistant" &&
         message.riskCheck &&
+        message.riskCheck.level !== "unknown" &&
         responseMode === "safety" &&
         !isStreaming ? (
           <div className="answer-followups">

@@ -208,7 +208,8 @@ describe("riskEngine", () => {
       state.profile
     );
     expect(result.riskCheck.level).toBe("unknown");
-    expect(result.message).toContain("资料不足");
+    expect(result.message).toContain("无法准确回答");
+    expect(result.message.length).toBeLessThan(100);
   });
 
   it("does not provide a one-size-fits-all dose for a symptom question", () => {

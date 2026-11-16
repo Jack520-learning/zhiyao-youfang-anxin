@@ -15,6 +15,7 @@ import {
   findConditionGuidance,
   formatConditionGuidance
 } from "../catalog/conditionGuidance";
+import { buildUnavailableAnswer } from "./unavailableAnswer";
 
 export const knowledge = knowledgeData as SharedKnowledgeBase;
 
@@ -935,7 +936,7 @@ export function answerWithRules(
     currentMedications
   );
   return {
-    message: buildRulesMessage(check, mode, query),
+    message: buildUnavailableAnswer(query),
     riskCheck: check,
     stages: [
       { id: "intent", label: "理解问题", status: "done" },
@@ -943,7 +944,8 @@ export function answerWithRules(
       { id: "rag", label: "检索资料", status: "done" },
       { id: "risk", label: "停止无依据推断", status: "done" }
     ],
-    mode: "rules"
+    mode: "rules",
+    groundingOnly: true
   };
 }
 
