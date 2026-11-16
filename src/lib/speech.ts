@@ -169,9 +169,14 @@ let preferredVoiceMode: VoiceMode = "warm";
 let currentAudio: HTMLAudioElement | null = null;
 let speechRequestVersion = 0;
 let speechPending = false;
+let speechAbortController: AbortController | null = null;
 const speechUrlCache = new Map<
   string,
   { audioUrl: string; createdAt: number; voice: string }
+>();
+const speechAudioRequests = new Map<
+  string,
+  Promise<{ audioUrl: string; voice: string }>
 >();
 const expectedSystemVoices: Record<
   Exclude<VoiceMode, "custom">,
@@ -210,6 +215,8 @@ export async function speakText(
   stopSpeaking();
   preferredVoiceMode = voiceMode;
   const requestVersion = speechRequestVersion;
+  const abortController = new AbortController();
+  speechAbortController = abortController;
   speechPending = true;
   emitSpeechState();
   const cached = getCachedSpeechAudio(text, voiceMode, customVoiceId);
@@ -221,11 +228,15 @@ export async function speakText(
       text,
       voiceMode,
       customVoiceId,
-      requestVersion
+      requestVersion,
+      abortController.signal
     );
   } catch {
     return false;
   } finally {
+    if (speechAbortController === abortController) {
+      speechAbortController = null;
+    }
     if (requestVersion === speechRequestVersion) {
       speechPending = false;
       emitSpeechState();
@@ -263,6 +274,11 @@ async function playAudioUrl(
     emitSpeechState();
   };
   await audio.play();
+  if (requestVersion !== speechRequestVersion || currentAudio !== audio) {
+    audio.pause();
+    audio.currentTime = 0;
+    return false;
+  }
   emitSpeechState();
   return true;
 }
@@ -271,9 +287,15 @@ async function playServerAudio(
   text: string,
   voiceMode: VoiceMode,
   customVoiceId: string | undefined,
-  requestVersion: number
+  requestVersion: number,
+  signal: AbortSignal
 ): Promise<boolean> {
-  const payload = await getSpeechAudioUrl(text, voiceMode, customVoiceId);
+  const payload = await getSpeechAudioUrl(
+    text,
+    voiceMode,
+    customVoiceId,
+    signal
+  );
   if (requestVersion !== speechRequestVersion) return false;
   return playAudioUrl(payload.audioUrl, requestVersion);
 }
@@ -281,42 +303,57 @@ async function playServerAudio(
 async function getSpeechAudioUrl(
   text: string,
   voiceMode: VoiceMode,
-  customVoiceId?: string
+  customVoiceId?: string,
+  signal?: AbortSignal
 ): Promise<{ audioUrl: string; voice: string }> {
   const spokenText = naturalSpeechText(text);
   const cacheKey = `${voiceMode}:${customVoiceId || "default"}:${spokenText}`;
   const cached = getCachedSpeechAudio(text, voiceMode, customVoiceId);
   if (cached) return cached;
-  const response = await fetch("/api/tts", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      text: spokenText,
-      voiceMode,
-      customVoiceId
-    })
-  });
-  if (!response.ok) throw new Error("服务端语音合成不可用");
-  const payload = (await response.json()) as {
-    audioUrl?: string;
-    voice?: string;
-  };
-  if (!payload.audioUrl) throw new Error("没有返回音频");
-  if (voiceMode !== "custom") {
-    const expectedVoice = expectedSystemVoices[voiceMode];
-    if (payload.voice !== expectedVoice) {
-      throw new Error("语音服务返回了不匹配的音色");
+  const pendingRequest = speechAudioRequests.get(cacheKey);
+  if (pendingRequest) return pendingRequest;
+
+  const request = (async () => {
+    const response = await fetch("/api/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal,
+      body: JSON.stringify({
+        text: spokenText,
+        voiceMode,
+        customVoiceId
+      })
+    });
+    if (!response.ok) throw new Error("服务端语音合成不可用");
+    const payload = (await response.json()) as {
+      audioUrl?: string;
+      voice?: string;
+    };
+    if (!payload.audioUrl) throw new Error("没有返回音频");
+    if (voiceMode !== "custom") {
+      const expectedVoice = expectedSystemVoices[voiceMode];
+      if (payload.voice !== expectedVoice) {
+        throw new Error("语音服务返回了不匹配的音色");
+      }
+    }
+    return {
+      audioUrl: payload.audioUrl,
+      voice: payload.voice || voiceMode
+    };
+  })();
+  speechAudioRequests.set(cacheKey, request);
+  try {
+    const result = await request;
+    speechUrlCache.set(cacheKey, {
+      ...result,
+      createdAt: Date.now()
+    });
+    return result;
+  } finally {
+    if (speechAudioRequests.get(cacheKey) === request) {
+      speechAudioRequests.delete(cacheKey);
     }
   }
-  const result = {
-    audioUrl: payload.audioUrl,
-    voice: payload.voice || voiceMode
-  };
-  speechUrlCache.set(cacheKey, {
-    ...result,
-    createdAt: Date.now()
-  });
-  return result;
 }
 
 export async function preloadSpeech(
@@ -359,6 +396,8 @@ export function resumeSpeaking(): boolean {
 export function stopSpeaking() {
   speechRequestVersion += 1;
   speechPending = false;
+  speechAbortController?.abort();
+  speechAbortController = null;
   if (currentAudio) {
     currentAudio.pause();
     currentAudio.currentTime = 0;

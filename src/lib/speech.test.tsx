@@ -4,6 +4,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  getSpeechStatus,
+  preloadSpeech,
   speakText,
   stopSpeaking,
   useSpeechRecognition
@@ -179,5 +181,55 @@ describe("speech playback start", () => {
       speakText("音色不匹配测试", true, "male")
     ).resolves.toBe(false);
     expect(browserSpeechCalls).toBe(0);
+  });
+
+  it("aborts a pending speech request immediately when stopped", async () => {
+    let requestSignal: AbortSignal | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_url: string, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            requestSignal = init?.signal || undefined;
+            requestSignal?.addEventListener(
+              "abort",
+              () =>
+                reject(
+                  new DOMException("语音朗读已停止", "AbortError")
+                ),
+              { once: true }
+            );
+          })
+      )
+    );
+
+    const playback = speakText("停止朗读测试", true, "clear");
+    expect(requestSignal).toBeDefined();
+    expect(getSpeechStatus()).toBe("loading");
+    stopSpeaking();
+
+    await expect(playback).resolves.toBe(false);
+    expect(requestSignal?.aborted).toBe(true);
+    expect(getSpeechStatus()).toBe("idle");
+  });
+
+  it("deduplicates background preparation for the same message and voice", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          audioUrl: "https://audio.example/prepared.wav",
+          voice: "longanhuan_v3.1"
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await Promise.all([
+      preloadSpeech("同一条回答朗读预取", "warm"),
+      preloadSpeech("同一条回答朗读预取", "warm")
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

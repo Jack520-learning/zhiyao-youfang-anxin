@@ -65,12 +65,16 @@ import {
 } from "../catalog/chatBridge";
 import { findBestMedicine } from "../catalog/retrieval";
 import { buildLocalGuidance } from "../catalog/guidance";
-import { searchHerbs } from "../catalog/herbs";
 import {
   buildDraftsFromVision,
   type VisionIdentification
 } from "../lib/vision";
-import { speakText, stopSpeaking } from "../lib/speech";
+import {
+  getSpeechStatus,
+  preloadSpeech,
+  speakText,
+  stopSpeaking
+} from "../lib/speech";
 import { useQwenSpeechRecognition } from "../lib/qwenSpeech";
 import { nowIso, getNextDose, formatMessageTime } from "../lib/time";
 import {
@@ -94,6 +98,11 @@ import {
 } from "../lib/medicationActivity";
 import { buildUnavailableAnswer } from "../lib/unavailableAnswer";
 import {
+  buildSkillResponse,
+  isSkillAnswerCompliant,
+  type ChatSkill
+} from "../lib/skillResponses";
+import {
   buildGeneralKnowledgeResponse,
   isGeneralKnowledgeQuestion,
   withGeneralKnowledgeNotice
@@ -114,7 +123,7 @@ const sampleQuestions = [
   "我头晕，是不是药的问题？"
 ];
 
-type ComposerSkill = "photo" | "catalog" | "herbs" | "multi-drug";
+type ComposerSkill = ChatSkill;
 type AnswerMode = "quick" | "safety" | "detailed";
 
 const composerSkills: Array<{
@@ -160,61 +169,6 @@ function needsMedicationReview(question: string, skill?: ComposerSkill): boolean
   return /(药|胶囊|片|颗粒|剂量|用量|用法|服用|怎么吃|什么时候吃|毫克|mg|同服|一起吃|相互作用|漏服|补服|停药|副作用|不良反应|头晕|恶心|心慌|胸闷|不舒服)/i.test(
     question
   );
-}
-
-function herbSkillAnswer(
-  question: string,
-  profile: { age: number; conditions: string[] },
-  currentMedicationNames: string[]
-): AssistantResponse | null {
-  const herb = searchHerbs(question).find((item) =>
-    [item.name, ...item.aliases].some((term) => question.includes(term))
-  );
-  if (!herb) return null;
-  const hasAnticoagulant = currentMedicationNames.some((name) =>
-    /华法林|阿司匹林|氯吡格雷|利伐沙班/.test(name)
-  );
-  const level = hasAnticoagulant ? "medium" : "low";
-  return {
-    message: [
-      `识别到中药材：${herb.name}`,
-      `性味归经：${herb.nature} · ${herb.flavor} · 归${herb.meridians.join("、")}经`,
-      `传统用途：${herb.functions.join("、")}`,
-      "",
-      "安全提醒：",
-      ...herb.safety.map((item) => `· ${item}`),
-      "",
-      hasAnticoagulant
-        ? "结论：您当前有需要关注凝血风险的处方药，不要自行把这类中药材加入日常服用。请先让医生或药师核对。"
-        : "结论：中药材也需要结合体质、炮制方法和正在服用的药物核对，不能仅凭名称自行定量或长期服用。",
-      `老人特别说明：${profile.age >= 65 ? "年龄较大，更应避免自行叠加药材和保健品。" : "使用前仍需核对年龄和基础疾病。"}`
-    ].join("\n"),
-    riskCheck: {
-      id: `herb-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      level,
-      title: hasAnticoagulant
-        ? "中药材与当前抗凝用药需要专业核对"
-        : `${herb.name}使用前需要核对`,
-      summary: herb.traditionalUse,
-      nextStep: hasAnticoagulant
-        ? "不要自行同服。请携带药材实物和全部处方药，让医生或药师评估。"
-        : "不要用单一症状自行确定体质，也不能用中药材替代处方药。",
-      reasons: [
-        `已匹配中药材：${herb.name}`,
-        `当前基础疾病：${profile.conditions.join("、") || "未填写"}`
-      ],
-      sourceIds: ["src-herb-catalog"],
-      involvedMedicationIds: [],
-      medicationSnapshot: currentMedicationNames,
-      createdAt: nowIso()
-    },
-    stages: [
-      { id: "herb-match", label: `识别中药材：${herb.name}`, status: "done" },
-      { id: "herb-safety", label: "核对安全提醒与当前用药", status: "done" },
-      { id: "herb-answer", label: "生成针对性解答", status: "done" }
-    ],
-    mode: "rules"
-  };
 }
 
 function wait(milliseconds: number) {
@@ -379,6 +333,7 @@ export function ChatPage() {
   }>();
   const [copiedMessageId, setCopiedMessageId] = useState("");
   const [speakingMessageId, setSpeakingMessageId] = useState("");
+  const [speechNotice, setSpeechNotice] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem("chat-sidebar-width");
@@ -394,6 +349,7 @@ export function ChatPage() {
   const streamTraceRef = useRef<AssistantStage[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const generationRunRef = useRef(0);
+  const speechRunRef = useRef(0);
 
   const speech = useQwenSpeechRecognition((transcript) => {
     setInput(transcript);
@@ -449,6 +405,37 @@ export function ChatPage() {
       void submitQuestion(initialQuery, false);
     }
   }, [searchParams, location.key]);
+
+  useEffect(() => {
+    const update = () => {
+      if (getSpeechStatus() === "idle") setSpeakingMessageId("");
+    };
+    window.addEventListener("speech-state-change", update);
+    return () => window.removeEventListener("speech-state-change", update);
+  }, []);
+
+  useEffect(() => {
+    if (
+      preferences.voiceMode === "custom" &&
+      !preferences.customVoiceId
+    ) {
+      return;
+    }
+    const messagesToPrepare = messages
+      .filter((message) => !message.pending && message.content.trim())
+      .slice(-5);
+    for (const message of messagesToPrepare) {
+      void preloadSpeech(
+        message.content,
+        preferences.voiceMode,
+        preferences.customVoiceId
+      ).catch(() => undefined);
+    }
+  }, [
+    messages,
+    preferences.voiceMode,
+    preferences.customVoiceId
+  ]);
 
   useEffect(() => {
     latestSidebarWidth.current = sidebarWidth;
@@ -632,14 +619,19 @@ export function ChatPage() {
         answerWithRules(contextualQuestion, activeMedications, profile, {
           answerMode: effectiveAnswerMode
         });
-    if (composerSkill === "herbs") {
-      localResponse =
-        herbSkillAnswer(
-          contextualQuestion,
-          profile,
-          activeMedications.map((medication) => medication.name)
-        ) ?? localResponse;
-    }
+    const explicitSkillResponse = buildSkillResponse(
+      composerSkill,
+      contextualQuestion,
+      {
+        profile,
+        medications: activeMedications,
+        currentMedicationNames: activeMedications.map(
+          (medication) => medication.name
+        ),
+        answerMode: effectiveAnswerMode
+      }
+    );
+    if (explicitSkillResponse) localResponse = explicitSkillResponse;
     const catalogResponse =
       dailyConversation || medicationActivityQuery || generalKnowledgeQuery
       ? null
@@ -661,6 +653,7 @@ export function ChatPage() {
         clean
       );
     if (
+      !composerSkill &&
       catalogResponse &&
       (!mentionsCurrentMedication ||
         catalogQuestionIntent ||
@@ -858,6 +851,15 @@ export function ChatPage() {
         if (!isResponseRelevantToQuestion(clean, streamed)) {
           throw new Error("模型回答与当前问题类型不一致，已切换本地回答");
         }
+        if (
+          !isSkillAnswerCompliant(
+            composerSkill,
+            streamed,
+            localResponse.message
+          )
+        ) {
+          throw new Error("模型回答没有遵循所选技能，已切换技能对应回答");
+        }
         if (!isAnswerModeCompliant(streamed, effectiveAnswerMode)) {
           throw new Error("模型回答未满足所选回答方式，已切换本地结构化回答");
         }
@@ -932,26 +934,39 @@ export function ChatPage() {
     }
 
     setMode(response.mode);
+    const finalMessageContent = generalKnowledgeQuery
+      ? withGeneralKnowledgeNotice(toElderVoice(response.message))
+      : toElderVoice(response.message);
+    const assistantMessageId =
+      streamedAssistantMessageId || createId("chat");
     if (!streamedAssistantMessageId) {
       addChatMessage({
-        id: createId("chat"),
+        id: assistantMessageId,
         role: "assistant",
-        content: generalKnowledgeQuery
-          ? withGeneralKnowledgeNotice(toElderVoice(response.message))
-          : toElderVoice(response.message),
+        content: finalMessageContent,
         createdAt: nowIso(),
         answerMode: effectiveAnswerMode,
         riskCheck: response.riskCheck
       }, targetConversationId);
     }
-    speakText(
-      effectiveAnswerMode === "quick"
-        ? response.message
-        : `${response.message}。${response.riskCheck.nextStep}`,
-      profile.voiceEnabled && preferences.soundEnabled,
-      preferences.voiceMode,
-      preferences.customVoiceId
-    );
+    if (profile.voiceEnabled && preferences.soundEnabled) {
+      const speechRunId = speechRunRef.current + 1;
+      speechRunRef.current = speechRunId;
+      const autoPlayback = speakText(
+        finalMessageContent,
+        true,
+        preferences.voiceMode,
+        preferences.customVoiceId
+      );
+      setSpeakingMessageId(assistantMessageId);
+      void autoPlayback.then((started) => {
+        if (speechRunRef.current !== speechRunId) return;
+        if (!started) {
+          setSpeakingMessageId("");
+          setSpeechNotice("自动朗读暂未开始，可点击回答下方的朗读按钮重试。");
+        }
+      });
+    }
     setStages([
       ...response.stages.map((stage) => ({
         ...stage,
@@ -1430,17 +1445,28 @@ export function ChatPage() {
   }
 
   async function toggleSpeakMessage(messageId: string, text: string) {
+    const speechRunId = speechRunRef.current + 1;
+    speechRunRef.current = speechRunId;
     if (speakingMessageId === messageId) {
       stopSpeaking();
       setSpeakingMessageId("");
+      setSpeechNotice("");
       return;
     }
     stopSpeaking();
+    setSpeechNotice("");
+    const playback = speakText(
+      text,
+      true,
+      preferences.voiceMode,
+      preferences.customVoiceId
+    );
     setSpeakingMessageId(messageId);
-    try {
-      await speakText(text);
-    } finally {
+    const started = await playback;
+    if (speechRunRef.current !== speechRunId) return;
+    if (!started) {
       setSpeakingMessageId("");
+      setSpeechNotice("朗读暂未开始，请检查网络后再次点击朗读。");
     }
   }
 
@@ -1486,6 +1512,9 @@ export function ChatPage() {
     setStages([]);
     setSending(false);
     autoScrollRef.current = false;
+    speechRunRef.current += 1;
+    setSpeakingMessageId("");
+    setSpeechNotice("");
     stopSpeaking();
   }
 
@@ -1704,7 +1733,12 @@ export function ChatPage() {
               onClick={() => {
                 const next = !profile.voiceEnabled;
                 updateProfile({ voiceEnabled: next });
-                if (!next) stopSpeaking();
+                if (!next) {
+                  speechRunRef.current += 1;
+                  setSpeakingMessageId("");
+                  setSpeechNotice("");
+                  stopSpeaking();
+                }
               }}
             >
               {profile.voiceEnabled ? (
@@ -2121,8 +2155,10 @@ export function ChatPage() {
               </div>
             </div>
             </div>
-            <div className={`ai-voice-status ${speech.error ? "error" : ""}`} aria-live="polite">
-              {speech.error
+            <div className={`ai-voice-status ${speech.error || speechNotice ? "error" : ""}`} aria-live="polite">
+              {speechNotice
+                ? speechNotice
+                : speech.error
                 ? speech.error
                 : speech.interim
                   ? `正在听：${speech.interim}`
