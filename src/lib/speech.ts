@@ -174,19 +174,6 @@ const speechUrlCache = new Map<
   { audioUrl: string; createdAt: number; voice: string }
 >();
 
-// Pre-warm SpeechSynthesis voices cache at module load time
-if (typeof window !== "undefined" && "speechSynthesis" in window) {
-  // Some browsers return empty voices on first getVoices() call,
-  // but the act of calling it triggers async loading
-  window.speechSynthesis.getVoices();
-  if (window.speechSynthesis.onvoiceschanged !== undefined) {
-    window.speechSynthesis.onvoiceschanged = () => {
-      // Just touch the voices so browser caches them
-      window.speechSynthesis.getVoices();
-    };
-  }
-}
-
 function emitSpeechState() {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("speech-state-change"));
@@ -262,25 +249,6 @@ function naturalSpeechText(text: string): string {
     .trim();
 }
 
-function waitForVoices(): Promise<void> {
-  return new Promise((resolve) => {
-    const voices = window.speechSynthesis.getVoices();
-    if (voices.length > 0) {
-      resolve();
-      return;
-    }
-    const timeout = window.setTimeout(resolve, 1500);
-    const onVoicesChanged = () => {
-      if (window.speechSynthesis.getVoices().length > 0) {
-        window.clearTimeout(timeout);
-        window.speechSynthesis.removeEventListener("voiceschanged", onVoicesChanged);
-        resolve();
-      }
-    };
-    window.speechSynthesis.addEventListener("voiceschanged", onVoicesChanged);
-  });
-}
-
 export async function speakText(
   text: string,
   enabled = true,
@@ -294,17 +262,12 @@ export async function speakText(
   speechPending = true;
   emitSpeechState();
   try {
-    const result = await playServerVoice(
+    return await playServerVoice(
       text,
       voiceMode,
       customVoiceId,
       requestVersion
     );
-    if (result) return true;
-    return speakWithBrowser(text, voiceMode);
-  } catch {
-    if (requestVersion !== speechRequestVersion) return false;
-    return speakWithBrowser(text, voiceMode);
   } finally {
     if (requestVersion === speechRequestVersion) {
       speechPending = false;
@@ -336,7 +299,8 @@ async function playServerVoice(
     emitSpeechState();
     return true;
   } catch {
-    return false;
+    if (requestVersion !== speechRequestVersion) return false;
+    return speakWithBrowser(text, voiceMode);
   }
 }
 
@@ -386,15 +350,13 @@ export async function preloadSpeech(
   await getSpeechAudioUrl(text, voiceMode, customVoiceId);
 }
 
-async function speakWithBrowser(text: string, voiceMode: VoiceMode): Promise<boolean> {
+function speakWithBrowser(text: string, voiceMode: VoiceMode): boolean {
   if (!("speechSynthesis" in window)) return false;
-  await waitForVoices();
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(naturalSpeechText(text));
   utterance.lang = "zh-CN";
   const fallbackMode = voiceMode === "custom" ? "warm" : voiceMode;
-  const voice = pickChineseVoice(fallbackMode);
-  if (voice) utterance.voice = voice;
+  utterance.voice = pickChineseVoice(fallbackMode) ?? null;
   utterance.rate =
     fallbackMode === "warm"
       ? 0.9
@@ -415,14 +377,7 @@ async function speakWithBrowser(text: string, voiceMode: VoiceMode): Promise<boo
   utterance.onend = () => {
     emitSpeechState();
   };
-  utterance.onerror = () => {
-    emitSpeechState();
-  };
   window.speechSynthesis.speak(utterance);
-  // Some browsers need a short delay after speak() for audio to actually start
-  if (window.speechSynthesis.speaking) return true;
-  // Force-start if needed (some browsers require user gesture)
-  window.speechSynthesis.resume();
   return true;
 }
 

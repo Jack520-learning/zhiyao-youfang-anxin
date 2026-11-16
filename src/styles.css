@@ -4838,7 +4838,7 @@ img {
 .ai-chat-content {
   position: relative;
   display: grid;
-  grid-template-columns: 0 minmax(0, 1fr);
+  grid-template-columns: 0 0 minmax(0, 1fr);
   min-height: 0;
   flex: 1;
   overflow: hidden;
@@ -4895,6 +4895,13 @@ img {
   position: relative;
   z-index: 5;
   transition: background-color 150ms ease;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ai-chat-content.sidebar-open .ai-sidebar-resizer {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .ai-sidebar-resizer::before {
@@ -5690,7 +5697,7 @@ img {
   }
 
   .ai-chat-content.sidebar-open {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .ai-chat-content:not(.sidebar-open) {
@@ -5710,6 +5717,10 @@ img {
     width: min(290px, 84vw);
     border-right: 1px solid var(--line);
     box-shadow: 18px 0 40px rgba(15, 35, 28, 0.14);
+  }
+
+  .ai-sidebar-resizer {
+    display: none;
   }
 
   .ai-chat-content:not(.sidebar-open) .ai-conversation-sidebar {
