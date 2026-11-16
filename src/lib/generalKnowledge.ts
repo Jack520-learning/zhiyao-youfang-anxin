@@ -3,12 +3,15 @@ import { findBestMedicine } from "../catalog/retrieval";
 import { herbs } from "../catalog/herbs";
 import { isDailyConversationQuery } from "./dailyConversation";
 import { nowIso } from "./time";
+import {
+  addGeneralKnowledgeNotice,
+  GENERAL_KNOWLEDGE_NOTICE
+} from "./generalNotice";
 
 const medicalTerms =
   /(药|胶囊|片剂|颗粒|剂量|服用|同服|副作用|漏服|停药|病|高血压|糖尿病|心衰|房颤|肾病|肝病|哮喘|慢阻肺|痴呆|帕金森|癫痫|甲状腺|癌症|痛|晕|咳|喘|恶心|呕吐|腹泻|发热|发烧|不舒服|心慌|胸闷|过敏|医生|药师|医院)/i;
 
-export const GENERAL_KNOWLEDGE_NOTICE =
-  "温馨提示：这个问题与健康用药无关，以下仅作一般常识参考。";
+export { GENERAL_KNOWLEDGE_NOTICE };
 
 export function isGeneralKnowledgeQuestion(
   query: string,
@@ -36,7 +39,7 @@ export function isGeneralKnowledgeQuestion(
 }
 
 export function withGeneralKnowledgeNotice(text: string): string {
-  return `> ${GENERAL_KNOWLEDGE_NOTICE}\n\n${text.trim()}`;
+  return addGeneralKnowledgeNotice(text);
 }
 
 export function buildGeneralKnowledgeResponse(

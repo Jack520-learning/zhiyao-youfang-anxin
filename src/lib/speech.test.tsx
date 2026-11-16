@@ -268,6 +268,47 @@ describe("speech playback start", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("reads the general-knowledge notice only once", async () => {
+    let spokenText = "";
+    class FakeAudio {
+      paused = false;
+      currentTime = 0;
+      onended: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      play() {
+        return Promise.resolve();
+      }
+      pause() {}
+    }
+    vi.stubGlobal("Audio", FakeAudio);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body || "{}")) as {
+          text?: string;
+        };
+        spokenText = body.text || "";
+        return new Response(
+          JSON.stringify({
+            audioUrl: "https://audio.example/notice.wav",
+            voice: "longanhuan_v3.1"
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      })
+    );
+
+    await expect(
+      speakText(
+        "温馨提示：这个问题与健康用药无关，以下仅作一般常识参考。\n\n温馨提示：这个问题与健康用药无关，以下仅作一般常识参考。\n\n天空呈蓝色。",
+        true,
+        "warm"
+      )
+    ).resolves.toBe(true);
+    expect(spokenText.match(/温馨提示/g)).toHaveLength(1);
+    expect(spokenText).toContain("天空呈蓝色");
+  });
+
   it("never substitutes an unregistered browser voice when cloud synthesis fails", async () => {
     let spoken = 0;
     class FakeUtterance {

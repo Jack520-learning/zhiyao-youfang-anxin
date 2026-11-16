@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_VOICE_MODE } from "./voiceDefaults";
+import {
+  GENERAL_KNOWLEDGE_NOTICE,
+  stripGeneralKnowledgeNotices
+} from "./generalNotice";
 
 interface SpeechRecognitionResultLike {
   readonly transcript: string;
@@ -195,7 +199,9 @@ function emitSpeechState() {
 }
 
 function naturalSpeechText(text: string): string {
-  return text
+  const hadNotice = text.includes("温馨提示");
+  const cleanText = stripGeneralKnowledgeNotices(text);
+  const spoken = cleanText
     .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     .replace(/[*_#>`~]/g, "")
@@ -203,6 +209,9 @@ function naturalSpeechText(text: string): string {
     .replace(/。{2,}/g, "。")
     .replace(/\s+/g, " ")
     .trim();
+  return hadNotice
+    ? `${GENERAL_KNOWLEDGE_NOTICE}${spoken ? ` ${spoken}` : ""}`
+    : spoken;
 }
 
 function splitSpeechChunks(text: string, maxLength = 180): string[] {
