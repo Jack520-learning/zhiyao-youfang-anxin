@@ -1,5 +1,7 @@
 import {
   ArrowDown,
+  BellOff,
+  BellPlus,
   BookOpenText,
   Camera,
   ChevronRight,
@@ -18,7 +20,6 @@ import {
   Plus,
   Send,
   Search,
-  Settings,
   ShieldCheck,
   Sparkles,
   Square,
@@ -1267,11 +1268,22 @@ export function ChatPage() {
             <button
               className="icon-btn"
               type="button"
-              aria-label="设置提醒"
-              title="设置提醒"
-              onClick={() => navigate("/profile")}
+              aria-label="新增提醒"
+              title="新增提醒"
+              onClick={() => navigate("/add-medication?from=chat")}
             >
-              <Settings size={20} aria-hidden="true" />
+              <BellPlus size={20} aria-hidden="true" />
+            </button>
+            <button
+              className="icon-btn"
+              type="button"
+              aria-label="取消提醒"
+              title="取消提醒"
+              onClick={() =>
+                window.dispatchEvent(new CustomEvent("dismiss-reminder"))
+              }
+            >
+              <BellOff size={20} aria-hidden="true" />
             </button>
           </div>
         </header>

@@ -20,6 +20,15 @@ export function ReminderOverlay() {
   );
   const [dismissedDoseId, setDismissedDoseId] = useState("");
 
+  // Allow the chat header "取消提醒" button to dismiss the current overlay.
+  useEffect(() => {
+    function onDismiss() {
+      if (nextDose) setDismissedDoseId(nextDose.doseId);
+    }
+    window.addEventListener("dismiss-reminder", onDismiss);
+    return () => window.removeEventListener("dismiss-reminder", onDismiss);
+  }, [nextDose]);
+
   const minutesFromNow = nextDose
     ? (new Date(nextDose.scheduledAt).getTime() - Date.now()) / 60000
     : Number.POSITIVE_INFINITY;
