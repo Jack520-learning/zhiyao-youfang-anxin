@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyFrequencySelection,
   isAsNeededFrequency,
+  splitDosageText,
   validateDosageText,
   validateTimes
 } from "./dosage";
@@ -36,5 +37,21 @@ describe("dosage validation", () => {
     const selected = applyFrequencySelection(["08:00"], "按需服用");
     expect(selected.frequency).toBe("按需服用");
     expect(selected.times).toEqual([]);
+  });
+
+  it("separates a single dose from tablet strength and package quantity", () => {
+    expect(splitDosageText("0.5mg/片；100片/盒")).toEqual({
+      dosage: "",
+      strength: "0.5mg/片",
+      packageSpec: "100片/盒"
+    });
+    expect(splitDosageText("0.5mg/片，每次 1 片")).toEqual({
+      dosage: "每次 1 片",
+      strength: "0.5mg/片",
+      packageSpec: ""
+    });
+    expect(validateDosageText("0.5mg/片；100片/盒").message).toContain(
+      "每次实际服用剂量"
+    );
   });
 });

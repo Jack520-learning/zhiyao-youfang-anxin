@@ -41,6 +41,10 @@ export function MedicationDetailPage() {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(medication?.name ?? "");
   const [dosage, setDosage] = useState(medication?.dosage ?? "");
+  const [strength, setStrength] = useState(medication?.strength ?? "");
+  const [packageSpec, setPackageSpec] = useState(
+    medication?.packageSpec ?? ""
+  );
   const [relation, setRelation] = useState(medication?.relation ?? "");
   const [frequency, setFrequency] = useState(medication?.frequency ?? "每日 1 次");
   const [times, setTimes] = useState(
@@ -113,6 +117,8 @@ export function MedicationDetailPage() {
     updateMedication(medication.id, {
       name,
       dosage,
+      strength,
+      packageSpec,
       relation,
       frequency,
       times: asNeeded ? [] : times,
@@ -167,6 +173,10 @@ export function MedicationDetailPage() {
           <p style={{ marginTop: 9, color: "var(--muted)", lineHeight: 1.7 }}>
             {medication.dosage}
             <br />
+            {medication.strength ? `规格：${medication.strength}` : ""}
+            {medication.strength ? <br /> : null}
+            {medication.packageSpec ? `包装：${medication.packageSpec}` : ""}
+            {medication.packageSpec ? <br /> : null}
             {medication.frequency}
             <br />
             {isAsNeededFrequency(medication.frequency)
@@ -239,9 +249,27 @@ export function MedicationDetailPage() {
                   <input className="input" value={name} onChange={(event) => setName(event.target.value)} />
                 </label>
                 <label className="field">
-                  <span className="field-label">剂量</span>
+                  <span className="field-label">每次实际服用剂量</span>
                   <input className="input" value={dosage} onChange={(event) => setDosage(event.target.value)} />
-                  <span className="field-hint">例如 5mg、1片；单次剂量不能超过合理填写上限。</span>
+                  <span className="field-hint">只填写一次实际服用量，例如 1片、0.5mg 或 10ml。</span>
+                </label>
+                <label className="field">
+                  <span className="field-label">单片/单粒规格</span>
+                  <input
+                    className="input"
+                    value={strength}
+                    placeholder="例如：0.5mg/片"
+                    onChange={(event) => setStrength(event.target.value)}
+                  />
+                </label>
+                <label className="field">
+                  <span className="field-label">包装数量</span>
+                  <input
+                    className="input"
+                    value={packageSpec}
+                    placeholder="例如：100片/盒"
+                    onChange={(event) => setPackageSpec(event.target.value)}
+                  />
                 </label>
                 <label className="field">
                   <span className="field-label">饭前饭后</span>

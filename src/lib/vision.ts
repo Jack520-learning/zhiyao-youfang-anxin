@@ -1,5 +1,5 @@
 import { findBestMedicine } from "../catalog/retrieval";
-import { isAsNeededFrequency } from "./dosage";
+import { isAsNeededFrequency, splitDosageText } from "./dosage";
 import type { IntakeDraft } from "../types";
 
 export interface VisionMedicine {
@@ -11,6 +11,7 @@ export interface VisionMedicine {
   price?: string;
   dosageForm?: string;
   strength?: string;
+  packageSpec?: string;
   frequency?: string;
   relation?: string;
   instructions?: string;
@@ -76,11 +77,19 @@ export function buildDraftsFromVision(
       catalogMatch && catalogMatch.score >= 0.58
         ? catalogMatch.medicine
         : undefined;
-    const dosage = cleanName(
+    const rawDosage = cleanName(
       item.dosage ||
         item.strength ||
         medicine?.strength ||
         (!multiple ? fallbackDraft.dosage : "")
+    );
+    const dosageDetails = splitDosageText(rawDosage);
+    const dosage = dosageDetails.dosage;
+    const strength = cleanName(
+      item.strength || dosageDetails.strength || medicine?.strength
+    );
+    const packageSpec = cleanName(
+      item.packageSpec || dosageDetails.packageSpec
     );
     const frequency = cleanName(
       item.frequency ||
@@ -124,6 +133,8 @@ export function buildDraftsFromVision(
       ),
       ingredientsText: ingredients,
       dosage,
+      strength,
+      packageSpec,
       frequency,
       times:
         isAsNeededFrequency(frequency)

@@ -918,6 +918,8 @@ export function ChatPage() {
             ingredientsText:
               nextDraft.ingredientsText || learned.ingredients.join("、"),
             dosage: nextDraft.dosage || learned.dosage,
+            strength: nextDraft.strength || learned.strength,
+            packageSpec: nextDraft.packageSpec || learned.packageSpec,
             frequency: nextDraft.frequency || learned.frequency,
             times: nextDraft.times.length ? nextDraft.times : learned.times,
             relation: nextDraft.relation || learned.relation,
@@ -963,6 +965,8 @@ export function ChatPage() {
             .split(/[、,，/\s]+/)
             .filter(Boolean),
           dosage: nextDraft.dosage,
+          strength: nextDraft.strength,
+          packageSpec: nextDraft.packageSpec,
           frequency: nextDraft.frequency,
           times: nextDraft.times,
           relation: nextDraft.relation,

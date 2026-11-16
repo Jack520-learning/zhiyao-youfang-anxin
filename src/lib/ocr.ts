@@ -1,4 +1,5 @@
 import type { IntakeDraft } from "../types";
+import { splitDosageText } from "./dosage";
 import { nowIso } from "./time";
 
 let workerPromise: Promise<import("tesseract.js").Worker> | undefined;
@@ -30,10 +31,19 @@ async function getWorker(onProgress?: (progress: number, label: string) => void)
 
 function extractDosage(text: string): string {
   const compact = text.replace(/\s+/g, "");
-  const match = compact.match(
-    /(?:规格|剂量|每次|一次)?\s*(\d+(?:\.\d+)?\s*(?:mg|毫克|g|克|ml|毫升|片|粒|袋))(?:\s*\/?\s*次)?/i
+  const explicit = compact.match(
+    /(?:每次|一次)(?:服用|使用|吃)?(\d+(?:\.\d+)?(?:mg|毫克|g|克|ml|毫升|片|粒|袋))/i
   );
-  return match?.[1]?.replace(/\s+/g, "") ?? "";
+  const measured = compact.match(
+    /(\d+(?:\.\d+)?(?:mg|毫克|g|克|ml|毫升))\s*\/?\s*次?/i
+  );
+  const counted = compact.match(
+    /(\d+(?:\.\d+)?(?:片|粒|袋))\s*\/?\s*次?/i
+  );
+  return (explicit?.[1] || measured?.[1] || counted?.[1] || "").replace(
+    /\s+/g,
+    ""
+  );
 }
 
 function extractFrequency(text: string): string {
@@ -109,6 +119,7 @@ export async function recognizeMedicineImage(
   const confidence = Math.max(0, Math.min(1, (result.data.confidence || 0) / 100));
   const name = extractName(text);
   const dosage = extractDosage(text);
+  const dosageDetails = splitDosageText(dosage);
   const frequency = extractFrequency(text);
   const relation = extractRelation(text);
   const times = extractTimes(text);
@@ -128,7 +139,9 @@ export async function recognizeMedicineImage(
       key: "name",
       value: /(片|胶囊|颗粒|口服液|滴丸|软膏|喷雾)$/.test(name) ? name : ""
     },
-    { key: "dosage", value: dosage },
+    { key: "dosage", value: dosageDetails.dosage },
+    { key: "strength", value: dosageDetails.strength },
+    { key: "packageSpec", value: dosageDetails.packageSpec },
     { key: "frequency", value: frequency },
     { key: "relation", value: relation },
     { key: "ingredientsText", value: knownIngredients.join("、") }
@@ -143,7 +156,9 @@ export async function recognizeMedicineImage(
     name,
     genericName,
     ingredientsText: knownIngredients.join("、"),
-    dosage,
+    dosage: dosageDetails.dosage,
+    strength: dosageDetails.strength,
+    packageSpec: dosageDetails.packageSpec,
     frequency,
     times,
     relation,
@@ -163,6 +178,8 @@ export function createManualDraft(imageDataUrl?: string): IntakeDraft {
     genericName: "",
     ingredientsText: "",
     dosage: "",
+    strength: "",
+    packageSpec: "",
     frequency: "每日 1 次",
     times: ["08:00"],
     relation: "饭后",

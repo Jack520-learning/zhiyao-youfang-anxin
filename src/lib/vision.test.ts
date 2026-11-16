@@ -56,7 +56,8 @@ describe("multi-medicine vision results", () => {
       "维生素C片"
     ]);
     expect(drafts[1].ingredientsText).toBe("维生素B2");
-    expect(drafts[2].dosage).toBe("100mg/片");
+    expect(drafts[2].dosage).toBe("");
+    expect(drafts[2].strength).toBe("100mg/片");
     expect(drafts[0].relation).toBe("按说明书");
   });
 
@@ -69,5 +70,25 @@ describe("multi-medicine vision results", () => {
         ]
       })
     ).toHaveLength(1);
+  });
+
+  it("does not treat package quantity as a single dose", () => {
+    const drafts = buildDraftsFromVision(
+      "data:image/jpeg;base64,test",
+      createManualDraft("data:image/jpeg;base64,test"),
+      {
+        medicines: [
+          {
+            name: "硝酸甘油片",
+            activeIngredient: "硝酸甘油",
+            dosage: "0.5mg/片；100片/盒"
+          }
+        ]
+      }
+    );
+    expect(drafts[0].dosage).toBe("");
+    expect(drafts[0].strength).toBe("0.5mg/片");
+    expect(drafts[0].packageSpec).toBe("100片/盒");
+    expect(drafts[0].lowConfidenceFields).toContain("dosage");
   });
 });

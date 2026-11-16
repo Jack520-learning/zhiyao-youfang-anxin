@@ -4,10 +4,47 @@ export interface ValidationResult {
 }
 
 const dosagePattern = /(\d+(?:\.\d+)?)\s*(mg|毫克|g|克|ml|毫升|片|粒|袋|滴)/gi;
+const strengthPattern =
+  /(\d+(?:\.\d+)?)\s*(mg|毫克|g|克|ml|毫升|μg|ug|微克)\s*\/\s*(片|粒|袋|支|ml|毫升)/i;
+const packagePattern =
+  /(\d+(?:\.\d+)?)\s*(片|粒|袋|支|瓶|板|包)\s*\/\s*(盒|瓶|袋|包|板)/i;
+
+export function splitDosageText(value: string): {
+  dosage: string;
+  strength: string;
+  packageSpec: string;
+} {
+  const source = value.trim();
+  const strengthMatch = source.match(strengthPattern);
+  const packageMatch = source.match(packagePattern);
+  let dosage = source;
+  for (const match of [strengthMatch?.[0], packageMatch?.[0]].filter(
+    (item): item is string => Boolean(item)
+  )) {
+    dosage = dosage.replace(match, "");
+  }
+  return {
+    dosage: dosage
+      .replace(/^[\s,，;；/]+|[\s,，;；/]+$/g, "")
+      .replace(/[\s,，;；]+/g, " ")
+      .trim(),
+    strength: strengthMatch?.[0]?.replace(/\s+/g, "") ?? "",
+    packageSpec: packageMatch?.[0]?.replace(/\s+/g, "") ?? ""
+  };
+}
 
 export function validateDosageText(value: string): ValidationResult {
-  const text = value.trim();
-  if (!text) return { valid: false, message: "请填写每次服用剂量" };
+  const details = splitDosageText(value);
+  const text = details.dosage;
+  if (!text) {
+    return {
+      valid: false,
+      message:
+        details.strength || details.packageSpec
+          ? "这里必须填写每次实际服用剂量；单片规格和包装数量已单独记录"
+          : "请填写每次实际服用剂量，例如 1片、0.5mg 或 10ml"
+    };
+  }
   const matches = [...text.matchAll(dosagePattern)];
   if (!matches.length) {
     return {

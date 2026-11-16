@@ -24,6 +24,7 @@ import {
   frequencyOptions,
   applyFrequencySelection,
   isAsNeededFrequency,
+  splitDosageText,
   validateDosageText,
   validateTimes
 } from "../lib/dosage";
@@ -288,7 +289,9 @@ export function AddMedicationPage({
       return;
     }
     if (!draft.dosage.trim()) {
-      setFormError("请填写剂量或包装规格");
+      setFormError(
+        "请填写每次实际服用剂量，例如 1片、0.5mg 或 10ml；包装数量不能代替单次剂量"
+      );
       return;
     }
     const dosageValidation = validateDosageText(draft.dosage);
@@ -320,6 +323,8 @@ export function AddMedicationPage({
       genericName: draft.genericName.trim(),
       ingredients: splitIngredients(draft.ingredientsText || draft.genericName || draft.name),
       dosage: draft.dosage.trim(),
+      strength: draft.strength?.trim(),
+      packageSpec: draft.packageSpec?.trim(),
       frequency: draft.frequency.trim(),
       times: isAsNeededFrequency(draft.frequency)
         ? []
@@ -366,6 +371,8 @@ export function AddMedicationPage({
       genericName: draft.genericName.trim(),
       ingredients: splitIngredients(draft.ingredientsText || draft.genericName || draft.name),
       dosage: draft.dosage.trim(),
+      strength: draft.strength?.trim(),
+      packageSpec: draft.packageSpec?.trim(),
       frequency: draft.frequency.trim(),
       times: isAsNeededFrequency(draft.frequency)
         ? []
@@ -616,7 +623,7 @@ export function AddMedicationPage({
             ) : null}
             <DosageFormSafetyNotice
               medicationName={draft.name}
-              instructions={`${draft.instructions} ${draft.dosage}`}
+              instructions={`${draft.instructions} ${draft.dosage} ${draft.strength ?? ""} ${draft.packageSpec ?? ""}`}
               compact
             />
             <div className="form-grid">
@@ -651,8 +658,44 @@ export function AddMedicationPage({
                 <span className="field-hint">价格仅来自包装、购买记录或可靠数据源，不自动猜测。</span>
               </label>
               <label className={`field ${draft.lowConfidenceFields.includes("dosage") ? "low-confidence" : ""}`}>
-                <span className="field-label">剂量 *</span>
-                <input className="input" value={draft.dosage} placeholder="例如：2.5mg，每次 1 片" onChange={(event) => updateField("dosage", event.target.value)} />
+                <span className="field-label">每次实际服用剂量 *</span>
+                <input
+                  className="input"
+                  value={draft.dosage}
+                  placeholder="例如：每次 1 片、0.5mg 或 10ml"
+                  onChange={(event) => updateField("dosage", event.target.value)}
+                  onBlur={() => {
+                    const split = splitDosageText(draft.dosage);
+                    if (split.strength || split.packageSpec) {
+                      updateFields({
+                        dosage: split.dosage,
+                        strength: draft.strength || split.strength,
+                        packageSpec: draft.packageSpec || split.packageSpec
+                      });
+                    }
+                  }}
+                />
+                <span className="field-hint">
+                  这里只填一次实际服用量。包装数量，例如“100片/盒”，不能填在这里。
+                </span>
+              </label>
+              <label className="field">
+                <span className="field-label">单片/单粒规格</span>
+                <input
+                  className="input"
+                  value={draft.strength ?? ""}
+                  placeholder="例如：0.5mg/片"
+                  onChange={(event) => updateField("strength", event.target.value)}
+                />
+              </label>
+              <label className="field">
+                <span className="field-label">包装数量</span>
+                <input
+                  className="input"
+                  value={draft.packageSpec ?? ""}
+                  placeholder="例如：100片/盒"
+                  onChange={(event) => updateField("packageSpec", event.target.value)}
+                />
               </label>
               <label className={`field ${draft.lowConfidenceFields.includes("frequency") ? "low-confidence" : ""}`}>
                 <span className="field-label">频次 *</span>
@@ -745,8 +788,7 @@ export function AddMedicationPage({
               <p className="field-error" role="alert">
                 {formError}
               </p>
-            ) : null}
-            {!validateDosageText(draft.dosage).valid ? (
+            ) : !validateDosageText(draft.dosage).valid ? (
               <p className="field-error" role="alert">
                 {validateDosageText(draft.dosage).message}
               </p>

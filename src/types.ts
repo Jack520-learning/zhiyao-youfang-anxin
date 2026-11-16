@@ -35,6 +35,8 @@ export interface Medication {
   genericName: string;
   ingredients: string[];
   dosage: string;
+  strength?: string;
+  packageSpec?: string;
   frequency: string;
   times: string[];
   relation: string;
@@ -158,6 +160,8 @@ export interface IntakeDraft {
   genericName: string;
   ingredientsText: string;
   dosage: string;
+  strength?: string;
+  packageSpec?: string;
   frequency: string;
   times: string[];
   relation: string;
