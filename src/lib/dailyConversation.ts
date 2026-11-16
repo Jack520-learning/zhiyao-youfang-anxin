@@ -14,6 +14,23 @@ export function isDailyConversationQuery(query: string): boolean {
   );
 }
 
+export function isContextualDailyReply(
+  query: string,
+  previousAssistantText = ""
+): boolean {
+  const normalized = normalize(query);
+  if (
+    !previousAssistantText ||
+    !/[？?]|吗|呢|怎么样|顺心|还好吗/.test(previousAssistantText) ||
+    !/^(还行|还好|还可以|可以|挺好|很好|不错|一般|不太好|不好|有一点|有一点儿|有点)[。！!]?$/.test(
+      normalized
+    )
+  ) {
+    return false;
+  }
+  return !/不舒服|头晕|胸闷|胸痛|呼吸困难|恶心|心慌|疼/.test(normalized);
+}
+
 export function resolveAdaptiveAnswerMode(
   query: string,
   requestedMode: AnswerMode
@@ -36,8 +53,13 @@ export function resolveAdaptiveAnswerMode(
   return requestedMode;
 }
 
-function dailyReply(query: string, profile: ElderProfile): string {
+function dailyReply(
+  query: string,
+  profile: ElderProfile,
+  previousAssistantText = ""
+): string {
   const normalized = normalize(query);
+  const previous = normalize(previousAssistantText);
   const name = profile.name.trim();
   const greeting = name ? `${name}，` : "";
 
@@ -46,6 +68,17 @@ function dailyReply(query: string, profile: ElderProfile): string {
   }
   if (/谢谢|感谢/.test(normalized)) {
     return "不客气，能帮到您就好。还有想聊的或想核对的，都可以继续说。";
+  }
+  if (isContextualDailyReply(query, previousAssistantText)) {
+    const negative = /不太好|不好|有一点|有点/.test(normalized);
+    if (previous.includes("吃饭") || previous.includes("胃口") || previous.includes("睡觉")) {
+      return negative
+        ? "听您说还是有些不太顺心。主要是胃口、睡眠，还是身体哪里觉得不舒服？可以只说最明显的一项。"
+        : "那就好。吃饭和睡觉方面，最近有没有哪一样想让您特别留意？";
+    }
+    return negative
+      ? "听您说不太理想，我愿意继续听。现在最让您不舒服或担心的是哪一件事？"
+      : "那就好。您想接着聊家里人、今天发生的事，还是最近的身体感受？";
   }
   if (/再见|晚安/.test(normalized)) {
     return normalized.includes("晚安")
@@ -92,9 +125,10 @@ function dailyReply(query: string, profile: ElderProfile): string {
 
 export function buildDailyConversationResponse(
   query: string,
-  profile: ElderProfile
+  profile: ElderProfile,
+  previousAssistantText = ""
 ): AssistantResponse {
-  const message = dailyReply(query, profile);
+  const message = dailyReply(query, profile, previousAssistantText);
   return {
     message,
     riskCheck: {

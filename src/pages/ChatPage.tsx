@@ -72,8 +72,13 @@ import { nowIso, getNextDose, formatMessageTime } from "../lib/time";
 import {
   buildDailyConversationResponse,
   isDailyConversationQuery,
+  isContextualDailyReply,
   resolveAdaptiveAnswerMode
 } from "../lib/dailyConversation";
+import {
+  buildContextualQuestion,
+  shouldUseConversationContext
+} from "../lib/conversationMemory";
 import { useAppStore } from "../store/useAppStore";
 import type {
   AssistantResponse,
@@ -483,12 +488,6 @@ export function ChatPage() {
       /药名|药物|药盒|处方|剂量|用量|服用|吃药|停药|副作用|不良反应|治疗/.test(
         clean
       );
-    const dailyConversation =
-      !hasExplicitMedicationIntent && isDailyConversationQuery(clean);
-    const effectiveAnswerMode = resolveAdaptiveAnswerMode(
-      clean,
-      answerMode
-    );
     const liveConversation = useAppStore
       .getState()
       .conversations.find(
@@ -508,15 +507,6 @@ export function ChatPage() {
     setStreamingMessageId("");
     streamingMessageIdRef.current = "";
     streamTraceRef.current = [];
-    setThinkingLabel(
-      dailyConversation
-        ? "正在陪您聊聊…"
-        : needsMedicationReview(clean, composerSkill)
-        ? "正在核对用药安全、当前药物和资料来源…"
-        : effectiveAnswerMode === "detailed"
-          ? "正在整理详细解释…"
-          : "正在思考并组织回答…"
-    );
     const targetConversationId =
       useAppStore.getState().activeConversationId;
     const userMessage: ChatMessage = {
@@ -535,14 +525,48 @@ export function ChatPage() {
       (conversation) =>
         conversation.id === stateAfterMessage.activeConversationId
     );
+    const previousMessages = (currentConversation?.messages ?? []).filter(
+      (message) => message.id !== userMessage.id
+    );
+    const previousUserMessage = [...previousMessages]
+      .reverse()
+      .find((message) => message.role === "user");
+    const previousAssistantMessage = [...previousMessages]
+      .reverse()
+      .find((message) => message.role === "assistant");
+    const dailyConversation =
+      !hasExplicitMedicationIntent &&
+      (isDailyConversationQuery(clean) ||
+        isContextualDailyReply(clean, previousAssistantMessage?.content));
     const currentConversationDraft =
       currentConversation?.medicineContext ?? stateAfterMessage.intakeDraft;
-    const contextualQuestion =
+    const draftContextQuestion =
       currentConversationDraft &&
       /(这个药|这种药|它|这盒药|图片里)/.test(clean) &&
       currentConversationDraft.name
         ? `${currentConversationDraft.name} ${clean}`
         : clean;
+    const medicalFollowUp =
+      !dailyConversation &&
+      Boolean(previousUserMessage) &&
+      needsMedicationReview(previousUserMessage?.content || "", composerSkill) &&
+      shouldUseConversationContext(clean);
+    const contextualQuestion =
+      medicalFollowUp && previousUserMessage
+        ? buildContextualQuestion(clean, previousUserMessage.content)
+        : draftContextQuestion;
+    const effectiveAnswerMode = dailyConversation
+      ? "quick"
+      : resolveAdaptiveAnswerMode(contextualQuestion, answerMode);
+    setThinkingLabel(
+      dailyConversation
+        ? "正在接着刚才的话题回答…"
+        : needsMedicationReview(contextualQuestion, composerSkill)
+          ? "正在结合上一轮问题核对用药安全…"
+          : effectiveAnswerMode === "detailed"
+            ? "正在整理详细解释…"
+            : "正在思考并组织回答…"
+    );
     const plannedTools = dailyConversation
       ? []
       : planAgentTools(
@@ -562,7 +586,11 @@ export function ChatPage() {
       durationMs: run.durationMs
     }));
     let localResponse = dailyConversation
-      ? buildDailyConversationResponse(contextualQuestion, profile)
+      ? buildDailyConversationResponse(
+          contextualQuestion,
+          profile,
+          previousAssistantMessage?.content
+        )
       : safetyResponseFromRuns(agentRuns) ??
         answerWithRules(contextualQuestion, activeMedications, profile, {
           answerMode: effectiveAnswerMode
