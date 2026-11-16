@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { toChineseErrorMessage } from "./userMessage";
 
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -109,9 +110,10 @@ export function useQwenSpeechRecognition(
           callbackRef.current(payload.text);
         } catch (transcriptionError) {
           setError(
-            transcriptionError instanceof Error
-              ? transcriptionError.message
-              : "语音识别失败，请改用文字输入。"
+            toChineseErrorMessage(
+              transcriptionError,
+              "语音识别失败，请检查网络后重试。"
+            )
           );
         } finally {
           setProcessing(false);

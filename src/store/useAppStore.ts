@@ -24,6 +24,7 @@ import {
 } from "../lib/accountApi";
 import { createId } from "../lib/ids";
 import { nowIso } from "../lib/time";
+import { toChineseErrorMessage } from "../lib/userMessage";
 import {
   captureWorkspace,
   createBlankWorkspace,
@@ -327,9 +328,10 @@ export const useAppStore = create<AppStore>()(
           return {
             ok: false,
             error:
-              error instanceof Error
-                ? error.message
-                : "无法连接账号服务，请稍后重试"
+              toChineseErrorMessage(
+                error,
+                "无法连接账号服务，请检查网络后重试。"
+              )
           };
         }
         const passwordRecord = await createPasswordRecord(password);
@@ -472,9 +474,10 @@ export const useAppStore = create<AppStore>()(
           return {
             ok: false,
             error:
-              error instanceof Error
-                ? error.message
-                : "账号添加失败，请稍后重试"
+              toChineseErrorMessage(
+                error,
+                "账号添加失败，请检查网络后重试。"
+              )
           };
         }
         const passwordRecord = await createPasswordRecord(password);
@@ -543,8 +546,10 @@ export const useAppStore = create<AppStore>()(
             password
           );
         } catch (error) {
-          serverError =
-            error instanceof Error ? error.message : "无法连接账号服务";
+          serverError = toChineseErrorMessage(
+            error,
+            "无法连接账号服务，请检查网络后重试。"
+          );
         }
 
         if (!serverSession && localAccount && localPasswordValid) {

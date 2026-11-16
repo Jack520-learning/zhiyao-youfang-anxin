@@ -23,6 +23,7 @@ import {
 import { updateServerAccount, verifyServerAccountPassword } from "../lib/accountApi";
 import { getLinkedFamilyCodes } from "../lib/workspaces";
 import { useAppStore } from "../store/useAppStore";
+import { toChineseErrorMessage } from "../lib/userMessage";
 import type { LocalAccount, UserRole } from "../types";
 
 export function AccountSwitcher({
@@ -243,7 +244,9 @@ export function AccountSwitcher({
       setEditTarget(undefined);
       setEditNotice("账号信息已更新");
     } catch (error) {
-      setEditError(error instanceof Error ? error.message : "更新失败，请重试");
+      setEditError(
+        toChineseErrorMessage(error, "账号信息更新失败，请稍后重试。")
+      );
     } finally {
       setEditing(false);
     }
@@ -280,7 +283,7 @@ export function AccountSwitcher({
       }
     } catch (error) {
       setRevealError(
-        error instanceof Error ? error.message : "无法解密密码，请重试"
+        toChineseErrorMessage(error, "暂时无法查看密码，请重试。")
       );
       setRevealAccountId(undefined);
       setRevealedPassword("");
@@ -334,7 +337,7 @@ export function AccountSwitcher({
       setRevealedPassword(setupPasswordValue);
     } catch (error) {
       setSetupPasswordError(
-        error instanceof Error ? error.message : "保存失败，请重试"
+        toChineseErrorMessage(error, "密码保存失败，请稍后重试。")
       );
     } finally {
       setSettingUpPassword(false);

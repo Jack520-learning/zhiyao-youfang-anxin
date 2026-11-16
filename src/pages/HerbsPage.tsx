@@ -12,6 +12,7 @@ import { CameraCaptureModal } from "../components/CameraCaptureModal";
 import { DiscoveryNav } from "../components/DiscoveryNav";
 import { herbs, searchHerbs } from "../catalog/herbs";
 import { recognizeMedicineImage } from "../lib/ocr";
+import { toChineseErrorMessage } from "../lib/userMessage";
 
 export function HerbsPage() {
   const navigate = useNavigate();
@@ -61,6 +62,10 @@ export function HerbsPage() {
         setError("照片中没有得到可确认的药材名称，请补拍清晰叶、花、果实或根茎特征。");
       }
     } catch (identificationError) {
+      const identificationMessage = toChineseErrorMessage(
+        identificationError,
+        "照片识别暂不可用，请检查网络后重试。"
+      );
       try {
         const ocr = await recognizeMedicineImage(imageDataUrl);
         const localMatches = searchHerbs(ocr.rawText).map((item) => item.name);
@@ -71,16 +76,12 @@ export function HerbsPage() {
           );
         } else {
           setError(
-            identificationError instanceof Error
-              ? `${identificationError.message} 图片中也没有读到可匹配的药材名称。`
-              : "照片识别暂不可用，请搜索药材名称。"
+            `${identificationMessage} 图片中也没有读到可匹配的药材名称。`
           );
         }
       } catch {
         setError(
-          identificationError instanceof Error
-            ? identificationError.message
-            : "照片识别暂不可用，请搜索药材名称。"
+          identificationMessage
         );
       }
     } finally {

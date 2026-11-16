@@ -13,6 +13,7 @@ import { useNavigate } from "react-router-dom";
 import { herbs } from "../catalog/herbs";
 import { medicines } from "../catalog/medicines";
 import { evaluateSafetyScenarios } from "../evaluation/safetyScenarios";
+import { toChineseErrorMessage } from "../lib/userMessage";
 
 const comparisonCases = [
   {
@@ -167,7 +168,7 @@ export function EvaluationPage() {
       setComparisonResults(payload.results);
     } catch (error) {
       setComparisonError(
-        error instanceof Error ? error.message : "模型对照未完成"
+        toChineseErrorMessage(error, "模型对照未完成，请稍后重试。")
       );
     } finally {
       setComparisonBusy(false);

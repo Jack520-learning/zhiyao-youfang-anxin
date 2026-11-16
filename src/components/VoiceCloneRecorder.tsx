@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { stopSpeaking } from "../lib/speech";
+import { toChineseErrorMessage } from "../lib/userMessage";
 
 const READING_TEXT =
   "今天天气很好，我正在使用智药有方核对今天的用药。请按照医生和说明书的安排服药。";
@@ -222,9 +223,10 @@ export function VoiceCloneRecorder({
       onCreated(payload.voiceId, `我的专属音色 ${customVoices.length + 1}`);
     } catch (uploadError) {
       setError(
-        uploadError instanceof Error
-          ? uploadError.message
-          : "专属音色创建失败，请重新录制"
+        toChineseErrorMessage(
+          uploadError,
+          "专属音色创建失败，请检查网络后重新录制。"
+        )
       );
     } finally {
       setProcessing(false);

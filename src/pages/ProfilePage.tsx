@@ -44,6 +44,7 @@ import {
 import { VoiceCloneRecorder } from "../components/VoiceCloneRecorder";
 import { LinkedAccountManager } from "../components/LinkedAccountManager";
 import { useAppStore } from "../store/useAppStore";
+import { toChineseErrorMessage } from "../lib/userMessage";
 import type { EmergencyContact } from "../types";
 
 const voiceOptions: Array<{ value: VoiceMode; label: string }> = [
@@ -326,7 +327,10 @@ export function ProfilePage() {
       setToast("专属音色已删除");
     } catch (deleteError) {
       setToast(
-        deleteError instanceof Error ? deleteError.message : "专属音色删除失败"
+        toChineseErrorMessage(
+          deleteError,
+          "专属音色删除失败，请稍后重试。"
+        )
       );
     }
   }
