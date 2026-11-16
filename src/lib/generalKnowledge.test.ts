@@ -30,6 +30,11 @@ describe("general knowledge questions", () => {
     expect(isGeneralKnowledgeQuestion("为什么天空是蓝色的", true)).toBe(false);
   });
 
+  it("keeps identity and greeting chat out of the off-topic notice flow", () => {
+    expect(isGeneralKnowledgeQuestion("你是谁")).toBe(false);
+    expect(isGeneralKnowledgeQuestion("你好，今天过得怎么样")).toBe(false);
+  });
+
   it("allows science questions that mention everyday objects", () => {
     expect(isGeneralKnowledgeQuestion("太阳为什么东升西落")).toBe(true);
   });

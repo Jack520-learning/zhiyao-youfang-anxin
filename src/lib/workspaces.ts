@@ -1,6 +1,6 @@
 import { createInitialState } from "../data/seed";
 import { collectTrackableRiskChecks } from "./riskTracking";
-import { normalizeVoiceMode } from "./voiceDefaults";
+import { sanitizeVoicePreferences } from "./voiceDefaults";
 import type {
   AccountWorkspace,
   AppState,
@@ -136,19 +136,13 @@ export function workspaceFromCloud(
     familyAlerts: snapshot.familyAlerts || [],
     conversations: snapshot.conversations || workspace.conversations,
     preferences: snapshot.preferences
-      ? {
+      ? sanitizeVoicePreferences({
           ...workspace.preferences,
           ...snapshot.preferences,
-          voiceMode: normalizeVoiceMode(
-            snapshot.preferences.voiceMode ??
-              workspace.preferences.voiceMode,
-            snapshot.preferences.customVoiceId ??
-              workspace.preferences.customVoiceId
-          ),
           customVoices:
             snapshot.preferences.customVoices ??
             workspace.preferences.customVoices
-        }
+        })
       : workspace.preferences,
     intakeDraft: snapshot.intakeDraft ?? workspace.intakeDraft,
     lastSyncedAt: snapshot.updatedAt

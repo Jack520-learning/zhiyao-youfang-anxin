@@ -24,7 +24,7 @@ import {
 } from "../lib/accountApi";
 import { createId } from "../lib/ids";
 import { nowIso } from "../lib/time";
-import { normalizeVoiceMode } from "../lib/voiceDefaults";
+import { sanitizeVoicePreferences } from "../lib/voiceDefaults";
 import { toChineseErrorMessage } from "../lib/userMessage";
 import {
   collectTrackableRiskChecks,
@@ -1029,7 +1029,10 @@ export const useAppStore = create<AppStore>()(
         })),
       updatePreferences: (preferences) =>
         setState((state) => ({
-          preferences: { ...state.preferences, ...preferences }
+          preferences: sanitizeVoicePreferences({
+            ...state.preferences,
+            ...preferences
+          })
         })),
       updateEmergencyContacts: (emergencyContacts) =>
         setState((state) => ({
@@ -1484,19 +1487,13 @@ export const useAppStore = create<AppStore>()(
           conversations,
           activeConversationId,
           preferences: snapshot.preferences
-            ? {
+            ? sanitizeVoicePreferences({
                 ...state.preferences,
                 ...snapshot.preferences,
-                voiceMode: normalizeVoiceMode(
-                  snapshot.preferences.voiceMode ??
-                    state.preferences.voiceMode,
-                  snapshot.preferences.customVoiceId ??
-                    state.preferences.customVoiceId
-                ),
                 customVoices:
                   snapshot.preferences.customVoices ??
                   state.preferences.customVoices
-              }
+              })
             : state.preferences,
           intakeDraft: snapshot.intakeDraft ?? state.intakeDraft,
           lastSyncedAt: snapshot.updatedAt,
@@ -1559,15 +1556,9 @@ export const useAppStore = create<AppStore>()(
           activeConversationId,
           accounts: (saved.accounts ?? current.accounts).map(normalizeAccount),
           workspaces: saved.workspaces ?? current.workspaces,
-          preferences: {
+          preferences: sanitizeVoicePreferences({
             ...current.preferences,
             ...saved.preferences,
-            voiceMode: normalizeVoiceMode(
-              saved.preferences?.voiceMode ??
-                current.preferences.voiceMode,
-              saved.preferences?.customVoiceId ??
-                current.preferences.customVoiceId
-            ),
             customVoices: (
               saved.preferences?.customVoices ??
               (saved.preferences?.customVoiceId
@@ -1589,7 +1580,7 @@ export const useAppStore = create<AppStore>()(
             remindersEnabled:
               saved.preferences?.remindersEnabled ??
               current.preferences.remindersEnabled
-          },
+          }),
           medications: (saved.medications ?? current.medications)
             .filter(
               (medication) =>

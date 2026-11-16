@@ -331,7 +331,15 @@ async function getSpeechAudioUrl(
       voice?: string;
     };
     if (!payload.audioUrl) throw new Error("没有返回音频");
-    if (voiceMode !== "custom") {
+    if (voiceMode === "custom") {
+      if (
+        !customVoiceId ||
+        !/^qwen-audio-/.test(customVoiceId) ||
+        payload.voice !== customVoiceId
+      ) {
+        throw new Error("语音服务返回了不匹配的专属音色");
+      }
+    } else {
       const expectedVoice = expectedSystemVoices[voiceMode];
       if (payload.voice !== expectedVoice) {
         throw new Error("语音服务返回了不匹配的音色");

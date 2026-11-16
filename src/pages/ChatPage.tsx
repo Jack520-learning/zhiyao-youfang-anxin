@@ -108,6 +108,7 @@ import {
   withGeneralKnowledgeNotice
 } from "../lib/generalKnowledge";
 import { useAppStore } from "../store/useAppStore";
+import { cleanAnswerForChat } from "../lib/chatAnswer";
 import type {
   AssistantResponse,
   AssistantStage,
@@ -766,6 +767,7 @@ export function ChatPage() {
     let streamedAssistantMessageId = "";
     if (
       !localResponse.groundingOnly &&
+      !dailyConversation &&
       localResponse.riskCheck.level !== "emergency"
     ) {
       streamedAssistantMessageId = createId("chat");
@@ -883,7 +885,7 @@ export function ChatPage() {
           streamedAssistantMessageId,
           {
             ...streamedMessage,
-            content: response.message,
+            content: cleanAnswerForChat(response.message),
             pending: false,
             riskCheck: response.riskCheck
           },
@@ -908,7 +910,7 @@ export function ChatPage() {
             streamedAssistantMessageId,
             {
               ...streamedMessage,
-              content: finalContent,
+              content: cleanAnswerForChat(finalContent),
               pending: false
             },
             targetConversationId
@@ -926,9 +928,11 @@ export function ChatPage() {
           streamedAssistantMessageId,
           {
             ...streamedMessage,
-            content: generalKnowledgeQuery
-              ? withGeneralKnowledgeNotice(toElderVoice(response.message))
-              : toElderVoice(response.message),
+            content: cleanAnswerForChat(
+              generalKnowledgeQuery
+                ? withGeneralKnowledgeNotice(toElderVoice(response.message))
+                : toElderVoice(response.message)
+            ),
             pending: false,
             riskCheck: response.riskCheck
           },
@@ -943,9 +947,11 @@ export function ChatPage() {
     }
 
     setMode(response.mode);
-    const finalMessageContent = generalKnowledgeQuery
-      ? withGeneralKnowledgeNotice(toElderVoice(response.message))
-      : toElderVoice(response.message);
+    const finalMessageContent = cleanAnswerForChat(
+      generalKnowledgeQuery
+        ? withGeneralKnowledgeNotice(toElderVoice(response.message))
+        : toElderVoice(response.message)
+    );
     const assistantMessageId =
       streamedAssistantMessageId || createId("chat");
     if (!streamedAssistantMessageId) {

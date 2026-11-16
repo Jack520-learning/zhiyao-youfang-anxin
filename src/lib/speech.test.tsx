@@ -183,6 +183,41 @@ describe("speech playback start", () => {
     expect(browserSpeechCalls).toBe(0);
   });
 
+  it("rejects an unregistered or mismatched custom voice", async () => {
+    class FakeAudio {
+      paused = false;
+      currentTime = 0;
+      onended: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      play() {
+        return Promise.resolve();
+      }
+      pause() {}
+    }
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            audioUrl: "https://audio.example/wrong-custom.wav",
+            voice: "qwen-audio-another-custom"
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      )
+    );
+    vi.stubGlobal("Audio", FakeAudio);
+
+    await expect(
+      speakText(
+        "专属音色校验",
+        true,
+        "custom",
+        "qwen-audio-selected-custom"
+      )
+    ).resolves.toBe(false);
+  });
+
   it("aborts a pending speech request immediately when stopped", async () => {
     let requestSignal: AbortSignal | undefined;
     vi.stubGlobal(

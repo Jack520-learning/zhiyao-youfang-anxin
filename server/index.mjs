@@ -740,6 +740,9 @@ function getTtsBaseUrl() {
 
 async function callQwenTts(text, voiceMode, customVoiceId) {
   const isCustom = voiceMode === "custom" && customVoiceId;
+  if (isCustom && !/^qwen-audio-/.test(String(customVoiceId))) {
+    throw new Error("专属音色标识无效或已删除");
+  }
   const voice = isCustom ? customVoiceId : systemVoices[voiceMode];
   if (!voice) throw new Error("没有找到对应的朗读音色");
   const response = await fetch(

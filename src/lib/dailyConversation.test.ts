@@ -33,7 +33,18 @@ describe("daily conversation", () => {
 
   it("selects quick replies for daily chat", () => {
     expect(isDailyConversationQuery("陪我聊聊天吧")).toBe(true);
+    expect(isDailyConversationQuery("你是谁")).toBe(true);
     expect(resolveAdaptiveAnswerMode("陪我聊聊天吧", "safety")).toBe("quick");
+  });
+
+  it("answers identity questions as natural daily chat without a warning", () => {
+    const response = buildDailyConversationResponse("你是谁", profile);
+    expect(response.conversationOnly).toBe(true);
+    expect(response.message).toBe(
+      "我是智药有方，专门陪您核对用药安全，也能陪您简单聊天。"
+    );
+    expect(response.message).not.toContain("温馨提示");
+    expect(response.message).not.toContain("回答边界");
   });
 
   it("remembers the previous daily question when the reply is short", () => {
