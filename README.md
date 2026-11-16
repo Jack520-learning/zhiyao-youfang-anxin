@@ -42,7 +42,7 @@
 
 ### 中草药识别与本草资料
 
-- 12 种常见中药材条目；
+- 14 种常见中药材条目；
 - 名称、别名、性味、归经、传统功用和辨识要点；
 - 老人、抗凝药、慢病用药等安全提醒；
 - 拍照候选识别接口与药材名称搜索；
@@ -91,16 +91,28 @@ npm start
 ## 可选 AI 配置
 
 ```dotenv
+PORT=8788
+APP_ORIGIN=http://localhost:8788
 AI_BASE_URL=https://api.openai.com/v1
 AI_API_KEY=your-key
 AI_MODEL=your-text-model
 AI_VISION_MODEL=your-vision-model
+AI_ASR_MODEL=
+QWEN_ASR_MODEL=
+QWEN_TTS_MODEL=
+QWEN_CUSTOM_TTS_MODEL=
+DASHSCOPE_TTS_BASE_URL=
+VAPID_CONTACT=mailto:your-email@example.com
 ```
 
 用途：
 
 - `AI_MODEL`：低风险普通问药的表达润色；
 - `AI_VISION_MODEL`：药品与中药材图片候选识别。
+- `AI_ASR_MODEL` / `QWEN_ASR_MODEL`：语音转写模型。
+- `QWEN_TTS_MODEL` / `QWEN_CUSTOM_TTS_MODEL`：固定音色和专属音色合成模型。
+- `DASHSCOPE_TTS_BASE_URL`：兼容服务使用非默认语音接口地址时填写。
+- `VAPID_CONTACT`：Web Push 服务联系人，正式部署时填写有效邮箱。
 
 配置可用 Key 后，普通问答、风险解释和多轮对话由智能模型负责组织表达；本地规则负责先确定风险等级、资料不足和用药停止线，模型不得覆盖这些结论。密钥文件 `.env` 已被 Git 忽略。
 
@@ -116,7 +128,7 @@ AI_VISION_MODEL=your-vision-model
 - 家庭摘要不包含完整对话和原始药品图片；
 - 药品和本草图片默认只在当前请求中使用；
 - 价格无法从可靠实时来源获取时明确显示“暂无可靠价格”，不猜价；
-- 所有 29 种药品资料仍为 `pending_review`；
+- 全部药品和本草资料仍标记为 `pending_review`；
 - 本草资料整理自公开资料，需要专业审核后才能用于真实医疗场景；
 - 正式部署应启用 HTTPS、数据库加密、访问审计和备份。
 
@@ -139,6 +151,8 @@ https://zhiyao.com
 ## Agent 与 MCP
 
 问药 Agent 使用可解释工具注册表执行药品检索、相互作用核查、个人档案读取和服药日程查询。服务端同时提供受账号会话保护的 MCP JSON-RPC 工具接口，详见 [`docs/MCP接口.md`](docs/MCP接口.md)。
+
+当前演示主链路由前端确定性规划器选择只读工具，大模型负责在安全证据范围内组织回答。服务端保留了函数调用接口，但为避免增加首屏等待，默认问答链路不额外请求模型自主选择工具。MCP 工具调用和本地 Agent 阶段事件均已实现。
 
 ## 安全边界
 
@@ -173,11 +187,49 @@ shared/           本地安全知识库
 docs/             PRD、技术文档、演示脚本和历史修订
 ```
 
+## 技术架构
+
+```text
+React + TypeScript + Vite
+        │ REST / SSE
+        ▼
+Node.js HTTP 服务
+  ├─ 账号、会话与家庭关联
+  ├─ 确定性用药安全规则
+  ├─ 多模态模型接口
+  ├─ MCP 只读工具
+  └─ JSON 运行数据与 Web Push
+        │
+        ▼
+浏览器 IndexedDB 本地缓存
+```
+
+前端采用 React Router 做页面路由和懒加载，Zustand 管理运行状态，IndexedDB 保存本地工作区。后端使用 Node.js 原生 HTTP 服务，当前以 JSON 文件持久化，通过 SSE 将老人端更新实时推送到另一台设备或家属端。
+
+## 参赛团队信息
+
+提交前需要补充真实信息：
+
+- 团队名称：待填写
+- 队长：待填写
+- 团队成员：待填写
+- 指导教师：如无请填写“无”
+- 团队联系方式：待填写
+
+## 比赛提交材料
+
+- 技术文档：Markdown 和 Word 版本已提供，PDF 版本见 `docs/智药有方-安心药伴-技术文档.pdf`。
+- 演示脚本：见 `docs/演示脚本-5-8分钟.md`。
+- 提交清单：见 `docs/参赛提交清单.md`。
+- 演示视频：需要按脚本录制 5 至 8 分钟、1080P、普通话 MP4。
+- 代码仓库：需要上传至 Public GitHub/Gitee 仓库或为评委开通访问权限。
+- 在线演示：目标地址为 `https://zhiyao.com`，当前尚未完成公网 DNS 绑定。
+
 ## 与参考项目的关系
 
 本项目以安心药伴为主要产品架构，并复用参考项目中的：
 
-- 29 种结构化药品资料；
+- 29 种基础结构化药品资料，并在当前仓库扩展至 149 种；
 - 药品别名与剂型检索；
 - 相互作用规则；
 - 特殊人群提醒；
