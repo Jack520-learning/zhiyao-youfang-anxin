@@ -111,6 +111,10 @@ import {
 import { useAppStore } from "../store/useAppStore";
 import { cleanAnswerForChat } from "../lib/chatAnswer";
 import { resolveChatRegeneration } from "../lib/chatRegeneration";
+import {
+  beginChatGeneration,
+  endChatGeneration
+} from "../lib/chatSyncGuard";
 import type {
   AssistantResponse,
   AssistantStage,
@@ -467,6 +471,21 @@ export function ChatPage() {
   }, [isResizing]);
 
   async function submitQuestion(
+    question = input,
+    autoScroll = true,
+    options?: {
+      regenerateMessageId?: string;
+    }
+  ) {
+    beginChatGeneration();
+    try {
+      await generateQuestionAnswer(question, autoScroll, options);
+    } finally {
+      endChatGeneration();
+    }
+  }
+
+  async function generateQuestionAnswer(
     question = input,
     autoScroll = true,
     options?: {

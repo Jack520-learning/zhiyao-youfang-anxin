@@ -5,6 +5,7 @@ import {
 } from "../lib/cloud";
 import { cloudSnapshotFingerprint } from "../lib/cloudSnapshot";
 import { useAppStore } from "../store/useAppStore";
+import { isChatGenerationActive } from "../lib/chatSyncGuard";
 
 export type SyncStatus = "idle" | "syncing" | "synced" | "offline" | "error";
 
@@ -141,9 +142,16 @@ export function useCloudSync() {
     lastElderContactUpdateRef.current = "";
 
     async function loadElderSnapshot() {
+      if (isChatGenerationActive()) return;
       try {
         const snapshot = await fetchFamilySnapshot(familyCode);
-        if (cancelled || !snapshot) return;
+        if (
+          cancelled ||
+          !snapshot ||
+          isChatGenerationActive()
+        ) {
+          return;
+        }
         if (snapshot.updatedAt === lastElderContactUpdateRef.current) return;
         lastElderContactUpdateRef.current = snapshot.updatedAt;
         if (pendingElderWriteRef.current) return;
