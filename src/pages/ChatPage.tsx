@@ -58,7 +58,7 @@ import {
 } from "../lib/vision";
 import { speakText, stopSpeaking } from "../lib/speech";
 import { useQwenSpeechRecognition } from "../lib/qwenSpeech";
-import { nowIso } from "../lib/time";
+import { nowIso, getNextDose } from "../lib/time";
 import { useAppStore } from "../store/useAppStore";
 import type {
   AssistantResponse,
@@ -322,6 +322,7 @@ export function ChatPage() {
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoProgress, setPhotoProgress] = useState("");
   const [photoNotice, setPhotoNotice] = useState("");
+  const [reminderNotice, setReminderNotice] = useState("");
   const [cameraOpen, setCameraOpen] = useState(false);
   const [view, setView] = useState<"home" | "conversation">(
     searchParams.get("q") ? "conversation" : "home"
@@ -408,6 +409,13 @@ export function ChatPage() {
   useEffect(() => {
     latestSidebarWidth.current = sidebarWidth;
   }, [sidebarWidth]);
+
+  // Auto-clear the reminder toggle notice after a few seconds
+  useEffect(() => {
+    if (!reminderNotice) return;
+    const timer = window.setTimeout(() => setReminderNotice(""), 3000);
+    return () => window.clearTimeout(timer);
+  }, [reminderNotice]);
 
   // Sidebar resize handling — uses delta from mousedown for pixel-perfect sensitivity
   useEffect(() => {
@@ -1082,6 +1090,43 @@ export function ChatPage() {
     setShowScrollToBottom(false);
   }
 
+  function toggleReminders() {
+    const next = !preferences.remindersEnabled;
+    updatePreferences({ remindersEnabled: next });
+    if (!next) {
+      stopSpeaking();
+      setReminderNotice("已关闭吃药提醒");
+      return;
+    }
+    // 开启提醒时立即检查是否有即将到期的用药
+    const state = useAppStore.getState();
+    const nextDose = getNextDose(
+      state.medications,
+      state.doseEvents,
+      new Date(),
+      state.profile.timeZone
+    );
+    if (nextDose) {
+      const minutesFromNow =
+        (new Date(nextDose.scheduledAt).getTime() - Date.now()) / 60000;
+      if (minutesFromNow <= 15 && minutesFromNow >= -90) {
+        setReminderNotice(
+          `已开启吃药提醒，下一次：${nextDose.medication.name}`
+        );
+      } else if (minutesFromNow > 0) {
+        const hours = Math.floor(minutesFromNow / 60);
+        const mins = Math.round(minutesFromNow % 60);
+        setReminderNotice(
+          `已开启吃药提醒，约 ${hours > 0 ? `${hours}小时` : ""}${mins}分钟后提醒`
+        );
+      } else {
+        setReminderNotice("已开启吃药提醒");
+      }
+    } else {
+      setReminderNotice("已开启吃药提醒，暂无待提醒的用药");
+    }
+  }
+
   function removeConversation(id: string, title: string) {
     setConversationToDelete({ id, title });
   }
@@ -1271,11 +1316,7 @@ export function ChatPage() {
               type="button"
               aria-label={preferences.remindersEnabled ? "关闭吃药提醒" : "开启吃药提醒"}
               title={preferences.remindersEnabled ? "关闭吃药提醒" : "开启吃药提醒"}
-              onClick={() =>
-                updatePreferences({
-                  remindersEnabled: !preferences.remindersEnabled
-                })
-              }
+              onClick={toggleReminders}
             >
               {preferences.remindersEnabled ? (
                 <BellRing size={20} aria-hidden="true" />
@@ -1285,6 +1326,17 @@ export function ChatPage() {
             </button>
           </div>
         </header>
+
+        {reminderNotice ? (
+          <div
+            className="notice chat-unified-notice"
+            role="status"
+            style={{ margin: "8px 16px 0" }}
+          >
+            <BellRing size={16} aria-hidden="true" />
+            {reminderNotice}
+          </div>
+        ) : null}
 
         <div
           className={`ai-chat-content ${sidebarOpen ? "sidebar-open" : ""} ${isResizing ? "is-resizing" : ""}`}
