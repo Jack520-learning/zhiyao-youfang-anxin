@@ -72,7 +72,12 @@
 
 ## 快速运行
 
-在 macOS 上可双击 `一键启动智药有方-安心药伴.command`；Windows 可双击同名 `.cmd` 文件。
+推荐使用 Node.js 22 LTS，最低支持版本为 Node.js 20.19.0。
+
+- Windows：双击 `一键启动智药有方-安心药伴.cmd`；
+- macOS：双击 `一键启动智药有方-安心药伴.command`；
+- Linux：运行 `./一键启动智药有方-安心药伴.sh`；
+- 所有系统统一命令：`npm run launch`。
 
 ```bash
 npm install
@@ -93,6 +98,23 @@ npm start
 ```
 
 访问 `http://127.0.0.1:8788`。
+
+## 系统与浏览器兼容
+
+| 系统 | 源码本地运行 | 浏览器访问已部署站点 |
+| --- | --- | --- |
+| Windows 10/11 | 支持 | 支持 |
+| macOS | 支持 | 支持 |
+| Linux | 支持 | 支持 |
+| ChromeOS | 需启用 Linux 开发环境 | 支持 Chrome 浏览器 |
+
+说明：
+
+- 项目包含 Windows、macOS、Linux 启动脚本，统一使用 `scripts/launch.mjs` 等待服务就绪后再打开浏览器；
+- ChromeOS 的普通“仅浏览器”环境不能直接运行 Node.js 服务，因此源码模式需要启用 Linux 开发环境；正式使用时通过公网部署地址在 Chrome 中访问即可；
+- GitHub Pages 只能托管前端静态文件，不能运行本项目的 API 服务，正式部署应使用 Node.js 服务或 Docker；
+- 仓库配置了 Windows、macOS、Ubuntu 三平台 GitHub Actions，自动执行安装、类型检查、测试和构建；
+- 推荐使用最新版 Chrome 或 Edge。相机、麦克风、通知和 Service Worker 在公网使用时需要 HTTPS 与浏览器权限。
 
 ## 可选 AI 配置
 
