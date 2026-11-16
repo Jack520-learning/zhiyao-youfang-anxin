@@ -18,11 +18,13 @@ import {
   Plus,
   Send,
   Search,
+  Settings,
   ShieldCheck,
   Sparkles,
   Square,
   Trash2,
-  Volume2
+  Volume2,
+  VolumeX
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
@@ -53,7 +55,7 @@ import {
   buildDraftsFromVision,
   type VisionIdentification
 } from "../lib/vision";
-import { preloadSpeech, speakText, stopSpeaking } from "../lib/speech";
+import { speakText, stopSpeaking } from "../lib/speech";
 import { useQwenSpeechRecognition } from "../lib/qwenSpeech";
 import { nowIso } from "../lib/time";
 import { useAppStore } from "../store/useAppStore";
@@ -295,6 +297,7 @@ export function ChatPage() {
   const medications = useAppStore((state) => state.medications);
   const profile = useAppStore((state) => state.profile);
   const preferences = useAppStore((state) => state.preferences);
+  const updateProfile = useAppStore((state) => state.updateProfile);
   const familyCode = useAppStore((state) => state.familyCode);
   const addFamilyAlert = useAppStore((state) => state.addFamilyAlert);
   const addChatMessage = useAppStore((state) => state.addChatMessage);
@@ -1189,12 +1192,7 @@ export function ChatPage() {
           </div>
         ) : null}
         {message.riskCheck ? (
-          <MessageRisk
-            riskCheck={message.riskCheck}
-            soundEnabled={profile.voiceEnabled && preferences.soundEnabled}
-            voiceMode={preferences.voiceMode}
-            customVoiceId={preferences.customVoiceId}
-          />
+          <MessageRisk riskCheck={message.riskCheck} />
         ) : null}
         {message.role === "assistant" &&
         message.riskCheck &&
@@ -1249,9 +1247,31 @@ export function ChatPage() {
               <ShieldCheck size={15} aria-hidden="true" />
               已核对 {medications.filter((item) => item.status === "active").length} 种当前药物
             </span>
-            <button className="btn" type="button" onClick={startNewConversation}>
-              <Plus size={18} aria-hidden="true" />
-              新对话
+            <button
+              className="icon-btn"
+              type="button"
+              aria-label={profile.voiceEnabled ? "停止自动播报" : "开启自动播报"}
+              title={profile.voiceEnabled ? "停止自动播报" : "开启自动播报"}
+              onClick={() => {
+                const next = !profile.voiceEnabled;
+                updateProfile({ voiceEnabled: next });
+                if (!next) stopSpeaking();
+              }}
+            >
+              {profile.voiceEnabled ? (
+                <Volume2 size={20} aria-hidden="true" />
+              ) : (
+                <VolumeX size={20} aria-hidden="true" />
+              )}
+            </button>
+            <button
+              className="icon-btn"
+              type="button"
+              aria-label="设置提醒"
+              title="设置提醒"
+              onClick={() => navigate("/profile")}
+            >
+              <Settings size={20} aria-hidden="true" />
             </button>
           </div>
         </header>
@@ -1675,27 +1695,10 @@ export function ChatPage() {
 }
 
 function MessageRisk({
-  riskCheck,
-  soundEnabled,
-  voiceMode,
-  customVoiceId
+  riskCheck
 }: {
   riskCheck: RiskCheck;
-  soundEnabled: boolean;
-  voiceMode: "warm" | "clear" | "male" | "calm" | "custom";
-  customVoiceId?: string;
 }) {
-  const speechContent = `${riskCheck.summary}。${riskCheck.nextStep}`;
-
-  useEffect(() => {
-    if (!soundEnabled) return;
-    void preloadSpeech(
-      speechContent,
-      voiceMode,
-      customVoiceId
-    ).catch(() => undefined);
-  }, [customVoiceId, soundEnabled, speechContent, voiceMode]);
-
   return (
     <div className="message-risk">
       <div className="message-risk-top">
@@ -1713,27 +1716,6 @@ function MessageRisk({
         </p>
         <SourcesBlock sourceIds={riskCheck.sourceIds} />
       </details>
-      <div className="speech-action-row">
-        <button
-          type="button"
-          className="btn btn-ghost"
-          disabled={!soundEnabled}
-          onClick={() =>
-            void speakText(speechContent, true, voiceMode, customVoiceId)
-          }
-        >
-          <Volume2 size={18} aria-hidden="true" />
-          {soundEnabled ? "朗读检查结果" : "语音朗读已关闭"}
-        </button>
-        <button
-          type="button"
-          className="btn btn-ghost speech-stop-inline"
-          disabled={!soundEnabled}
-          onClick={stopSpeaking}
-        >
-          停止朗读
-        </button>
-      </div>
     </div>
   );
 }
