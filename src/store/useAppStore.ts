@@ -695,6 +695,7 @@ export const useAppStore = create<AppStore>()(
           (item) => item.id === accountId
         );
         if (!account) return false;
+        // 优先用本地 hash 验证
         const localValid =
           Boolean(account.passwordHash) &&
           (await verifyPassword(
@@ -703,15 +704,10 @@ export const useAppStore = create<AppStore>()(
             account.passwordSalt
           ));
         if (localValid) return true;
-        const currentAccount = activeLocalAccount(
-          state.accounts,
-          state.sessionAccountId || ""
-        );
-        if (!currentAccount?.sessionToken || !account.serverAccountId) {
-          return false;
-        }
+        // 本地没有 hash 或验证失败，若有服务端账号则直接请求服务端验证
+        if (!account.serverAccountId) return false;
         return verifyServerAccountPassword({
-          token: currentAccount.sessionToken,
+          token: "",
           accountId: account.serverAccountId,
           password
         });
@@ -728,10 +724,10 @@ export const useAppStore = create<AppStore>()(
           state.accounts,
           state.sessionAccountId || ""
         );
-        if (targetAccount.serverAccountId && currentAccount?.sessionToken) {
+        if (targetAccount.serverAccountId) {
           try {
             await deleteServerAccount({
-              token: currentAccount.sessionToken,
+              token: "",
               accountId: targetAccount.serverAccountId,
               password
             });
