@@ -7,6 +7,7 @@ import {
 describe("safety evaluation suite", () => {
   it("keeps every curated safety regression scenario passing", () => {
     const results = evaluateSafetyScenarios();
+    expect(results.length).toBeGreaterThanOrEqual(100);
     expect(results.every((result) => result.passed)).toBe(true);
   });
 

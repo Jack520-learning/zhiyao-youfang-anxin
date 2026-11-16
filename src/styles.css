@@ -4056,6 +4056,8 @@ img {
 }
 
 .evaluation-scenarios,
+.evaluation-model-compare,
+.evaluation-user-test,
 .evaluation-review,
 .evaluation-method {
   margin-top: 16px;
@@ -4118,6 +4120,20 @@ img {
   color: var(--red);
 }
 
+.evaluation-more-results {
+  margin-top: 12px;
+}
+
+.evaluation-more-results > summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  cursor: pointer;
+  color: var(--primary);
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 750;
+}
+
 .evaluation-review-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -4151,6 +4167,74 @@ img {
 
 .evaluation-review-grid b {
   color: var(--amber);
+  font-size: calc(11px * var(--font-scale));
+}
+
+.user-task-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.user-task-list button {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  padding: 9px 12px;
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+}
+
+.user-task-list button span {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--primary);
+  font-size: calc(11px * var(--font-scale));
+  font-weight: 800;
+}
+
+.user-task-list button.done {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.user-task-list button:disabled {
+  opacity: 0.65;
+}
+
+.evaluation-test-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.evaluation-test-results > div {
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  padding: 10px;
+  background: var(--surface-soft);
+}
+
+.evaluation-test-results strong {
+  color: var(--ink);
+  font-size: calc(13px * var(--font-scale));
+}
+
+.evaluation-test-results span,
+.evaluation-test-results small {
+  color: var(--muted);
   font-size: calc(11px * var(--font-scale));
 }
 
@@ -4539,6 +4623,10 @@ img {
   }
 
   .evaluation-review-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .user-task-list {
     grid-template-columns: 1fr;
   }
 

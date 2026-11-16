@@ -1,7 +1,11 @@
 import {
   answerWithRules,
-  checkNewMedication
+  checkNewMedication,
+  findHighRiskMedication
 } from "../lib/riskEngine";
+import { findInteractions, interactionRules } from "../catalog/interactions";
+import { getMedicine, medicines } from "../catalog/medicines";
+import type { Medicine } from "../catalog/types";
 import type {
   ElderProfile,
   Medication,
@@ -130,7 +134,7 @@ const penicillinCandidate: Medication = {
   confidence: 0.9
 };
 
-export const safetyScenarios: SafetyScenario[] = [
+const curatedScenarios: SafetyScenario[] = [
   ruleScenario(
     "emergency-chest-pain",
     "紧急求助",
@@ -210,6 +214,113 @@ export const safetyScenarios: SafetyScenario[] = [
     [warfarin],
     /医生|药师|不要|不能/
   )
+];
+
+function medicationFromCatalog(
+  medicine: Medicine,
+  index: number
+): Medication {
+  return {
+    ...medication(
+      `catalog-${medicine.slug}-${index}`,
+      medicine.displayName,
+      medicine.activeIngredient,
+      [medicine.activeIngredient]
+    ),
+    dosage: medicine.strength,
+    instructions: medicine.howToTake
+  };
+}
+
+const emergencyScenarios: SafetyScenario[] = [
+  "我突然胸痛而且喘不上气",
+  "老人说话含糊，一侧手脚没有力气",
+  "吃药后嘴唇肿了，呼吸很困难",
+  "老人突然意识不清楚，叫不醒",
+  "出现黑便并且头晕得站不稳",
+  "心跳很快同时胸闷出汗",
+  "老人抽搐后还没有恢复意识",
+  "服药后全身大片皮疹并呼吸困难"
+].map((input, index) =>
+  ruleScenario(
+    `emergency-variant-${index + 1}`,
+    "紧急求助",
+    `紧急危险信号场景 ${index + 1}`,
+    input,
+    ["emergency", "high"],
+    [],
+    /120|急救|急诊/
+  )
+);
+
+const interactionScenarios: SafetyScenario[] = interactionRules.map((rule) => {
+  const left = getMedicine(rule.a);
+  const right = getMedicine(rule.b);
+  return {
+    id: `interaction-${rule.a}-${rule.b}`,
+    category: "相互作用规则",
+    title: rule.title,
+    input: `${left?.displayName || rule.a}与${right?.displayName || rule.b}联合使用`,
+    expectedLevels:
+      rule.severity === "high"
+        ? ["high"]
+        : rule.severity === "caution"
+          ? ["medium"]
+          : ["low", "medium"],
+    expectedKeyword: new RegExp(
+      rule.title.slice(0, Math.min(6, rule.title.length)).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    ),
+    run: () => {
+      const interaction = findInteractions([rule.a, rule.b])[0];
+      return {
+        id: `check-${rule.a}-${rule.b}`,
+        level:
+          interaction?.severity === "high"
+            ? "high"
+            : interaction?.severity === "caution"
+              ? "medium"
+              : "low",
+        title: interaction?.title || rule.title,
+        summary: interaction?.explanation || rule.explanation,
+        nextStep: interaction?.action || rule.action,
+        reasons: [
+          `规则配对：${left?.displayName || rule.a} + ${right?.displayName || rule.b}`
+        ],
+        sourceIds: ["src-drug-catalog"],
+        involvedMedicationIds: [],
+        medicationSnapshot: [left?.displayName || rule.a, right?.displayName || rule.b],
+        createdAt: "2026-01-01T00:00:00.000Z"
+      };
+    }
+  };
+});
+
+const usageScenarios: SafetyScenario[] = medicines
+  .slice(0, 65)
+  .map((medicine, index) => {
+    const current = medicationFromCatalog(medicine, index);
+    return {
+      id: `usage-${medicine.slug}`,
+      category: "具体药物用法",
+      title: `${medicine.displayName}用法边界`,
+      input: `${medicine.displayName}怎么吃`,
+      expectedLevels: findHighRiskMedication(current)
+        ? ["high"]
+        : ["low"],
+      run: () =>
+        answerWithRules(
+          `${medicine.displayName}怎么吃`,
+          [current],
+          profile
+        ).riskCheck
+    };
+  });
+
+export const safetyScenarios: SafetyScenario[] = [
+  ...curatedScenarios,
+  ...emergencyScenarios,
+  ...interactionScenarios,
+  ...usageScenarios
 ];
 
 export function evaluateSafetyScenarios(): ScenarioResult[] {

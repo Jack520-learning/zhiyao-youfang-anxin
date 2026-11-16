@@ -232,6 +232,8 @@ const interactionList: Interaction[] = [
   },
 ];
 
+export const interactionRules = interactionList;
+
 const interactionMap = new Map(
   interactionList.map((interaction) => [pair(interaction.a, interaction.b), interaction]),
 );
