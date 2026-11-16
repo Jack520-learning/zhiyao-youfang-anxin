@@ -1,10 +1,21 @@
 import type { AssistantResponse, ElderProfile } from "../types";
+import { findBestMedicine } from "../catalog/retrieval";
 import { nowIso } from "./time";
 
 type AnswerMode = "quick" | "safety" | "detailed";
 
 function normalize(value: string): string {
   return value.toLowerCase().replace(/\s+/g, "");
+}
+
+export function hasMedicationTopicIntent(query: string): boolean {
+  const normalized = normalize(query);
+  return (
+    (findBestMedicine(query)?.score || 0) >= 0.55 ||
+    /头孢|青霉素|阿莫西林|霉素|西林|沙星|硝唑|华法林|阿司匹林|氯吡格雷|胰岛素|二甲双胍|降压药|降糖药|安眠药|止痛药|退烧药|感冒药|抗生素|消炎药|中成药|中药|保健品|处方|服药|吃药|用药|剂量|用量|喝酒|饮酒|酒精|聚餐.*酒|饭局.*酒/.test(
+      normalized
+    )
+  );
 }
 
 export function isEmotionalDiscomfortQuery(query: string): boolean {
@@ -23,6 +34,7 @@ export function isEmotionalDiscomfortQuery(query: string): boolean {
 
 export function isDailyConversationQuery(query: string): boolean {
   const normalized = normalize(query);
+  if (hasMedicationTopicIntent(query)) return false;
   return (
     isEmotionalDiscomfortQuery(query) ||
     /你好|您好|嗨|在吗|你是谁|你叫什么|你是什么|你是做什么|你能做什么|早上好|上午好|中午好|下午好|晚上好|谢谢|感谢|再见|晚安|心情|开心|难过|不高兴|烦|累|无聊|陪我|聊聊天|说说话|笑话|故事|唱歌|天气|下雨|今天.*太阳|太阳.*(大|晒|出来)|新闻|吃饭了吗|吃了吗|散步|电视|音乐|孩子|孙子|孙女|老伴|家人|睡得好|昨晚|今天过得|今天怎么样|你喜欢|你喜欢什么/.test(

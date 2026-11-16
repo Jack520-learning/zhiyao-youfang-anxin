@@ -79,6 +79,7 @@ import { useQwenSpeechRecognition } from "../lib/qwenSpeech";
 import { nowIso, getNextDose, formatMessageTime } from "../lib/time";
 import {
   buildDailyConversationResponse,
+  hasMedicationTopicIntent,
   isDailyConversationQuery,
   isContextualDailyReply,
   resolveAdaptiveAnswerMode
@@ -496,6 +497,7 @@ export function ChatPage() {
     abortControllerRef.current = generationController;
     const hasExplicitMedicationIntent =
       Boolean(composerSkill) ||
+      hasMedicationTopicIntent(clean) ||
       /药名|药物|药盒|处方|剂量|用量|服用|吃药|停药|副作用|不良反应|治疗/.test(
         clean
       );

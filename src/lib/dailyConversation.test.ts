@@ -7,6 +7,7 @@ import {
   resolveAdaptiveAnswerMode
 } from "./dailyConversation";
 import type { ElderProfile } from "../types";
+import { answerWithRules } from "./riskEngine";
 
 const profile: ElderProfile = {
   name: "王阿姨",
@@ -45,6 +46,17 @@ describe("daily conversation", () => {
     );
     expect(response.message).not.toContain("温馨提示");
     expect(response.message).not.toContain("回答边界");
+  });
+
+  it("prioritizes medication and alcohol safety over family-chat keywords", () => {
+    const query = "我老伴吃头孢了，晚上亲戚聚餐，能不能喝点酒。";
+    expect(isDailyConversationQuery(query)).toBe(false);
+    const medicalFallback = answerWithRules(query, [], profile);
+    expect(medicalFallback.message).not.toContain(
+      "家里人确实很容易牵动心情"
+    );
+    expect(medicalFallback.message).toContain("不建议饮酒");
+    expect(medicalFallback.message).toContain("头孢");
   });
 
   it("remembers the previous daily question when the reply is short", () => {

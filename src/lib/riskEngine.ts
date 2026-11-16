@@ -419,6 +419,40 @@ export function answerWithRules(
     };
   }
 
+  const mentionsCephalosporin = /头孢/.test(normalizedQuery);
+  const asksAboutAlcohol = /酒|酒精|饮酒/.test(normalizedQuery);
+  if (mentionsCephalosporin && asksAboutAlcohol) {
+    const check = makeCheck(
+      {
+        level: "medium",
+        title: "服用头孢期间不建议饮酒",
+        summary:
+          "服用头孢期间不建议饮酒。部分头孢与酒精同用可能出现面部潮红、心悸、恶心、低血压等不适，酒精也可能加重肝胃负担。",
+        nextStep:
+          "今晚不要饮酒。如果已经饮酒，先停止继续饮酒并观察；出现呼吸困难、面唇肿胀、意识异常、晕厥或明显心悸时立即拨打 120。",
+        reasons: [
+          "问题同时涉及头孢类抗菌药和饮酒",
+          "具体禁酒要求仍需以所用药品说明书和医生说明为准"
+        ],
+        sourceIds: ["src-drug-catalog", "src-safety-rule"],
+        involvedMedicationIds: currentMedications.map(
+          (medication) => medication.id
+        )
+      },
+      currentMedications
+    );
+    return {
+      message: buildRulesMessage(check, mode, query),
+      riskCheck: check,
+      stages: [
+        { id: "intent", label: "识别头孢与饮酒问题", status: "done" },
+        { id: "risk", label: "应用抗菌药饮酒停止线", status: "done" },
+        { id: "next-step", label: "说明不饮酒与就医信号", status: "done" }
+      ],
+      mode: "rules"
+    };
+  }
+
   const currentInteraction = currentMedications
     .flatMap((left, leftIndex) =>
       currentMedications
