@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   ArrowRight,
+  AlertTriangle,
   Bell,
   BookOpenText,
   Camera,
@@ -16,7 +17,7 @@ import {
   ShieldAlert,
   Stethoscope
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { RiskBadge } from "../components/RiskBadge";
 import { ProactiveRiskPanel } from "../components/ProactiveRiskPanel";
@@ -28,6 +29,7 @@ import { createId } from "../lib/ids";
 import { matchMedicines } from "../catalog/retrieval";
 import { searchHerbs } from "../catalog/herbs";
 import { trackableRiskChecks } from "../lib/riskTracking";
+import { buildDoseTimingNotice } from "../lib/doseTiming";
 import { useAppStore } from "../store/useAppStore";
 import type { DoseStatus } from "../types";
 
@@ -51,20 +53,20 @@ export function HomePage() {
   const addAuditEvent = useAppStore((state) => state.addAuditEvent);
   const preferences = useAppStore((state) => state.preferences);
   const firstContact = useAppStore((state) => state.emergencyContacts[0]);
+  const [now, setNow] = useState(() => new Date());
   const nextDose = getNextDose(
     medications,
     doseEvents,
-    new Date(),
+    now,
     profile.timeZone
   );
   const todayDoses = getTodayDoses(
     medications,
     doseEvents,
-    new Date(),
+    now,
     profile.timeZone
   );
   const latestRisk = trackableRiskChecks(riskChecks)[0];
-  const now = new Date();
   const [lastAction, setLastAction] = useState<{
     medicationId: string;
     scheduledAt: string;
@@ -75,6 +77,11 @@ export function HomePage() {
   const [concernStatus, setConcernStatus] = useState<
     "idle" | "sending" | "sent" | "queued"
   >("idle");
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   function setDoseStatus(
     dose:
@@ -390,7 +397,20 @@ export function HomePage() {
         <div className="section-heading">
           <div>
             <h2>今天的用药安排</h2>
-            <p>没有点击不等于漏服，会先记为“尚未确认”。</p>
+            <p>
+              没有点击不等于漏服，会先记为“尚未确认”。
+              {todayDoses.some((dose) =>
+                buildDoseTimingNotice({
+                  scheduledAt: dose.scheduledAt,
+                  status: dose.status,
+                  now,
+                  recordedAt: dose.recordedAt,
+                  timeZone: profile.timeZone
+                })
+              )
+                ? " 有计划时间与当前或记录时间不一致，请逐项核对。"
+                : ""}
+            </p>
           </div>
           <button type="button" className="btn btn-ghost" onClick={() => navigate("/medications")}>
             全部用药
@@ -398,7 +418,15 @@ export function HomePage() {
           </button>
         </div>
         <div className="timeline">
-          {todayDoses.map((dose) => (
+          {todayDoses.map((dose) => {
+            const timingNotice = buildDoseTimingNotice({
+              scheduledAt: dose.scheduledAt,
+              status: dose.status,
+              now,
+              recordedAt: dose.recordedAt,
+              timeZone: profile.timeZone
+            });
+            return (
             <div className="timeline-row" key={dose.doseId}>
               <div className="timeline-time">{formatTime(new Date(dose.scheduledAt), profile.timeZone)}</div>
               <div className="timeline-med">
@@ -406,6 +434,18 @@ export function HomePage() {
                 <span>
                   {dose.medication.dosage} · {humanizeRelation(dose.medication.relation)}
                 </span>
+                {timingNotice ? (
+                  <span
+                    className={`dose-time-warning ${timingNotice.kind}`}
+                    role="status"
+                  >
+                    <AlertTriangle size={15} aria-hidden="true" />
+                    <span>
+                      <strong>{timingNotice.title}</strong>
+                      {timingNotice.detail}
+                    </span>
+                  </span>
+                ) : null}
               </div>
               <div className="timeline-status">
                 {dose.status === "pending" ? (
@@ -428,7 +468,8 @@ export function HomePage() {
                 ) : null}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </section>
       <section className="home-search-lower" aria-label="搜索与识别用药">

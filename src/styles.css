@@ -857,6 +857,37 @@ img {
   font-size: calc(14px * var(--font-scale));
 }
 
+.timeline-med .dose-time-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 9px;
+  border: 1px solid color-mix(in srgb, var(--amber) 32%, var(--line));
+  border-radius: 12px;
+  padding: 9px 11px;
+  background: var(--amber-soft);
+  color: var(--amber);
+  font-size: calc(13px * var(--font-scale));
+  line-height: 1.55;
+}
+
+.dose-time-warning > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.dose-time-warning strong {
+  display: block;
+  color: var(--ink);
+  font-size: calc(14px * var(--font-scale));
+}
+
+.dose-time-warning.mismatch {
+  border-color: color-mix(in srgb, var(--red) 28%, var(--line));
+  background: var(--red-soft);
+  color: var(--red);
+}
+
 .status-pill {
   border-radius: 999px;
   padding: 7px 11px;
