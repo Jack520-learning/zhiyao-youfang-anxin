@@ -224,6 +224,19 @@ export function HomePage() {
                 <span>先识别紧急危险信号</span>
               </span>
             </button>
+            <button
+              type="button"
+              className="card quick-action"
+              onClick={() => navigate("/profile")}
+            >
+              <span className="quick-action-icon">
+                <Bell size={25} aria-hidden="true" />
+              </span>
+              <span>
+                <strong>开启吃药提醒</strong>
+                <span>按时提醒，避免漏服</span>
+              </span>
+            </button>
           </aside>
         </div>
         <section className="home-search-lower" aria-label="搜索与识别用药">
