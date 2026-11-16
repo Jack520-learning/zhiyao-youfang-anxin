@@ -565,7 +565,7 @@ function HomeSearch() {
             <Mic size={21} aria-hidden="true" />
           )}
           {speech.processing
-            ? "千问转写中"
+            ? "语音识别中"
             : speech.listening
               ? "松开结束"
               : "按住说"}

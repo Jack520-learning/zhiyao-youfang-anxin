@@ -3,7 +3,11 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { useSpeechRecognition } from "./speech";
+import {
+  speakText,
+  stopSpeaking,
+  useSpeechRecognition
+} from "./speech";
 
 class FakeRecognition {
   static instances: FakeRecognition[] = [];
@@ -71,5 +75,94 @@ describe("useSpeechRecognition hold behavior", () => {
     });
     expect(FakeRecognition.instances[0].starts).toBe(2);
     root.unmount();
+  });
+});
+
+describe("speech playback start", () => {
+  afterEach(() => {
+    stopSpeaking();
+  });
+
+  it("starts browser speech immediately without waiting for server TTS", async () => {
+    let spoken = 0;
+    const holder: {
+      utterance: {
+        onend: (() => void) | null;
+        onerror: (() => void) | null;
+      } | null;
+    } = { utterance: null };
+
+    class FakeUtterance {
+      lang = "";
+      voice: unknown = null;
+      rate = 1;
+      pitch = 1;
+      volume = 1;
+      onend: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+
+      constructor(public text: string) {}
+    }
+
+    Object.assign(window, {
+      SpeechSynthesisUtterance: FakeUtterance,
+      speechSynthesis: {
+        cancel: () => undefined,
+        speak: (next: FakeUtterance) => {
+          spoken += 1;
+          holder.utterance = next;
+        },
+        getVoices: () => [],
+        speaking: false,
+        paused: false
+      }
+    });
+
+    const playback = speakText("您好，我马上为您朗读。", true, "warm");
+    expect(spoken).toBe(1);
+    expect(holder.utterance).not.toBeNull();
+    holder.utterance?.onend?.();
+    await expect(playback).resolves.toBe(true);
+  });
+
+  it("keeps the same Chinese voice when browser voices load later", async () => {
+    const spokenVoices: unknown[] = [];
+    let voiceReads = 0;
+    const firstVoice = { name: "Stable Voice A", lang: "zh-CN", localService: true };
+    const secondVoice = { name: "Different Voice B", lang: "zh-CN", localService: true };
+
+    class StableUtterance {
+      lang = "";
+      voice: unknown = null;
+      rate = 1;
+      pitch = 1;
+      volume = 1;
+      onend: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      constructor(public text: string) {}
+    }
+
+    Object.assign(window, {
+      SpeechSynthesisUtterance: StableUtterance,
+      speechSynthesis: {
+        cancel: () => undefined,
+        speak: (next: StableUtterance) => {
+          spokenVoices.push(next.voice);
+          next.onend?.();
+        },
+        getVoices: () => {
+          voiceReads += 1;
+          return [voiceReads === 1 ? firstVoice : secondVoice];
+        },
+        speaking: false,
+        paused: false
+      }
+    });
+
+    await speakText("第一段朗读", true, "clear");
+    await speakText("第二段朗读", true, "clear");
+    expect(spokenVoices).toHaveLength(2);
+    expect(spokenVoices[0]).toBe(firstVoice);
+    expect(spokenVoices[1]).toBe(firstVoice);
   });
 });

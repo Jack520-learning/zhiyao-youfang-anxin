@@ -5,6 +5,7 @@ import {
 } from "../lib/riskEngine";
 import { findInteractions, interactionRules } from "../catalog/interactions";
 import { getMedicine, medicines } from "../catalog/medicines";
+import { conditionGuides } from "../catalog/conditionGuidance";
 import type { Medicine } from "../catalog/types";
 import type {
   ElderProfile,
@@ -316,11 +317,32 @@ const usageScenarios: SafetyScenario[] = medicines
     };
   });
 
+const conditionScenarios: SafetyScenario[] = conditionGuides.map(
+  (condition) => ({
+    id: `condition-${condition.id}`,
+    category: "慢病日常管理",
+    title: `${condition.name}专属注意事项`,
+    input: `${condition.name}平时该注意什么`,
+    expectedLevels: ["medium"],
+    expectedKeyword: /注意|求助|医生|药师/,
+    run: () =>
+      answerWithRules(
+        `${condition.name}平时该注意什么`,
+        [],
+        {
+          ...profile,
+          conditions: []
+        }
+      ).riskCheck
+  })
+);
+
 export const safetyScenarios: SafetyScenario[] = [
   ...curatedScenarios,
   ...emergencyScenarios,
   ...interactionScenarios,
-  ...usageScenarios
+  ...usageScenarios,
+  ...conditionScenarios
 ];
 
 export function evaluateSafetyScenarios(): ScenarioResult[] {

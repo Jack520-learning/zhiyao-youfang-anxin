@@ -77,6 +77,7 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   createdAt: string;
+  answerMode?: "quick" | "safety" | "detailed";
   imageDataUrls?: string[];
   riskCheck?: RiskCheck;
   pending?: boolean;
@@ -303,4 +304,6 @@ export interface AssistantResponse {
   riskCheck: RiskCheck;
   stages: AssistantStage[];
   mode: "rules" | "llm";
+  groundingOnly?: boolean;
+  conversationOnly?: boolean;
 }

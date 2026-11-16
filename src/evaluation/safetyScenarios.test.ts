@@ -11,7 +11,7 @@ describe("safety evaluation suite", () => {
     expect(results.every((result) => result.passed)).toBe(true);
   });
 
-  it("covers emergency, interaction, duplication, allergy and missing data", () => {
+  it("covers emergency, interaction, duplication, allergy, missing data and chronic conditions", () => {
     const categories = new Set(safetyScenarios.map((scenario) => scenario.category));
     expect([...categories]).toEqual(
       expect.arrayContaining([
@@ -19,7 +19,8 @@ describe("safety evaluation suite", () => {
         "相互作用",
         "重复成分",
         "过敏史",
-        "资料不足"
+        "资料不足",
+        "慢病日常管理"
       ])
     );
   });

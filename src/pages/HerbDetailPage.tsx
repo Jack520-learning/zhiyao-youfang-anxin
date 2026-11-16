@@ -187,7 +187,7 @@ export function HerbDetailPage() {
               ) : (
                 <Send size={19} aria-hidden="true" />
               )}
-              {asking ? "千问正在回答" : "发送问题"}
+              {asking ? "正在回答" : "发送问题"}
             </button>
             {answer ? (
               <div className="catalog-answer" aria-live="polite">

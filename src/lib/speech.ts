@@ -173,6 +173,7 @@ const speechUrlCache = new Map<
   string,
   { audioUrl: string; createdAt: number; voice: string }
 >();
+const browserVoiceLocks = new Map<VoiceMode, SpeechSynthesisVoice | null>();
 
 function emitSpeechState() {
   if (typeof window !== "undefined") {
@@ -227,15 +228,24 @@ function scoreVoice(voice: SpeechSynthesisVoice, mode: VoiceMode): number {
 }
 
 function pickChineseVoice(mode: VoiceMode): SpeechSynthesisVoice | undefined {
+  if (browserVoiceLocks.has(mode)) {
+    return browserVoiceLocks.get(mode) ?? undefined;
+  }
   const voices = window.speechSynthesis
     .getVoices()
     .filter((voice) => voice.lang.toLowerCase().startsWith("zh"))
     .sort((left, right) => scoreVoice(right, mode) - scoreVoice(left, mode));
   const preferred = voices.find((voice) => scoreVoice(voice, mode) >= 20);
-  if (preferred) return preferred;
+  if (preferred) {
+    browserVoiceLocks.set(mode, preferred);
+    return preferred;
+  }
   const fallbackIndex =
     mode === "warm" ? 0 : mode === "clear" ? 1 : mode === "male" ? 0 : 0;
-  return voices[Math.min(fallbackIndex, voices.length - 1)];
+  const fallback =
+    voices[Math.min(fallbackIndex, voices.length - 1)] ?? null;
+  browserVoiceLocks.set(mode, fallback);
+  return fallback ?? undefined;
 }
 
 function naturalSpeechText(text: string): string {
@@ -261,7 +271,22 @@ export async function speakText(
   const requestVersion = speechRequestVersion;
   speechPending = true;
   emitSpeechState();
+  const cached = getCachedSpeechAudio(text, voiceMode, customVoiceId);
   try {
+    if (customVoiceId && cached) {
+      return await playAudioUrl(cached.audioUrl, requestVersion);
+    }
+    const browserPlayback = speakWithBrowserAndWait(
+      text,
+      voiceMode,
+      requestVersion
+    );
+    if (browserPlayback) {
+      speechPending = false;
+      emitSpeechState();
+      const played = await browserPlayback;
+      if (played || requestVersion !== speechRequestVersion) return played;
+    }
     return await playServerVoice(
       text,
       voiceMode,
@@ -276,6 +301,40 @@ export async function speakText(
   }
 }
 
+function getCachedSpeechAudio(
+  text: string,
+  voiceMode: VoiceMode,
+  customVoiceId?: string
+) {
+  const spokenText = naturalSpeechText(text);
+  const cacheKey = `${voiceMode}:${customVoiceId || "default"}:${spokenText}`;
+  const cached = speechUrlCache.get(cacheKey);
+  if (!cached || Date.now() - cached.createdAt >= 10 * 60 * 1000) {
+    return null;
+  }
+  return cached;
+}
+
+async function playAudioUrl(
+  audioUrl: string,
+  requestVersion: number
+): Promise<boolean> {
+  if (requestVersion !== speechRequestVersion) return false;
+  const audio = new Audio(audioUrl);
+  currentAudio = audio;
+  audio.onended = () => {
+    if (currentAudio === audio) currentAudio = null;
+    emitSpeechState();
+  };
+  audio.onerror = () => {
+    if (currentAudio === audio) currentAudio = null;
+    emitSpeechState();
+  };
+  await audio.play();
+  emitSpeechState();
+  return true;
+}
+
 async function playServerVoice(
   text: string,
   voiceMode: VoiceMode,
@@ -285,22 +344,15 @@ async function playServerVoice(
   try {
     const payload = await getSpeechAudioUrl(text, voiceMode, customVoiceId);
     if (requestVersion !== speechRequestVersion) return false;
-    const audio = new Audio(payload.audioUrl);
-    currentAudio = audio;
-    audio.onended = () => {
-      if (currentAudio === audio) currentAudio = null;
-      emitSpeechState();
-    };
-    audio.onerror = () => {
-      if (currentAudio === audio) currentAudio = null;
-      emitSpeechState();
-    };
-    await audio.play();
-    emitSpeechState();
-    return true;
+    return playAudioUrl(payload.audioUrl, requestVersion);
   } catch {
     if (requestVersion !== speechRequestVersion) return false;
-    return speakWithBrowser(text, voiceMode);
+    const fallback = speakWithBrowserAndWait(
+      text,
+      voiceMode,
+      requestVersion
+    );
+    return fallback ? await fallback : false;
   }
 }
 
@@ -311,10 +363,8 @@ async function getSpeechAudioUrl(
 ): Promise<{ audioUrl: string; voice: string }> {
   const spokenText = naturalSpeechText(text);
   const cacheKey = `${voiceMode}:${customVoiceId || "default"}:${spokenText}`;
-  const cached = speechUrlCache.get(cacheKey);
-  if (cached && Date.now() - cached.createdAt < 10 * 60 * 1000) {
-    return cached;
-  }
+  const cached = getCachedSpeechAudio(text, voiceMode, customVoiceId);
+  if (cached) return cached;
   const response = await fetch("/api/tts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -350,8 +400,12 @@ export async function preloadSpeech(
   await getSpeechAudioUrl(text, voiceMode, customVoiceId);
 }
 
-function speakWithBrowser(text: string, voiceMode: VoiceMode): boolean {
-  if (!("speechSynthesis" in window)) return false;
+function speakWithBrowserAndWait(
+  text: string,
+  voiceMode: VoiceMode,
+  requestVersion: number
+): Promise<boolean> | null {
+  if (!("speechSynthesis" in window)) return null;
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(naturalSpeechText(text));
   utterance.lang = "zh-CN";
@@ -374,11 +428,16 @@ function speakWithBrowser(text: string, voiceMode: VoiceMode): boolean {
           ? 0.9
           : 0.84;
   utterance.volume = 1;
-  utterance.onend = () => {
+  return new Promise((resolve) => {
+    const finish = (played: boolean) => {
+      emitSpeechState();
+      resolve(played && requestVersion === speechRequestVersion);
+    };
+    utterance.onend = () => finish(true);
+    utterance.onerror = () => finish(false);
+    window.speechSynthesis.speak(utterance);
     emitSpeechState();
-  };
-  window.speechSynthesis.speak(utterance);
-  return true;
+  });
 }
 
 export function getSpeechPlaybackState(): SpeechPlaybackState {

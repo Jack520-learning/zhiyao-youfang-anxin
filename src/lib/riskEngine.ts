@@ -11,6 +11,10 @@ import type {
 import { createId } from "./ids";
 import { nowIso } from "./time";
 import { findSafetyTopics } from "../catalog/safetyTopics";
+import {
+  findConditionGuidance,
+  formatConditionGuidance
+} from "../catalog/conditionGuidance";
 
 export const knowledge = knowledgeData as SharedKnowledgeBase;
 
@@ -272,7 +276,43 @@ function findArticle(query: string) {
 
 export type AnswerMode = "quick" | "safety" | "detailed";
 
-export function buildRulesMessage(check: RiskCheck, mode: AnswerMode): string {
+function questionHeading(query: string): string {
+  const normalized = normalize(query);
+  if (/胸痛|呼吸困难|喘不上|意识不清|昏迷|抽搐|大出血/.test(normalized)) {
+    return "紧急情况先这样处理";
+  }
+  if (/漏服|忘了吃|忘记吃|少吃一次|补服|补吃/.test(normalized)) {
+    return "这次漏服怎么处理";
+  }
+  if (/一起吃|同服|联用|相互作用|能不能配/.test(normalized)) {
+    return "这几款药能否同服";
+  }
+  if (/多少钱|价格|价钱|最便宜|哪里买|购买/.test(normalized)) {
+    return "价格与购买核对";
+  }
+  if (/副作用|不良反应|难受|不舒服/.test(normalized)) {
+    return "服药后的不适怎么判断";
+  }
+  if (/怎么吃|怎么用|什么时候吃|几点吃|饭前|饭后|吃几次|剂量|用量/.test(normalized)) {
+    return "具体服药方法";
+  }
+  if (/禁忌|禁用|不能吃|不适合/.test(normalized)) {
+    return "这款药的禁忌与注意";
+  }
+  if (/该注意|注意什么|注意哪些|日常注意|平时注意/.test(normalized)) {
+    return "日常注意事项";
+  }
+  if (/能.*吗|可以.*吗|要不要|该不该/.test(normalized)) {
+    return "这个问题怎么判断";
+  }
+  return "本次答复";
+}
+
+export function buildRulesMessage(
+  check: RiskCheck,
+  mode: AnswerMode,
+  query = ""
+): string {
   const levelLabel = check.level === "emergency"
     ? "紧急"
     : check.level === "high"
@@ -286,21 +326,42 @@ export function buildRulesMessage(check: RiskCheck, mode: AnswerMode): string {
   if (mode === "quick") {
     const firstSentence = check.summary.split(/[。！？\n]/)[0] || check.summary;
     const firstStep = check.nextStep.split(/[。！？\n]/)[0] || check.nextStep;
-    return `${check.title}：${firstSentence}。${firstStep}`.trim();
+    return `直接回答：${firstSentence}。${firstStep}。`.trim();
   }
 
   if (mode === "detailed") {
     const reasonsBlock = check.reasons?.length
-      ? `\n\n## 风险依据\n${check.reasons.map((r) => `- ${r}`).join("\n")}`
+      ? `\n\n### 判断依据\n${check.reasons.map((r) => `- ${r}`).join("\n")}`
       : "";
-    return `## 风险等级：${levelLabel}\n\n${check.summary}${reasonsBlock}\n\n## 下一步\n${check.nextStep}`;
+    return [
+      `## ${questionHeading(query)}的详细说明`,
+      `**风险等级：${levelLabel}**`,
+      "### 完整解释",
+      check.summary,
+      reasonsBlock,
+      "### 现在应该做什么",
+      check.nextStep,
+      "### 需要注意",
+      "以上内容基于当前档案、说明书信息和确定性安全规则生成；个体诊断、停药和剂量调整仍需医生或药师确认。"
+    ].join("\n\n");
   }
 
-  // safety（默认）：三段式
-  const dangerItems = check.reasons?.length
-    ? check.reasons.map((r) => `- ${r}`).join("\n")
-    : `- ${check.summary.split(/[。！？]/)[0] || check.title}`;
-  return `## ⚠️风险核对\n**风险等级：${levelLabel}**\n\n${dangerItems}\n\n## 结论\n${check.summary}\n\n## 下一步\n${check.nextStep}`;
+  const urgent =
+    check.level === "high" || check.level === "emergency"
+      ? "**需要优先处理：**"
+      : "";
+  const safetyReason = check.reasons?.[0]
+    ? `\n\n### 为什么\n- ${check.reasons[0]}`
+    : "";
+  return [
+    `## ${questionHeading(query)}的安全要点`,
+    `${urgent}${check.summary}`,
+    safetyReason.trim(),
+    "### 现在先做",
+    `- ${check.nextStep}`
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 export function answerWithRules(
@@ -316,7 +377,7 @@ export function answerWithRules(
   if (options?.missedMedication) {
     const check = handleMissedDose(options.missedMedication, currentMedications);
     return {
-      message: buildRulesMessage(check, mode),
+      message: buildRulesMessage(check, mode, query),
       riskCheck: check,
       stages: [
         { id: "intent", label: "识别漏服问题", status: "done" },
@@ -346,7 +407,7 @@ export function answerWithRules(
       currentMedications
     );
     return {
-      message: buildRulesMessage(check, mode),
+      message: buildRulesMessage(check, mode, query),
       riskCheck: check,
       stages: [
         { id: "intent", label: "识别身体不适", status: "done" },
@@ -388,7 +449,7 @@ export function answerWithRules(
       currentMedications
     );
     return {
-      message: buildRulesMessage(check, mode),
+      message: buildRulesMessage(check, mode, query),
       riskCheck: check,
       stages: [
         { id: "intent", label: "理解用药问题", status: "done" },
@@ -397,6 +458,46 @@ export function answerWithRules(
         { id: "risk", label: "完成风险分级", status: "done" }
       ],
       mode: "rules"
+    };
+  }
+
+  const conditionMatch = findConditionGuidance(query, profile.conditions);
+  if (conditionMatch) {
+    const condition = conditionMatch.condition;
+    const check = makeCheck(
+      {
+        level: "medium",
+        title: `${condition.name}日常管理与用药注意`,
+        summary: condition.summary,
+        nextStep: `${condition.followUp} ${condition.emergencySigns[0]}`,
+        reasons: [
+          `命中慢病知识卡：${condition.name}`,
+          conditionMatch.fromProfile
+            ? `来自个人档案：${conditionMatch.matchedTerms.join("、")}`
+            : `问题关键词：${conditionMatch.matchedTerms.join("、")}`,
+          `资料依据：${condition.reference}`
+        ],
+        sourceIds: condition.sourceIds,
+        involvedMedicationIds: currentMedications.map(
+          (medication) => medication.id
+        )
+      },
+      currentMedications
+    );
+    return {
+      message: formatConditionGuidance(
+        conditionMatch,
+        currentMedications.map((medication) => medication.name),
+        mode
+      ),
+      riskCheck: check,
+      stages: [
+        { id: "intent", label: `识别慢病问题：${condition.name}`, status: "done" },
+        { id: "profile", label: "读取当前用药与危险信号", status: "done" },
+        { id: "answer", label: "生成慢病专属注意事项", status: "done" }
+      ],
+      mode: "rules",
+      groundingOnly: false
     };
   }
 
@@ -418,7 +519,7 @@ export function answerWithRules(
     const medication = mentionedMedications[0];
     const check = handleMissedDose(medication, currentMedications);
     return {
-      message: buildRulesMessage(check, mode),
+      message: buildRulesMessage(check, mode, query),
       riskCheck: check,
       stages: [
         { id: "intent", label: `识别${medication.name}漏服问题`, status: "done" },
@@ -457,7 +558,7 @@ export function answerWithRules(
       currentMedications
     );
     return {
-      message: buildRulesMessage(check, mode),
+      message: buildRulesMessage(check, mode, query),
       riskCheck: check,
       stages: [
         { id: "intent", label: "识别具体药物问题", status: "done" },
@@ -473,14 +574,24 @@ export function answerWithRules(
     const lines = currentMedications.map(
       (medication) => `${medication.name}：${humanizeMedicationUsage(medication)}`
     );
+    const hasCurrentMedications = currentMedications.length > 0;
     const check = makeCheck(
       {
-        level: "low",
-        title: "已按当前用药档案逐项核对",
-        summary: lines.join("；") || "当前没有已确认的在用药物。",
-        nextStep:
-          "这只是档案中的计划，请以处方或说明书为准；不同药物不要自行合并或拆分剂量。",
-        reasons: ["逐项读取当前全部在用药物"],
+        level: hasCurrentMedications ? "low" : "unknown",
+        title: hasCurrentMedications
+          ? "已按当前用药档案逐项核对"
+          : "用药档案中还没有可列出的药物",
+        summary: hasCurrentMedications
+          ? lines.join("；")
+          : "您问的是“今天这些药”，但当前用药档案里还没有已确认的药物，所以我无法列出具体药名、剂量和服用时间。",
+        nextStep: hasCurrentMedications
+          ? "这只是档案中的计划，请以处方或说明书为准；不同药物不要自行合并或拆分剂量。"
+          : "请先拍药盒或手动添加正在服用的药，再回来查看每种药的剂量、时间和注意事项。",
+        reasons: [
+          hasCurrentMedications
+            ? "逐项读取当前全部在用药物"
+            : "当前档案药物数量为 0"
+        ],
         sourceIds: ["src-user-profile"],
         involvedMedicationIds: currentMedications.map(
           (medication) => medication.id
@@ -489,7 +600,7 @@ export function answerWithRules(
       currentMedications
     );
     return {
-      message: buildRulesMessage(check, mode),
+      message: buildRulesMessage(check, mode, query),
       riskCheck: check,
       stages: [
         { id: "intent", label: "识别全量用药问题", status: "done" },
@@ -517,7 +628,7 @@ export function answerWithRules(
       currentMedications
     );
     return {
-      message: buildRulesMessage(check, mode),
+      message: buildRulesMessage(check, mode, query),
       riskCheck: check,
       stages: [
         { id: "intent", label: "发现问题缺少具体药名", status: "done" },
@@ -549,7 +660,7 @@ export function answerWithRules(
       currentMedications
     );
     return {
-      message: buildRulesMessage(check, mode),
+      message: buildRulesMessage(check, mode, query),
       riskCheck: check,
       stages: [
         { id: "intent", label: "识别常见用药安全问题", status: "done" },
@@ -585,7 +696,7 @@ export function answerWithRules(
       currentMedications
     );
     return {
-      message: buildRulesMessage(check, mode),
+      message: buildRulesMessage(check, mode, query),
       riskCheck: check,
       stages: [
         { id: "intent", label: "理解用药问题", status: "done" },
@@ -613,7 +724,7 @@ export function answerWithRules(
       currentMedications
     );
     return {
-      message: buildRulesMessage(check, mode),
+      message: buildRulesMessage(check, mode, query),
       riskCheck: check,
       stages: [
         { id: "intent", label: "识别身体不适", status: "done" },
@@ -697,7 +808,7 @@ export function answerWithRules(
     };
   }
 
-  // === 常见症状非处方建议分支 ===
+  // === 常见症状安全建议分支 ===
   const symptomAdvice: Array<{
     re: RegExp;
     title: string;
@@ -707,75 +818,75 @@ export function answerWithRules(
   }> = [
     {
       re: /腹泻|拉肚子|拉稀|肚子疼.*拉/,
-      title: "腹泻的非处方建议",
+      title: "腹泻先补液并观察危险信号",
       summary:
-        "拉肚子的时候，建议先喝口服补液盐（ORS）或淡盐水，防止脱水。\n\n常用的非处方止泻药：蒙脱石散（思密达）可以保护肠黏膜；益生菌（如双歧杆菌、乳酸菌素片）可以调节肠道菌群。\n\n⚠️ 注意：如果拉肚子同时伴随高烧、持续腹痛、大便带血或黑色，或者一天超过 8 次水样便，请尽快去医院，不要自己吃药硬扛。",
+        "腹泻时首先要防止脱水，可在没有禁忌时少量多次补充口服补液盐或饮水。具体补液量以及是否适合使用止泻药，应结合年龄、肾病、心脏功能和腹泻原因判断。\n\n如果同时出现高热、明显腹痛、便血或黑便、持续呕吐、尿量明显减少或头晕站不稳，应尽快就医，不要自行使用止泻药掩盖症状。",
       nextStep:
-        "您现在有在吃的其他药物吗？有些止泻药可能和正在吃的药有冲突，告诉我药名我可以帮您核对。",
-      keywords: ["蒙脱石散", "益生菌", "口服补液盐", "ORS"]
+        "请先补充腹泻持续多久、今天大致次数、体温、尿量，以及是否在服用利尿剂或降糖药。",
+      keywords: ["口服补液盐", "脱水", "腹泻"]
     },
     {
       re: /咳嗽|咳.*痰|干咳|喉咙痒.*咳/,
-      title: "咳嗽的非处方建议",
+      title: "先区分咳嗽类型和危险信号",
       summary:
-        "咳嗽分有痰和无痰两种：\n\n• 有痰咳嗽：可以用氨溴索（沐舒坦）或乙酰半胱氨酸，帮助化痰。不要单独用止咳药。\n• 干咳无痰：可以用右美沙芬或苯丙哌林。\n• 喉咙痒引起的咳嗽：可以用含片（如西瓜霜、金嗓子）润喉。\n\n⚠️ 如果咳嗽超过 2 周不好转、伴随呼吸困难或胸痛，请去医院检查。",
+        "咳嗽需要先区分是干咳还是有痰，也要结合发热、气短、胸痛和既往肺病判断。单纯止咳可能掩盖感染或哮喘加重，不建议在未核对原因前自行叠加多种止咳、化痰或感冒药。\n\n如果呼吸困难、胸痛、咳血、嘴唇发紫、意识变化，或症状持续加重，应及时就医。",
       nextStep:
-        "您现在咳嗽有痰吗？痰是什么颜色的？这些信息能帮您选更合适的药。",
-      keywords: ["氨溴索", "沐舒坦", "右美沙芬", "西瓜霜"]
+        "请补充咳嗽多久、有痰还是干咳、是否发热或气短，以及当前是否有慢阻肺或哮喘。",
+      keywords: ["干咳", "咳痰", "呼吸困难"]
     },
     {
       re: /感冒|着凉|流鼻涕|打喷嚏|鼻塞/,
-      title: "感冒的非处方建议",
+      title: "感冒药先核对成分和基础病",
       summary:
-        "感冒大多是病毒引起的，一般 5-7 天自己就好。非处方感冒药主要缓解症状：\n\n• 发热头痛：对乙酰氨基酚（泰诺林）或布洛芬（芬必得）\n• 鼻塞流鼻涕：氯雷他定、西替利嗪，或伪麻黄碱滴鼻液（连续用不超过 3 天）\n• 咳嗽：见咳嗽建议\n\n⚠️ 不要同时吃多种感冒药，很多复方感冒药里已经含有对乙酰氨基酚，重复吃会伤肝。如果发烧超过 38.5℃ 超过 3 天不好转，请去医院。",
+        "普通感冒多为病毒感染，处理以休息、补水和症状观察为主。复方感冒药可能含有相同退热、抗过敏或减充血成分，同时服用容易重复；高血压、心脏病、前列腺增生和青光眼患者还需核对减充血成分。\n\n不要自行叠加多种感冒药。高热持续、呼吸困难、胸痛、意识异常或症状明显加重时应及时就医。",
       nextStep:
-        "您现在有发烧吗？发烧的话体温多少度？另外您现在有没有在吃其他药？",
-      keywords: ["对乙酰氨基酚", "泰诺林", "布洛芬", "氯雷他定"]
+        "请补充体温、症状持续时间和正在使用的慢病药；如果要买感冒药，先拍下成分表再核对。",
+      keywords: ["复方感冒药", "重复成分", "减充血剂"]
     },
     {
       re: /发烧|发热|高烧|体温.*3[7-9]|体温.*4/,
-      title: "发烧的非处方建议",
+      title: "发热先测量并判断是否需就医",
       summary:
-        "如果体温在 37.3℃-38.5℃ 之间，建议先物理降温：多喝水、用温水擦身体、不要捂汗。\n\n超过 38.5℃ 或身体明显不舒服时可以吃退烧药：\n• 对乙酰氨基酚（泰诺林）：每 4-6 小时一次，24 小时不超过 4 次\n• 布洛芬（芬必得）：每 6-8 小时一次，24 小时不超过 3 次\n\n⚠️ 两个退烧药不要同时吃。如果发烧超过 3 天不退、或者体温超过 39℃，请尽快去医院。",
+        "发热时先准确测量体温、补充水分并观察精神状态。是否需要退热药要结合基础病、肝肾功能、胃溃疡和正在服用的药物；布洛芬等止痛退热药并非适合所有人，不能按别人的剂量照用。\n\n高热持续、呼吸困难、胸痛、抽搐、意识模糊、明显脱水或老人整体状态变差时，应尽快就医。",
       nextStep:
-        "您现在体温多少？另外注意有没有胸痛、呼吸困难、意识模糊这些严重症状。",
-      keywords: ["对乙酰氨基酚", "布洛芬", "泰诺林", "芬必得"]
+        "请补充体温、持续天数、是否畏寒咳嗽，以及有无心脏病、肾病、胃溃疡或抗凝药。",
+      keywords: ["发热", "退热药", "基础病"]
     },
     {
       re: /头痛|头疼|偏头痛|太阳穴.*疼/,
-      title: "头痛的非处方建议",
+      title: "头痛先排除卒中和其他急症",
       summary:
-        "常见头痛可以先用非处方止痛药：\n• 对乙酰氨基酚（泰诺林）\n• 布洛芬（芬必得）\n\n另外注意休息、多喝水，避免强光和噪音刺激。\n\n⚠️ 如果头痛突然很剧烈、伴随呕吐或视力模糊，或者是这辈子经历过最疼的一次，请立即去医院——这可能是脑出血的信号。",
+        "头痛的原因很多。如果不是突然剧烈头痛，可以先休息、补水并记录血压；在原因未确认前，不建议只靠止痛药掩盖症状。\n\n突然出现“人生最剧烈”的头痛、伴呕吐或视力改变、说话含糊、一侧无力、发热颈硬或跌倒撞头后头痛，应立即就医。",
       nextStep:
-        "您以前有偏头痛病史吗？这次头痛是慢慢疼起来的还是突然疼的？",
-      keywords: ["对乙酰氨基酚", "布洛芬"]
+        "请补充是突然还是逐渐出现、持续多久、是否伴血压升高、神经症状或近期头部外伤。",
+      keywords: ["头痛", "卒中", "头部外伤"]
     },
     {
       re: /胃痛|胃疼|肚子疼|肚子痛|腹痛|肚子.*疼|反酸|烧心|胃溃疡|胃炎|肚子.*不舒服|绞痛/,
-      title: "胃痛/腹痛的非处方建议",
+      title: "胃痛或腹痛先判断急症风险",
       summary:
-        "肚子痛的原因很多，先看位置：\n\n• 如果是上腹部（胃的位置），伴随反酸/烧心：可以用铝碳酸镁（达喜）咀嚼片临时缓解，或奥美拉唑/雷贝拉唑抑制胃酸。暂时吃点馒头、白粥这类好消化的，避免辛辣油腻。\n• 如果是肚脐周围绞痛、拉肚子：可能是肠炎或肠痉挛，注意补水，可以吃蒙脱石散保护肠黏膜。\n• 如果是右下腹痛（阑尾炎位置）、右上腹痛（胆囊炎位置），或者疼痛持续加重、伴随呕吐、发烧，请**尽快去医院**，不要自己吃药硬扛。⚠️ 急性腹痛可能是急症。",
+        "腹痛的位置、持续时间和伴随症状很重要。在原因未明确前，不建议自行使用止痛药或多种胃药，因为可能掩盖阑尾炎、胆囊炎、胰腺炎或消化道出血。\n\n如果疼痛突然剧烈、持续加重，伴发热、呕吐、黑便呕血、腹部僵硬或胸痛，应尽快就医或拨打 120。",
       nextStep:
-        "您具体是哪个位置疼？是饭前疼还是饭后疼？有没有伴随拉肚子、呕吐或发烧？",
-      keywords: ["铝碳酸镁", "达喜", "奥美拉唑", "蒙脱石散"]
+        "请补充具体位置、开始时间、饭前饭后规律，以及是否伴呕吐、发热、黑便或胸闷。",
+      keywords: ["腹痛", "消化道出血", "急腹症"]
     },
     {
       re: /失眠|睡不着|睡不好|失眠.*吃什么|助眠/,
-      title: "失眠的建议",
+      title: "失眠先调整作息并排查药物影响",
       summary:
-        "老年人不建议自己吃安眠药！助眠可以先试这些温和的方法：\n\n• 固定睡觉时间，每天同一个点上床\n• 睡前 1 小时不要看手机、电视\n• 卧室保持黑暗和安静，温度凉爽\n• 白天适当活动但不要临睡前剧烈运动\n• 可以试试睡前喝一杯温牛奶、听轻音乐\n\n如果确实需要药物辅助，建议先去医院睡眠科就诊，由医生开药（比如褪黑素、或新型非苯二氮䓬类催眠药）。不建议自己买助眠保健品乱吃。",
+        "失眠可以先固定起床时间、减少午睡过长和睡前屏幕刺激，并记录咖啡因、酒精及晚间用药。老年人自行使用安眠药或助眠保健品可能增加跌倒、嗜睡和意识混乱风险。\n\n如果持续数周、明显影响白天生活，或伴随严重焦虑、胸痛、呼吸困难，应由医生评估。",
       nextStep:
-        "您失眠持续多久了？大概每天能睡几个小时？这些信息能帮医生判断情况。",
-      keywords: []
+        "请补充失眠持续多久、每天睡眠时间、是否打鼾或憋醒，以及晚间正在使用的药。",
+      keywords: ["失眠", "安眠药", "跌倒"]
     },
     {
       re: /皮肤.*痒|过敏|荨麻疹|湿疹|皮炎/,
-      title: "皮肤痒/过敏的非处方建议",
+      title: "皮肤过敏先看范围和呼吸症状",
       summary:
-        "皮肤过敏/湿疹可以先用非处方药膏：\n\n• 局部止痒：炉甘石洗剂（无激素，安全温和）\n• 湿疹/皮炎：弱效糖皮质激素乳膏如氢化可的松乳膏（连续用不超过 1 周，薄涂）\n• 口服抗过敏：氯雷他定、西替利嗪、扑尔敏（扑尔敏会犯困，白天别吃）\n\n⚠️ 如果面积很大、或者伴随呼吸困难、嘴唇眼皮肿，这是严重过敏反应，请立即就医！",
+        "轻微局部瘙痒可以先避免抓挠和可疑接触物，并记录是否与新增药物有关。外用或口服抗过敏药也需结合皮肤情况、年龄和其他药物核对，不能把激素药膏长期随意使用。\n\n如果皮疹迅速扩散，伴嘴唇或眼睑肿胀、喉部紧缩、呼吸困难、头晕或意识变化，应按严重过敏处理并立即拨打 120。",
       nextStep:
-        "痒的地方是局部一小块还是全身都有？最近有没有接触什么新的东西？",
-      keywords: ["炉甘石", "氢化可的松", "氯雷他定"]
+        "请补充皮疹范围、开始时间、近期新增药物或食物，以及是否有呼吸或吞咽困难。",
+      keywords: ["严重过敏", "皮疹", "呼吸困难"]
     }
   ];
   const symptomHit = symptomAdvice.find((s) => s.re.test(normalizedQuery));
@@ -796,7 +907,7 @@ export function answerWithRules(
       currentMedications
     );
     return {
-      message: buildRulesMessage(check, mode),
+      message: buildRulesMessage(check, mode, query),
       riskCheck: check,
       stages: [
         { id: "intent", label: "识别症状咨询", status: "done" },
@@ -810,11 +921,11 @@ export function answerWithRules(
   const check = makeCheck(
     {
       level: "unknown",
-      title: "资料不足，先不要按猜测处理",
+      title: "暂未收录这个具体主题",
       summary:
-        "资料不足：当前知识库没有找到足以回答这个问题的可靠资料，因此不会生成具体剂量、停药或补服建议。",
+        `资料不足：当前知识库没有找到足以可靠回答“${query.slice(0, 40)}”的资料，因此不会猜测诊断或生成具体剂量、停药、补服建议。`,
       nextStep:
-        "请补充药盒或说明书照片，或联系医生、药师确认。您也可以查看当前用药清单继续核对。",
+        "请补充医生确认的疾病名称、持续时间、主要症状、药盒或说明书；涉及胸痛、呼吸困难、意识异常或明显出血时，不要等待在线回答。",
       reasons: ["未检索到匹配知识条目", "当前知识库覆盖范围有限"],
       sourceIds: ["src-no-evidence"],
       involvedMedicationIds: currentMedications.map((medication) => medication.id)
@@ -822,7 +933,7 @@ export function answerWithRules(
     currentMedications
   );
   return {
-    message: buildRulesMessage(check, mode),
+    message: buildRulesMessage(check, mode, query),
     riskCheck: check,
     stages: [
       { id: "intent", label: "理解问题", status: "done" },

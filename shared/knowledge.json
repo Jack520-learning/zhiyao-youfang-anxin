@@ -1,6 +1,6 @@
 {
-  "version": "demo-2026-11-14",
-  "reviewStatus": "unreviewed-demo",
+  "version": "curated-2026-11-16",
+  "reviewStatus": "pending-professional-review",
   "sources": [
     {
       "id": "src-warfarin-aspirin",
@@ -70,6 +70,27 @@
       "title": "紧急身体状态优先原则",
       "type": "safety-policy",
       "excerpt": "出现胸痛、呼吸困难、意识异常、口角歪斜或严重过敏表现时，应优先联系急救服务，而不是继续等待药物分析。",
+      "reviewed": true
+    },
+    {
+      "id": "src-condition-guidance",
+      "title": "常见慢病日常管理与用药安全知识卡",
+      "type": "professional-note",
+      "excerpt": "心脏病、高血压、心衰、房颤、卒中、糖尿病、慢阻肺、哮喘、肾病、肝病、痛风、骨质疏松、痴呆、帕金森、癫痫、甲状腺、情绪障碍、前列腺增生和癌症治疗等知识整理自 WHO、NHS、CDC、美国心脏协会及相关公共健康机构资料；提供一般安全信息，尚未完成本地临床药师逐条复核。",
+      "reviewed": false
+    },
+    {
+      "id": "src-symptom-advice",
+      "title": "常见症状安全分诊原则",
+      "type": "safety-policy",
+      "excerpt": "症状问答优先识别胸痛、呼吸困难、意识异常、卒中、严重过敏、消化道出血和脱水等危险信号；在病因和个体情况不完整时，不提供自行用药剂量。",
+      "reviewed": true
+    },
+    {
+      "id": "src-chat",
+      "title": "日常陪伴对话边界",
+      "type": "safety-policy",
+      "excerpt": "日常陪伴只处理问候、情绪和生活话题，不推断疾病或提供药物建议；涉及健康问题时切换到安全问药。",
       "reviewed": true
     }
   ],

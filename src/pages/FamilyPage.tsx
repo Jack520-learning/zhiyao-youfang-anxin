@@ -15,6 +15,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { RiskBadge } from "../components/RiskBadge";
 import { ProactiveRiskPanel } from "../components/ProactiveRiskPanel";
+import { FamilyHealthCharts } from "../components/FamilyHealthCharts";
 import { formatChineseDate, getTodayDoses } from "../lib/time";
 import { useAppStore } from "../store/useAppStore";
 import { updateFamilyAlertStatus } from "../lib/cloud";
@@ -143,6 +144,16 @@ export function FamilyPage() {
           <div className="metric-note">高危提示不可由家属关闭</div>
         </section>
       </div>
+
+      <FamilyHealthCharts
+        medications={medications}
+        doseEvents={doseEvents}
+        riskChecks={riskChecks}
+        timeZone={profile.timeZone}
+        shareMedicationSummary={consent.shareMedicationSummary}
+        shareMissedDose={consent.shareMissedDose}
+        shareHighRisk={consent.shareHighRisk}
+      />
 
       {!consent.shareMedicationSummary ? (
         <div className="notice warm" style={{ marginTop: 16 }}>

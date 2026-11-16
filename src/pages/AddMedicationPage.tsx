@@ -101,6 +101,7 @@ export function AddMedicationPage({
   const [candidateMedication, setCandidateMedication] = useState<Medication>();
   const [cameraOpen, setCameraOpen] = useState(false);
   const initialCameraOpened = useRef(false);
+  const libraryInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!captureMode || initialCameraOpened.current) return;
@@ -444,16 +445,14 @@ export function AddMedicationPage({
                 <Camera size={21} aria-hidden="true" />
                 打开相机拍照
               </button>
-              <label className="btn btn-large upload-label">
+              <button
+                type="button"
+                className="btn btn-large"
+                onClick={() => libraryInputRef.current?.click()}
+              >
                 <FileImage size={21} aria-hidden="true" />
                 从相册选图
-                <input
-                  type="file"
-                  accept="image/*"
-                  aria-label="从相册选择药盒图片"
-                  onChange={(event) => onFileChange(event.target.files?.[0])}
-                />
-              </label>
+              </button>
               <button
                 type="button"
                 className="btn btn-large"
@@ -506,15 +505,14 @@ export function AddMedicationPage({
               <Camera size={20} aria-hidden="true" />
               重新拍照识别
             </button>
-            <label className="btn upload-label">
+            <button
+              type="button"
+              className="btn"
+              onClick={() => libraryInputRef.current?.click()}
+            >
               <FileImage size={20} aria-hidden="true" />
               从相册重新选择
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(event) => onFileChange(event.target.files?.[0])}
-              />
-            </label>
+            </button>
             <button
               type="button"
               className="btn"
@@ -772,6 +770,18 @@ export function AddMedicationPage({
           </section>
         </div>
       ) : null}
+      <input
+        ref={libraryInputRef}
+        className="visually-hidden-file"
+        type="file"
+        accept="image/*"
+        aria-label="从相册选择药盒图片"
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          void onFileChange(file);
+        }}
+      />
       <CameraCaptureModal
         open={cameraOpen}
         onClose={() => {

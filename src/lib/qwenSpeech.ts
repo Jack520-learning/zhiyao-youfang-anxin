@@ -88,7 +88,7 @@ export function useQwenSpeechRecognition(
           return;
         }
         setProcessing(true);
-        setInterim("正在用千问整理语音…");
+        setInterim("正在识别语音…");
         try {
           const audioDataUrl = await blobToDataUrl(blob);
           const response = await fetch("/api/transcribe", {
@@ -104,7 +104,7 @@ export function useQwenSpeechRecognition(
             error?: string;
           };
           if (!response.ok || !payload.text) {
-            throw new Error(payload.error || "千问没有返回语音文字");
+            throw new Error(payload.error || "语音识别服务没有返回文字");
           }
           callbackRef.current(payload.text);
         } catch (transcriptionError) {

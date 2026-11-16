@@ -122,6 +122,48 @@ describe("riskEngine", () => {
     expect(amlodipineAnswer.message).not.toBe(aspirinAnswer.message);
   });
 
+  it("answers an empty 'today's medicines' question without a generic risk template", () => {
+    const result = answerWithRules("今天这些药要怎么吃", [], profile);
+    expect(result.message).toContain("具体服药方法");
+    expect(result.message).toContain("用药档案里还没有已确认的药物");
+    expect(result.message).not.toContain("## ⚠️风险核对");
+  });
+
+  it("changes the response focus for usage and missed-dose questions", () => {
+    const usage = answerWithRules(
+      "阿司匹林怎么吃",
+      [aspirin],
+      profile
+    );
+    const missed = answerWithRules(
+      "阿司匹林忘了吃怎么办",
+      [aspirin],
+      profile
+    );
+    expect(usage.message).toContain("具体服药方法");
+    expect(missed.message).toContain("这次漏服怎么处理");
+    expect(usage.message).not.toBe(missed.message);
+  });
+
+  it("uses distinct response contracts outside the condition knowledge cards", () => {
+    const query = "阿司匹林忘了吃怎么办";
+    const quick = answerWithRules(query, [aspirin], profile, {
+      answerMode: "quick"
+    });
+    const safety = answerWithRules(query, [aspirin], profile, {
+      answerMode: "safety"
+    });
+    const detailed = answerWithRules(query, [aspirin], profile, {
+      answerMode: "detailed"
+    });
+    expect(quick.message).not.toContain("\n## ");
+    expect(safety.message).toContain("安全要点");
+    expect(detailed.message).toContain("详细说明");
+    expect(detailed.message).toContain("判断依据");
+    expect(quick.message.length).toBeLessThan(safety.message.length);
+    expect(safety.message.length).toBeLessThan(detailed.message.length);
+  });
+
   it("asks for a drug name instead of guessing from '这个药'", () => {
     const result = answerWithRules(
       "这个药怎么吃",
@@ -167,5 +209,16 @@ describe("riskEngine", () => {
     );
     expect(result.riskCheck.level).toBe("unknown");
     expect(result.message).toContain("资料不足");
+  });
+
+  it("does not provide a one-size-fits-all dose for a symptom question", () => {
+    const result = answerWithRules(
+      "我发烧了该怎么办",
+      [],
+      profile
+    );
+    expect(result.message).toContain("基础病");
+    expect(result.message).not.toMatch(/每\s*4\s*-\s*6\s*小时/);
+    expect(result.message).not.toMatch(/每\s*6\s*-\s*8\s*小时/);
   });
 });

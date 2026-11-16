@@ -44,6 +44,10 @@ import { answerWithRules, checkNewMedication } from "../lib/riskEngine";
 import { sendConcernAlert } from "../lib/cloud";
 import { streamAssistantAnswer } from "../lib/assistantStream";
 import {
+  isAnswerModeCompliant,
+  isQuestionFocusedAnswer
+} from "../lib/assistantAnswer";
+import {
   catalogResponseFromRuns,
   planAgentTools,
   runAgentPlan,
@@ -65,6 +69,11 @@ import {
 import { speakText, stopSpeaking } from "../lib/speech";
 import { useQwenSpeechRecognition } from "../lib/qwenSpeech";
 import { nowIso, getNextDose, formatMessageTime } from "../lib/time";
+import {
+  buildDailyConversationResponse,
+  isDailyConversationQuery,
+  resolveAdaptiveAnswerMode
+} from "../lib/dailyConversation";
 import { useAppStore } from "../store/useAppStore";
 import type {
   AssistantResponse,
@@ -122,6 +131,8 @@ function needsMedicationReview(question: string, skill?: ComposerSkill): boolean
   if (skill === "photo" || skill === "catalog" || skill === "multi-drug") {
     return true;
   }
+  const medicineMatch = findBestMedicine(question);
+  if (medicineMatch && medicineMatch.score >= 0.68) return true;
   return /(药|胶囊|片|颗粒|剂量|用量|用法|服用|怎么吃|什么时候吃|毫克|mg|同服|一起吃|相互作用|漏服|补服|停药|副作用|不良反应|头晕|恶心|心慌|胸闷|不舒服)/i.test(
     question
   );
@@ -335,6 +346,7 @@ export function ChatPage() {
   const [skillMenuOpen, setSkillMenuOpen] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [streamingMessageId, setStreamingMessageId] = useState("");
+  const streamingMessageIdRef = useRef("");
   const [thinkingLabel, setThinkingLabel] = useState("正在思考并组织回答…");
   const [conversationToDelete, setConversationToDelete] = useState<{
     id: string;
@@ -356,6 +368,7 @@ export function ChatPage() {
   const autoScrollRef = useRef(false);
   const streamTraceRef = useRef<AssistantStage[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const generationRunRef = useRef(0);
 
   const speech = useQwenSpeechRecognition((transcript) => {
     setInput(transcript);
@@ -461,6 +474,21 @@ export function ChatPage() {
   async function submitQuestion(question = input, autoScroll = true) {
     const clean = question.trim();
     if (!clean || sending) return;
+    const runId = generationRunRef.current + 1;
+    generationRunRef.current = runId;
+    const generationController = new AbortController();
+    abortControllerRef.current = generationController;
+    const hasExplicitMedicationIntent =
+      Boolean(composerSkill) ||
+      /药名|药物|药盒|处方|剂量|用量|服用|吃药|停药|副作用|不良反应|治疗/.test(
+        clean
+      );
+    const dailyConversation =
+      !hasExplicitMedicationIntent && isDailyConversationQuery(clean);
+    const effectiveAnswerMode = resolveAdaptiveAnswerMode(
+      clean,
+      answerMode
+    );
     const liveConversation = useAppStore
       .getState()
       .conversations.find(
@@ -478,11 +506,14 @@ export function ChatPage() {
     setInput("");
     setSending(true);
     setStreamingMessageId("");
+    streamingMessageIdRef.current = "";
     streamTraceRef.current = [];
     setThinkingLabel(
-      needsMedicationReview(clean, composerSkill)
+      dailyConversation
+        ? "正在陪您聊聊…"
+        : needsMedicationReview(clean, composerSkill)
         ? "正在核对用药安全、当前药物和资料来源…"
-        : answerMode === "detailed"
+        : effectiveAnswerMode === "detailed"
           ? "正在整理详细解释…"
           : "正在思考并组织回答…"
     );
@@ -512,15 +543,17 @@ export function ChatPage() {
       currentConversationDraft.name
         ? `${currentConversationDraft.name} ${clean}`
         : clean;
-    const plannedTools = planAgentTools(
-      contextualQuestion,
-      Boolean(currentConversationDraft?.name)
-    );
+    const plannedTools = dailyConversation
+      ? []
+      : planAgentTools(
+          contextualQuestion,
+          Boolean(currentConversationDraft?.name)
+        );
     const agentRuns = runAgentPlan(plannedTools, {
       query: contextualQuestion,
       profile,
       medications: activeMedications,
-      answerMode
+      answerMode: effectiveAnswerMode
     });
     const agentTrace = agentRuns.map((run) => ({
       id: `tool-${run.name}`,
@@ -528,11 +561,12 @@ export function ChatPage() {
       summary: run.summary,
       durationMs: run.durationMs
     }));
-    let localResponse =
-      safetyResponseFromRuns(agentRuns) ??
-      answerWithRules(contextualQuestion, activeMedications, profile, {
-        answerMode
-      });
+    let localResponse = dailyConversation
+      ? buildDailyConversationResponse(contextualQuestion, profile)
+      : safetyResponseFromRuns(agentRuns) ??
+        answerWithRules(contextualQuestion, activeMedications, profile, {
+          answerMode: effectiveAnswerMode
+        });
     if (composerSkill === "herbs") {
       localResponse =
         herbSkillAnswer(
@@ -541,15 +575,16 @@ export function ChatPage() {
           activeMedications.map((medication) => medication.name)
         ) ?? localResponse;
     }
-    const catalogResponse =
-      catalogResponseFromRuns(agentRuns) ??
-      answerFromDrugCatalog(
-        contextualQuestion,
-        profile,
-        activeMedications.map((medication) => medication.name),
-        undefined,
-        answerMode
-      );
+    const catalogResponse = dailyConversation
+      ? null
+      : catalogResponseFromRuns(agentRuns) ??
+        answerFromDrugCatalog(
+          contextualQuestion,
+          profile,
+          activeMedications.map((medication) => medication.name),
+          undefined,
+          effectiveAnswerMode
+        );
     const mentionsCurrentMedication = activeMedications.some((medication) =>
       clean.includes(medication.name) ||
       clean.includes(medication.genericName) ||
@@ -604,6 +639,12 @@ export function ChatPage() {
       localResponse.stages.length + agentTrace.length;
     for (let index = 0; index < localStageCount; index += 1) {
       await wait(260);
+      if (
+        generationRunRef.current !== runId ||
+        generationController.signal.aborted
+      ) {
+        return;
+      }
       setStages((current) =>
         current.map((stage, stageIndex) => ({
           ...stage,
@@ -620,41 +661,23 @@ export function ChatPage() {
     let response: AssistantResponse = localResponse;
     let streamedAssistantMessageId = "";
     if (
-      localResponse.riskCheck.level === "low" ||
-      localResponse.riskCheck.level === "medium" ||
-      localResponse.riskCheck.level === "unknown"
+      !localResponse.groundingOnly &&
+      localResponse.riskCheck.level !== "emergency"
     ) {
       streamedAssistantMessageId = createId("chat");
       const streamedMessage: ChatMessage = {
         id: streamedAssistantMessageId,
         role: "assistant",
-        content: "",
+        content: localResponse.message,
         createdAt: nowIso(),
+        answerMode: effectiveAnswerMode,
         pending: true
       };
       addChatMessage(streamedMessage, targetConversationId);
       setStreamingMessageId(streamedAssistantMessageId);
+      streamingMessageIdRef.current = streamedAssistantMessageId;
       let fullText = "";
-      let flushScheduled = false;
-      const flushStream = () => {
-        if (flushScheduled) return;
-        flushScheduled = true;
-        window.requestAnimationFrame(() => {
-          flushScheduled = false;
-          replaceChatMessage(
-            streamedAssistantMessageId,
-            {
-              ...streamedMessage,
-              content: fullText,
-              pending: true
-            },
-            targetConversationId
-          );
-        });
-      };
       try {
-        const controller = new AbortController();
-        abortControllerRef.current = controller;
         const streamed = await streamAssistantAnswer(
           {
             query: clean,
@@ -663,11 +686,12 @@ export function ChatPage() {
             evidence: localResponse.riskCheck.sourceIds,
             riskLevel: localResponse.riskCheck.level,
             groundingText: localResponse.message,
-            skill: composerSkill,
-            skillLabel: composerSkills.find(
-              (item) => item.id === composerSkill
-            )?.label,
-            answerMode,
+            skill: dailyConversation ? "daily-chat" : composerSkill,
+            skillLabel: dailyConversation
+              ? "日常陪伴"
+              : composerSkills.find((item) => item.id === composerSkill)
+                  ?.label,
+            answerMode: effectiveAnswerMode,
             agentTrace,
             history: (currentConversation?.messages ?? [])
               .filter((message) => message.id !== userMessage.id)
@@ -684,7 +708,6 @@ export function ChatPage() {
           {
             onDelta: (_delta, nextFullText) => {
               fullText = nextFullText;
-              flushStream();
             },
             onStage: (stage) => {
               const traceStage: AssistantStage = {
@@ -706,10 +729,17 @@ export function ChatPage() {
                 traceStage
               ]);
             },
-            signal: controller.signal
+            signal: generationController.signal
           }
         );
+        if (generationRunRef.current !== runId) return;
         if (!streamed.trim()) throw new Error("模型没有返回内容");
+        if (!isQuestionFocusedAnswer(streamed, localResponse.message)) {
+          throw new Error("模型回答偏离具体问题，已切换本地规则回答");
+        }
+        if (!isAnswerModeCompliant(streamed, effectiveAnswerMode)) {
+          throw new Error("模型回答未满足所选回答方式，已切换本地结构化回答");
+        }
         response = {
           ...localResponse,
           message: streamed,
@@ -726,15 +756,12 @@ export function ChatPage() {
           targetConversationId
         );
       } catch (err) {
+        if (generationRunRef.current !== runId) return;
         const aborted =
           (err instanceof DOMException && err.name === "AbortError") ||
           (err as Error | undefined)?.name === "AbortError";
         if (aborted) {
-          // 使用已 flush 到 store 的 fullText + 初始 riskCheck（streamedMessage 自带）
-          const trimmed = fullText.trim();
-          const finalContent = trimmed
-            ? trimmed + "\n\n_（已停止生成）_"
-            : "_（已停止生成）_";
+          const finalContent = `${localResponse.message}\n\n_（已停止生成，保留本地规则回答）_`;
           replaceChatMessage(
             streamedAssistantMessageId,
             {
@@ -746,6 +773,7 @@ export function ChatPage() {
           );
           stopSpeaking();
           setStreamingMessageId("");
+          streamingMessageIdRef.current = "";
           abortControllerRef.current = null;
           setSending(false);
           autoScrollRef.current = false;
@@ -764,6 +792,7 @@ export function ChatPage() {
         );
       } finally {
         setStreamingMessageId("");
+        streamingMessageIdRef.current = "";
         abortControllerRef.current = null;
       }
     }
@@ -775,11 +804,14 @@ export function ChatPage() {
         role: "assistant",
         content: response.message,
         createdAt: nowIso(),
+        answerMode: effectiveAnswerMode,
         riskCheck: response.riskCheck
       }, targetConversationId);
     }
     speakText(
-      `${response.message}。${response.riskCheck.nextStep}`,
+      effectiveAnswerMode === "quick"
+        ? response.message
+        : `${response.message}。${response.riskCheck.nextStep}`,
       profile.voiceEnabled && preferences.soundEnabled,
       preferences.voiceMode,
       preferences.customVoiceId
@@ -1066,6 +1098,7 @@ export function ChatPage() {
         role: "assistant",
         content,
         createdAt: nowIso(),
+        answerMode: "detailed",
         riskCheck
       }, targetConversationId);
       setStages(
@@ -1270,8 +1303,48 @@ export function ChatPage() {
   }
 
   function stopGeneration() {
+    generationRunRef.current += 1;
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
+    const pendingId = streamingMessageIdRef.current || streamingMessageId;
+    if (pendingId) {
+      const state = useAppStore.getState();
+      const conversation = state.conversations.find(
+        (item) => item.id === state.activeConversationId
+      );
+      const pendingMessage = conversation?.messages.find(
+        (message) => message.id === pendingId
+      );
+      if (pendingMessage) {
+        replaceChatMessage(
+          pendingId,
+          {
+            ...pendingMessage,
+            content: `${pendingMessage.content}\n\n_（已停止生成）_`,
+            pending: false
+          },
+          state.activeConversationId
+        );
+      }
+    } else {
+      const state = useAppStore.getState();
+      addChatMessage(
+        {
+          id: createId("chat"),
+          role: "assistant",
+          content: "已停止生成。",
+          createdAt: nowIso(),
+          answerMode: "quick"
+        },
+        state.activeConversationId
+      );
+    }
+    setStreamingMessageId("");
+    streamingMessageIdRef.current = "";
+    setStages([]);
+    setSending(false);
+    autoScrollRef.current = false;
+    stopSpeaking();
   }
 
   function regenerateMessage(messageId: string) {
@@ -1296,6 +1369,16 @@ export function ChatPage() {
   function renderMessage(message: ChatMessage) {
     const ts = formatMessageTime(message.createdAt);
     const isStreaming = Boolean(message.pending);
+    const responseMode = message.answerMode ?? "safety";
+    const isQuickAnswer =
+      message.role === "assistant" && responseMode === "quick";
+    const showRiskDetails =
+      message.role === "assistant" &&
+      responseMode === "safety" &&
+      Boolean(
+        message.riskCheck &&
+          ["medium", "high", "emergency"].includes(message.riskCheck.level)
+      );
     const canRegenerate = message.role === "assistant" && !isStreaming;
     const canSpeak =
       (message.role === "assistant" || message.role === "user") &&
@@ -1314,7 +1397,9 @@ export function ChatPage() {
             {message.role === "assistant" ? "智药有方" : "您"}
           </div>
         </div>
-        {message.role === "assistant" && message.riskCheck ? (
+        {message.role === "assistant" &&
+        message.riskCheck &&
+        !isQuickAnswer ? (
           <div className="answer-search-meta">
             <Search size={15} aria-hidden="true" />
             核对 {message.riskCheck.medicationSnapshot.length} 种药物，参考{" "}
@@ -1349,11 +1434,12 @@ export function ChatPage() {
             ))}
           </div>
         ) : null}
-        {message.riskCheck ? (
+        {showRiskDetails && message.riskCheck ? (
           <MessageRisk riskCheck={message.riskCheck} />
         ) : null}
         {message.role === "assistant" &&
         message.riskCheck &&
+        responseMode === "safety" &&
         !isStreaming ? (
           <div className="answer-followups">
             <button
@@ -1637,17 +1723,6 @@ export function ChatPage() {
             <>
               <div className="ai-conversation-head">
                 <strong>当前对话</strong>
-                {stages.length ? (
-                  <details className="chat-stage-details">
-                    <summary>查看本次核对步骤</summary>
-                    {stages.map((stage) => (
-                      <div className={`agent-stage ${stage.status}`} key={stage.id}>
-                        <span className="stage-dot" aria-hidden="true" />
-                        {stage.label}
-                      </div>
-                    ))}
-                  </details>
-                ) : null}
               </div>
               {photoNotice ? (
                 <div className="notice chat-unified-notice">
@@ -1823,14 +1898,32 @@ export function ChatPage() {
                       <p>回答方式</p>
                       {(
                         [
-                          ["safety", "安全问药", ShieldCheck],
-                          ["quick", "快速回答", Zap],
-                          ["detailed", "详细解释", FileText]
-                        ] as Array<[AnswerMode, string, typeof ShieldCheck]>
-                      ).map(([value, label, Icon]) => (
+                          [
+                            "safety",
+                            "安全问药",
+                            "风险边界与立即行动",
+                            ShieldCheck
+                          ],
+                          [
+                            "quick",
+                            "快速回答",
+                            "一句结论，重点最短",
+                            Zap
+                          ],
+                          [
+                            "detailed",
+                            "详细解释",
+                            "原因、管理与求助条件",
+                            FileText
+                          ]
+                        ] as Array<
+                          [AnswerMode, string, string, typeof ShieldCheck]
+                        >
+                      ).map(([value, label, description, Icon]) => (
                         <button
                           type="button"
                           className={answerMode === value ? "active" : ""}
+                          aria-pressed={answerMode === value}
                           key={value}
                           onClick={() => {
                             setAnswerMode(value);
@@ -1838,7 +1931,10 @@ export function ChatPage() {
                           }}
                         >
                           <Icon size={18} aria-hidden="true" />
-                          {label}
+                          <span className="ai-answer-mode-copy">
+                            <strong>{label}</strong>
+                            <small>{description}</small>
+                          </span>
                         </button>
                       ))}
                       <span className="ai-skill-divider" />

@@ -102,7 +102,7 @@ AI_VISION_MODEL=your-vision-model
 - `AI_MODEL`：低风险普通问药的表达润色；
 - `AI_VISION_MODEL`：药品与中药材图片候选识别。
 
-配置可用 Key 后，普通问答、风险解释和多轮对话由通义千问负责组织表达；本地规则负责先确定风险等级、资料不足和用药停止线，模型不得覆盖这些结论。密钥文件 `.env` 已被 Git 忽略。
+配置可用 Key 后，普通问答、风险解释和多轮对话由智能模型负责组织表达；本地规则负责先确定风险等级、资料不足和用药停止线，模型不得覆盖这些结论。密钥文件 `.env` 已被 Git 忽略。
 
 也兼容参考项目的 `DASHSCOPE_API_KEY`、`QWEN_TEXT_MODEL`、`QWEN_VISION_MODEL` 变量；如使用百炼专属业务空间，请同时配置对应的完整 `AI_BASE_URL`。
 

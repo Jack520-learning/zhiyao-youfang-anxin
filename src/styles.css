@@ -943,31 +943,6 @@ img {
   display: none;
 }
 
-.chat-stage-details {
-  margin-left: auto;
-  border-radius: 14px;
-  padding: 10px 13px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-}
-
-.chat-stage-details > summary {
-  min-height: 38px;
-  cursor: pointer;
-  color: var(--primary);
-  font-size: calc(14px * var(--font-scale));
-  font-weight: 700;
-}
-
-.chat-stage-details[open] > summary {
-  margin-bottom: 8px;
-}
-
-.chat-stage-details .agent-stage {
-  min-width: 190px;
-  padding: 5px 0;
-}
-
 .chat-suggestions {
   display: flex;
   gap: 8px;
@@ -1496,6 +1471,16 @@ img {
   display: none;
 }
 
+.visually-hidden-file {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  opacity: 0;
+  pointer-events: none;
+}
+
 .upload-content {
   display: grid;
   justify-items: center;
@@ -1584,6 +1569,242 @@ img {
   margin-top: 9px;
   color: var(--muted);
   font-size: calc(13px * var(--font-scale));
+}
+
+.family-health-charts {
+  margin-top: 16px;
+}
+
+.family-chart-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.family-chart-panel {
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 16px;
+  background:
+    linear-gradient(145deg, rgba(15, 107, 85, 0.04), transparent 60%),
+    var(--surface-soft);
+}
+
+.family-chart-panel figcaption {
+  display: flex;
+  min-height: 48px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.family-chart-title {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.family-chart-title > span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.family-chart-title strong {
+  font-size: calc(16px * var(--font-scale));
+}
+
+.family-chart-title small {
+  color: var(--muted);
+  font-size: calc(12px * var(--font-scale));
+  line-height: 1.45;
+}
+
+.family-chart-badge {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: calc(12px * var(--font-scale));
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.family-adherence-chart {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(30px, 1fr));
+  gap: 8px;
+  min-height: 190px;
+  margin-top: 16px;
+}
+
+.family-adherence-day {
+  display: grid;
+  grid-template-rows: 24px minmax(100px, 1fr) 18px 16px;
+  justify-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.family-chart-value {
+  color: var(--muted);
+  font-size: calc(11px * var(--font-scale));
+  font-variant-numeric: tabular-nums;
+}
+
+.family-chart-track {
+  position: relative;
+  width: min(34px, 100%);
+  overflow: hidden;
+  border-radius: 9px;
+  background:
+    repeating-linear-gradient(
+      to top,
+      transparent 0,
+      transparent calc(25% - 1px),
+      var(--line) calc(25% - 1px),
+      var(--line) 25%
+    ),
+    var(--surface);
+}
+
+.family-chart-track i {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  min-height: 2px;
+  border-radius: 7px 7px 0 0;
+  background: var(--primary);
+  transition: height 300ms ease;
+}
+
+.family-chart-track i.complete {
+  background: linear-gradient(to top, var(--primary), #47a88e);
+}
+
+.family-adherence-day strong {
+  color: var(--text);
+  font-size: calc(12px * var(--font-scale));
+  font-weight: 700;
+}
+
+.family-adherence-day small {
+  color: var(--muted);
+  font-size: calc(10px * var(--font-scale));
+  white-space: nowrap;
+}
+
+.family-chart-restricted {
+  display: flex;
+  min-height: 190px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: 14px;
+  padding: 20px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: calc(14px * var(--font-scale));
+  line-height: 1.6;
+}
+
+.family-risk-chart {
+  display: flex;
+  min-height: 190px;
+  align-items: center;
+  justify-content: space-around;
+  gap: 22px;
+  margin-top: 12px;
+}
+
+.family-risk-donut {
+  position: relative;
+  display: grid;
+  width: 142px;
+  height: 142px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.family-risk-donut::after {
+  position: absolute;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: var(--surface-soft);
+  content: "";
+}
+
+.family-risk-donut > span {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+}
+
+.family-risk-donut strong {
+  font-size: calc(30px * var(--font-scale));
+  line-height: 1;
+}
+
+.family-risk-donut small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: calc(11px * var(--font-scale));
+}
+
+.family-risk-legend {
+  display: grid;
+  min-width: 122px;
+  gap: 10px;
+}
+
+.family-risk-legend > div {
+  display: grid;
+  grid-template-columns: 10px minmax(48px, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  font-size: calc(13px * var(--font-scale));
+}
+
+.family-risk-legend strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.family-risk-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.family-risk-dot.high {
+  background: var(--red);
+}
+
+.family-risk-dot.medium {
+  background: var(--amber);
+}
+
+.family-risk-dot.low {
+  background: var(--primary);
+}
+
+.family-risk-dot.unknown {
+  background: #86958f;
+}
+
+.family-chart-footnote {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: calc(12px * var(--font-scale));
+  line-height: 1.6;
 }
 
 .family-content-grid {
@@ -2341,6 +2562,13 @@ img {
 
 .camera-modal input[type="file"] {
   display: none;
+}
+
+.camera-library-error {
+  margin-top: 10px;
+  color: var(--red);
+  font-size: calc(13px * var(--font-scale));
+  line-height: 1.55;
 }
 
 .modal h2 {
@@ -3569,8 +3797,26 @@ img {
 @media (max-width: 1080px) {
   .home-grid,
   .chat-layout,
-  .family-content-grid {
+  .family-content-grid,
+  .family-chart-grid {
     grid-template-columns: 1fr;
+  }
+
+  .family-adherence-chart {
+    gap: 5px;
+  }
+
+  .family-chart-panel {
+    padding: 14px;
+  }
+
+  .family-risk-chart {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .family-risk-legend {
+    width: min(100%, 230px);
   }
 
   .hero-task {
@@ -3785,10 +4031,6 @@ img {
     justify-content: center;
   }
 
-  .chat-stage-details {
-    display: none;
-  }
-
   .chat-page .page-header {
     margin-bottom: 12px;
   }
@@ -3913,6 +4155,10 @@ img {
   .settings-grid,
   .intake-layout,
   .family-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .family-chart-grid {
     grid-template-columns: 1fr;
   }
 
@@ -5714,6 +5960,31 @@ img {
 .ai-skill-menu button.active {
   background: var(--primary-soft);
   color: var(--primary);
+}
+
+.ai-skill-menu button > svg {
+  flex: 0 0 auto;
+}
+
+.ai-answer-mode-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.ai-answer-mode-copy strong {
+  font-size: inherit;
+  font-weight: 700;
+}
+
+.ai-answer-mode-copy small {
+  color: var(--muted);
+  font-size: calc(10px * var(--font-scale));
+  line-height: 1.35;
+}
+
+.ai-skill-menu button.active .ai-answer-mode-copy small {
+  color: color-mix(in srgb, var(--primary) 78%, var(--muted));
 }
 
 .ai-skill-menu button.research {

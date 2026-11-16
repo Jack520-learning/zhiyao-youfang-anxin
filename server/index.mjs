@@ -92,6 +92,10 @@ webpush.setVapidDetails(
 );
 
 function json(response, status, payload) {
+  if (response.headersSent) {
+    if (!response.writableEnded) response.end();
+    return;
+  }
   response.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store"
@@ -679,7 +683,7 @@ async function callQwenTranscription(audioBase64, mimeType) {
         ? errorPayload.error.message.replace(/\s+/g, " ").slice(0, 160)
         : "";
     throw new Error(
-      `千问语音识别失败（${chatResponse.status}）${
+      `语音识别服务失败（${chatResponse.status}）${
         providerMessage ? `：${providerMessage}` : ""
       }`
     );
@@ -692,7 +696,7 @@ async function callQwenTranscription(audioBase64, mimeType) {
       : typeof content?.text === "string"
         ? content.text.trim()
         : "";
-  if (!text) throw new Error("千问没有返回语音文字");
+  if (!text) throw new Error("语音识别服务没有返回文字");
   return { text, model };
 }
 
@@ -738,11 +742,11 @@ async function callQwenTts(text, voiceMode, customVoiceId) {
   );
   if (!response.ok) {
     const payload = await response.text();
-    throw new Error(`千问语音合成失败（${response.status}）：${payload.slice(0, 160)}`);
+    throw new Error(`语音合成服务失败（${response.status}）：${payload.slice(0, 160)}`);
   }
   const payload = await response.json();
   const audioUrl = payload.output?.audio?.url;
-  if (!audioUrl) throw new Error("千问没有返回可播放音频");
+  if (!audioUrl) throw new Error("语音合成服务没有返回可播放音频");
   return {
     audioUrl: String(audioUrl).replace(/^http:\/\//i, "https://"),
     voice
@@ -832,8 +836,35 @@ async function deleteCustomVoice(voiceId) {
   return response.json();
 }
 
+function classifyAssistantQuestion(query) {
+  const normalized = String(query || "").toLowerCase().replace(/\s+/g, "");
+  if (/胸痛|呼吸困难|喘不上|意识不清|昏迷|抽搐|大出血/.test(normalized)) {
+    return "紧急症状";
+  }
+  if (/漏服|忘了吃|忘记吃|少吃一次|补服|补吃/.test(normalized)) {
+    return "漏服处理";
+  }
+  if (/一起吃|同服|联用|相互作用|能不能配/.test(normalized)) {
+    return "联合用药";
+  }
+  if (/多少钱|价格|价钱|最便宜|哪里买|购买/.test(normalized)) {
+    return "价格核对";
+  }
+  if (/副作用|不良反应|难受|不舒服|头晕|恶心/.test(normalized)) {
+    return "身体不适";
+  }
+  if (/怎么吃|怎么用|什么时候吃|几点吃|饭前|饭后|吃几次|剂量|用量/.test(normalized)) {
+    return "服药方法";
+  }
+  if (/储存|保存|冷藏|避光/.test(normalized)) {
+    return "储存要求";
+  }
+  return "用药咨询";
+}
+
 function buildAssistantRequest(payload) {
   const baseUrl = getAiBaseUrl();
+  const isDailyConversation = payload.skill === "daily-chat";
   const skillFocus = {
     photo:
       "围绕照片识别结果回答，明确哪些字段来自图片、哪些仍需包装或说明书确认。",
@@ -842,17 +873,23 @@ function buildAssistantRequest(payload) {
     herbs:
       "围绕中药材辨识、传统用途、安全提醒及与当前处方药的搭配风险回答。",
     "multi-drug":
-      "逐项核对重复成分、同类重复、相互作用和错峰服用，不自行决定停药或改剂量。"
+      "逐项核对重复成分、同类重复、相互作用和错峰服用，不自行决定停药或改剂量。",
+    "daily-chat":
+      "自然回应日常聊天、陪伴和情绪表达；不进行疾病诊断，不生成药物建议。"
   }[payload.skill] || "使用普通安全用药问答方式。";
-  const answerConfig = {
+  const answerConfig = isDailyConversation ? {
+    style: "像熟悉的朋友一样自然陪聊，直接回应用户说的话，用两到四句中文，最多问一个开放式问题。不要输出标题、列表、Markdown格式、风险等级或医疗建议。不要假装知道实时天气、位置或用户未提供的事实。",
+    maxTokens: 360,
+    temperature: 0.55
+  } : {
     quick: {
       style: "只说两三句话，第一句直接给结论，最后一句给一个最该做的下一步。不展开原理，不列清单，不重复用户问题。绝对不要输出任何Markdown表格、|字符、---分隔线或#标题符号，保持纯文本。",
       maxTokens: 500,
       temperature: 0.05
     },
     safety: {
-      style: "必须用标准Markdown标题格式输出三段：第一段以「## ⚠️风险核对」开头，内容包含风险等级（低/中/高）、与当前在用药物的相互作用或禁忌、什么情况绝不能这么做；第二段以「## 结论」开头，给出核心结论；第三段以「## 下一步」开头，给出最该做的事。每段不超过三句话。绝对不要输出表格、|字符或---分隔线。",
-      maxTokens: 1000,
+      style: "先识别用户真正问的是用法、漏服、同服、价格、症状、储存还是禁忌，再直接回答这个具体问题。标题和内容必须随问题变化，不要固定套用「风险核对—结论—下一步」，也不要复用与问题无关的通用段落。用法题要落到具体药名、剂量、时间和饭前饭后；漏服题要说明具体处理边界；同服题要指出涉及的具体药；价格题要明确未核实实时价格；症状题要先给危险信号。保留 groundingText 的风险等级、禁忌和下一步，不得增加新药事实。不要输出表格或---分隔线。",
+      maxTokens: 1200,
       temperature: 0.05
     },
     detailed: {
@@ -886,6 +923,9 @@ function buildAssistantRequest(payload) {
     riskLevel: payload.riskLevel || "unknown",
     activeSkill: payload.skillLabel || "",
     skillFocus,
+    questionIntent: classifyAssistantQuestion(payload.query),
+    answerMode: payload.answerMode || "safety",
+    conversationOnly: isDailyConversation,
     answerStyle,
     agentTrace: Array.isArray(payload.agentTrace)
       ? payload.agentTrace
@@ -919,12 +959,16 @@ function buildAssistantRequest(payload) {
           }))
       : []
   };
+  const systemPrompt = isDailyConversation
+    ? "你是智药有方中的日常陪伴助手。用户可以问候、表达心情、聊生活或寻求轻松陪伴。请自然、温暖、简洁地回应，不诊断疾病，不给药物、剂量或治疗建议。不要假装知道天气、位置或未提供的事实。如果用户转向疾病、症状或用药，简短提示可以改用安全问药后继续回答。"
+    : "你是智药有方的老人安全用药信息助手。groundingText 是本地安全规则已经确定的结论和依据，只能在不改变其风险等级、剂量边界、禁忌和下一步的前提下改写表达。当前技能只决定回答重点，不得借技能扩张医疗权限。不得补充 groundingText 之外的药物事实，不诊断、不开处方、不判断停药、不建议调整剂量或替代医生。高风险或紧急状态只能强调求助，不得增加具体用药动作。资料不足时保留“资料不足”。回答必须紧扣用户的具体问题：用法、漏服、同服、价格、症状和储存分别采用对应内容，不能把所有问题都改写成同一套安全模板。用简短、温和、老人能理解的中文回答。";
   return {
     baseUrl,
     model: getTextModel(),
     context,
     skillFocus,
     answerStyle,
+    systemPrompt,
     answerMaxTokens,
     answerTemperature
   };
@@ -1016,7 +1060,7 @@ function executeAssistantTool(payload, name) {
 }
 
 async function requestAiAssistant(payload, options = {}) {
-  const { baseUrl, model, context, skillFocus, answerStyle, answerMaxTokens, answerTemperature } =
+  const { baseUrl, model, context, skillFocus, answerStyle, systemPrompt, answerMaxTokens, answerTemperature } =
     buildAssistantRequest(payload);
   return fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
@@ -1039,12 +1083,11 @@ async function requestAiAssistant(payload, options = {}) {
       messages: [
         {
           role: "system",
-          content:
-            "你是基于通义千问的老人安全用药信息助手。groundingText 是本地安全规则已经确定的结论和依据，只能在不改变其风险等级、剂量边界、禁忌和下一步的前提下改写表达。当前技能只决定回答重点，不得借技能扩张医疗权限。不得补充 groundingText 之外的药物事实，不诊断、不开处方、不判断停药、不建议调整剂量或替代医生。高风险或紧急状态只能强调求助，不得增加具体用药动作。资料不足时保留“资料不足”。先给结论，再说明原因和下一步，用简短、温和、老人能理解的中文回答。"
+          content: systemPrompt
         },
         {
           role: "user",
-          content: `安全上下文：${JSON.stringify(context)}\n当前技能重点：${skillFocus}\n回答方式：${answerStyle}\n用户问题：${String(payload.query || "").slice(0, 1000)}`
+          content: `安全上下文：${JSON.stringify(context)}\n当前问题类型：${context.questionIntent}\n当前技能重点：${skillFocus}\n回答方式：${answerStyle}\n用户问题：${String(payload.query || "").slice(0, 1000)}`
         },
         ...(Array.isArray(options.extraMessages) ? options.extraMessages : [])
       ]
@@ -1149,10 +1192,10 @@ async function compareModelAnswers(testCase) {
 }
 
 const assistantToolLabels = {
-  get_active_medications: "千问工具：读取当前用药",
-  get_elder_profile: "千问工具：读取个人风险档案",
-  get_grounded_evidence: "千问工具：读取本地安全证据",
-  get_medication_schedule: "千问工具：读取服药日程"
+  get_active_medications: "智能服务：读取当前用药",
+  get_elder_profile: "智能服务：读取个人风险档案",
+  get_grounded_evidence: "智能服务：读取本地安全证据",
+  get_medication_schedule: "智能服务：读取服药日程"
 };
 
 async function prepareAssistantToolCalls(payload, sendEvent, signal) {
@@ -1175,7 +1218,7 @@ async function prepareAssistantToolCalls(payload, sendEvent, signal) {
       const name = String(call?.function?.name || "");
       sendEvent("stage", {
         id: `function-${name}`,
-        label: assistantToolLabels[name] || `千问工具：${name}`
+        label: assistantToolLabels[name] || `智能服务：${name}`
       });
       try {
         const result = executeAssistantTool(payload, name);
@@ -1269,8 +1312,13 @@ async function serveStatic(request, response) {
   }
   try {
     const file = await readFile(filePath);
+    const isFreshPage =
+      filePath.endsWith(".html") || filePath.endsWith("/sw.js");
     response.writeHead(200, {
-      "Content-Type": mimeTypes[extname(filePath)] || "application/octet-stream"
+      "Content-Type": mimeTypes[extname(filePath)] || "application/octet-stream",
+      "Cache-Control": isFreshPage
+        ? "no-cache, no-store, must-revalidate"
+        : "public, max-age=31536000, immutable"
     });
     response.end(file);
   } catch {
@@ -2066,7 +2114,7 @@ const server = createServer(async (request, response) => {
       );
       sendEvent("stage", {
         id: "generating",
-        label: "千问正在生成受控回答"
+        label: "正在生成受控回答"
       });
       try {
         const answer = await streamAiAssistant(
@@ -2105,7 +2153,7 @@ const server = createServer(async (request, response) => {
     if (url.pathname === "/api/transcribe" && request.method === "POST") {
       if (!hasAiKey()) {
         return json(response, 503, {
-          error: "千问语音识别尚未配置，请改用文字输入。"
+          error: "智能语音识别尚未配置，请改用文字输入。"
         });
       }
       const body = await readJson(request, 18 * 1024 * 1024);
@@ -2123,14 +2171,14 @@ const server = createServer(async (request, response) => {
           error:
             error instanceof Error
               ? error.message
-              : "千问语音识别暂时不可用，请改用文字输入。"
+              : "智能语音识别暂时不可用，请改用文字输入。"
         });
       }
     }
 
     if (url.pathname === "/api/tts" && request.method === "POST") {
       if (!hasAiKey()) {
-        return json(response, 503, { error: "千问语音合成尚未配置" });
+        return json(response, 503, { error: "智能语音合成尚未配置" });
       }
       const body = await readJson(request, 256 * 1024);
       if (!String(body.text || "").trim()) {
@@ -2153,7 +2201,7 @@ const server = createServer(async (request, response) => {
 
     if (url.pathname === "/api/voice-clone" && request.method === "POST") {
       if (!hasAiKey()) {
-        return json(response, 503, { error: "千问音色复刻尚未配置" });
+        return json(response, 503, { error: "智能音色复刻尚未配置" });
       }
       const body = await readJson(request, 15 * 1024 * 1024);
       const audioDataUrl = String(body.audioDataUrl || "");
@@ -2182,7 +2230,7 @@ const server = createServer(async (request, response) => {
       request.method === "DELETE"
     ) {
       if (!hasAiKey()) {
-        return json(response, 503, { error: "千问音色复刻尚未配置" });
+        return json(response, 503, { error: "智能音色复刻尚未配置" });
       }
       const voiceId = decodeURIComponent(
         url.pathname.slice("/api/voice-clone/".length)
@@ -2228,6 +2276,10 @@ const server = createServer(async (request, response) => {
     return json(response, 404, { error: "Not found" });
   } catch (error) {
     console.error(error);
+    if (response.headersSent) {
+      if (!response.writableEnded && !response.destroyed) response.end();
+      return;
+    }
     return json(response, 500, { error: error?.message || "服务异常" });
   }
 });

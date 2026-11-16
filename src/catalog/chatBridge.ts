@@ -106,7 +106,7 @@ export function answerFromDrugCatalog(
   };
 
   return {
-    message: buildRulesMessage(check, answerMode),
+    message: buildRulesMessage(check, answerMode, query),
     riskCheck: check,
     stages: [
       { id: "match", label: `匹配药品百科：${primary.displayName}`, status: "done" },

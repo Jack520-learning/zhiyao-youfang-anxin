@@ -13,8 +13,11 @@ export function CameraCaptureModal({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const albumInputRef = useRef<HTMLInputElement>(null);
+  const systemCameraInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
+  const [libraryError, setLibraryError] = useState("");
   const [captured, setCaptured] = useState("");
   const [retryKey, setRetryKey] = useState(0);
 
@@ -23,6 +26,7 @@ export function CameraCaptureModal({
     let cancelled = false;
     setStatus("loading");
     setError("");
+    setLibraryError("");
     setCaptured("");
     let permissionTimer: number | undefined;
 
@@ -108,9 +112,13 @@ export function CameraCaptureModal({
 
   async function useLibrary(file: File | undefined) {
     if (!file) return;
-    const imageDataUrl = await fileToCompressedDataUrl(file);
-    onCapture(imageDataUrl);
-    close();
+    try {
+      setLibraryError("");
+      const imageDataUrl = await fileToCompressedDataUrl(file);
+      onCapture(imageDataUrl);
+    } catch {
+      setLibraryError("这张图片无法读取，请换一张清晰的药盒照片。");
+    }
   }
 
   return (
@@ -175,17 +183,14 @@ export function CameraCaptureModal({
                     <RotateCcw size={20} aria-hidden="true" />
                     重试摄像头
                   </button>
-                  <label className="btn btn-large upload-label">
+                  <button
+                    className="btn btn-large"
+                    type="button"
+                    onClick={() => systemCameraInputRef.current?.click()}
+                  >
                     <Camera size={20} aria-hidden="true" />
                     使用手机系统相机
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      aria-label="使用手机系统相机拍摄药盒"
-                      onChange={(event) => void useLibrary(event.target.files?.[0])}
-                    />
-                  </label>
+                  </button>
                 </>
               ) : (
                 <button
@@ -200,17 +205,45 @@ export function CameraCaptureModal({
               )}
             </>
           )}
-          <label className="btn btn-large upload-label">
+          <button
+            className="btn btn-large"
+            type="button"
+            onClick={() => albumInputRef.current?.click()}
+          >
             <ImagePlus size={20} aria-hidden="true" />
             从相册选择
-            <input
-              type="file"
-              accept="image/*"
-              aria-label="从相册选择药盒照片"
-              onChange={(event) => void useLibrary(event.target.files?.[0])}
-            />
-          </label>
+          </button>
         </div>
+        <input
+          ref={albumInputRef}
+          className="visually-hidden-file"
+          type="file"
+          accept="image/*"
+          aria-label="从相册选择药盒照片"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            event.currentTarget.value = "";
+            void useLibrary(file);
+          }}
+        />
+        <input
+          ref={systemCameraInputRef}
+          className="visually-hidden-file"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          aria-label="使用手机系统相机拍摄药盒"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            event.currentTarget.value = "";
+            void useLibrary(file);
+          }}
+        />
+        {libraryError ? (
+          <p className="camera-library-error" role="alert">
+            {libraryError}
+          </p>
+        ) : null}
       </section>
     </div>
   );

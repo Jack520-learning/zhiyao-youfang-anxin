@@ -487,7 +487,7 @@ export function EvaluationPage() {
           <div>
             <b>01</b>
             <span>持续扩充到 200 个安全场景</span>
-            <small>当前已有 109 个场景，继续覆盖药品、中药和保健品组合。</small>
+            <small>当前已有 {results.length} 个场景，继续覆盖慢病、药品、中药和保健品组合。</small>
           </div>
           <div>
             <b>02</b>
