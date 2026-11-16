@@ -334,10 +334,12 @@ export function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem("chat-sidebar-width");
-    const parsed = saved ? Number(saved) : 250;
-    return Number.isFinite(parsed) && parsed >= 180 && parsed <= 420 ? parsed : 250;
+    const parsed = saved ? Number(saved) : 220;
+    return Number.isFinite(parsed) && parsed >= 160 && parsed <= 400 ? parsed : 220;
   });
   const [isResizing, setIsResizing] = useState(false);
+  const resizeStartRef = useRef<{ mouseX: number; width: number } | null>(null);
+  const latestSidebarWidth = useRef(220);
   const messagesRef = useRef<HTMLDivElement>(null);
   const initialQueryHandled = useRef(false);
   const autoScrollRef = useRef(false);
@@ -398,18 +400,32 @@ export function ChatPage() {
     }
   }, [searchParams, location.key]);
 
-  // Sidebar resize handling
+  useEffect(() => {
+    latestSidebarWidth.current = sidebarWidth;
+  }, [sidebarWidth]);
+
+  // Sidebar resize handling — uses delta from mousedown for pixel-perfect sensitivity
   useEffect(() => {
     if (!isResizing) return;
+    const start = resizeStartRef.current;
+    if (!start) return;
+
     function onMove(event: MouseEvent) {
-      const next = Math.min(420, Math.max(180, event.clientX - 16));
+      const delta = event.clientX - start.mouseX;
+      const next = Math.min(400, Math.max(160, start.width + delta));
       setSidebarWidth(next);
     }
     function onUp() {
       setIsResizing(false);
-      localStorage.setItem("chat-sidebar-width", String(sidebarWidth));
+      resizeStartRef.current = null;
+      localStorage.setItem(
+        "chat-sidebar-width",
+        String(latestSidebarWidth.current)
+      );
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
     }
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
@@ -421,7 +437,7 @@ export function ChatPage() {
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     };
-  }, [isResizing, sidebarWidth]);
+  }, [isResizing]);
 
   async function submitQuestion(question = input, autoScroll = true) {
     const clean = question.trim();
@@ -1306,7 +1322,14 @@ export function ChatPage() {
             role="separator"
             aria-orientation="vertical"
             aria-label="拖拽调整对话记录宽度"
-            onMouseDown={() => setIsResizing(true)}
+            onMouseDown={(event) => {
+              event.preventDefault();
+              resizeStartRef.current = {
+                mouseX: event.clientX,
+                width: latestSidebarWidth.current
+              };
+              setIsResizing(true);
+            }}
           />
 
           <div className="ai-chat-main">
