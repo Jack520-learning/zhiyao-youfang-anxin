@@ -219,7 +219,7 @@ export function AppShell() {
             <button
               type="button"
               className="icon-btn"
-              aria-label="打开 SOS 求助"
+              aria-label="打开紧急求助"
               onClick={() => setSosOpen(true)}
             >
               <BellRing size={20} />

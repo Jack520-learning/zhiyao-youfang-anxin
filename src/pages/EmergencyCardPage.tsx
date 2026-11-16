@@ -66,7 +66,7 @@ export function EmergencyCardPage() {
           onClick={printCard}
         >
           <Printer size={21} aria-hidden="true" />
-          打印或保存为 PDF
+          打印或保存为文件
         </button>
       </header>
 

@@ -68,7 +68,7 @@ export async function streamAssistantAnswer(
     if (handlers.signal?.aborted) {
       throw new DOMException("Aborted", "AbortError");
     }
-    let errorMsg = "AI 流式回答失败";
+    let errorMsg = "智能回答服务未完成";
     try {
       const body = (await response.json()) as { error?: string };
       errorMsg = body.error || errorMsg;
@@ -127,7 +127,7 @@ export async function streamAssistantAnswer(
       } else if (event === "stage" && payloadData.id && payloadData.label) {
         handlers.onStage?.({ id: payloadData.id, label: payloadData.label });
       } else if (event === "error") {
-        throw new Error(payloadData.error || "AI 流式回答失败");
+        throw new Error(payloadData.error || "智能回答服务未完成");
       }
     }
   }

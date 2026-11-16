@@ -217,7 +217,7 @@ export const safetyTopics: SafetyTopic[] = [
     keywords: ["很多药", "多种药", "老年人吃药多", "重复用药", "相互作用", "多药"],
     riskLevel: "medium",
     summary:
-      "同时使用多种处方药、OTC、中药和保健品时，重复成分和相互作用风险会增加。",
+      "同时使用多种处方药、非处方药、中药和保健品时，重复成分和相互作用风险会增加。",
     nextStep:
       "复诊时携带全部药盒或使用多药对账，至少让医生或药师集中核对一次。",
     sourceIds

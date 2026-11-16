@@ -167,7 +167,7 @@ export function FamilyPage() {
           <div className="section-heading">
             <div>
               <h2>家人收到的即时信息</h2>
-              <p>老人主动报告不舒服或 SOS 时会出现在这里。</p>
+              <p>老人主动报告不舒服或紧急求助时会出现在这里。</p>
             </div>
             <BellRing size={22} color="var(--red)" aria-hidden="true" />
           </div>
@@ -197,7 +197,7 @@ export function FamilyPage() {
             {!openAlerts.length ? (
               <div className="notice">
                 <CheckCircle2 size={20} aria-hidden="true" />
-                当前没有待处理的不舒服或 SOS 记录。
+                当前没有待处理的不舒服或紧急求助记录。
               </div>
             ) : null}
           </div>
@@ -296,7 +296,7 @@ export function FamilyPage() {
             <div className="section-heading">
               <div>
                 <h2 style={{ fontSize: 19 }}>紧急联系</h2>
-                <p>求助链路不依赖 AI 回答。</p>
+                <p>求助链路不依赖智能回答。</p>
               </div>
               <HeartPulse size={22} color="var(--red)" aria-hidden="true" />
             </div>

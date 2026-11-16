@@ -78,7 +78,7 @@ export function MultiDrugPage() {
           ...current,
           ...lines.filter((line) => !current.includes(line))
         ]);
-        setNotice("AI 视觉服务未返回唯一名称，已把图片中识别到的文字加入清单。");
+        setNotice("智能识图未返回唯一名称，已把图片中识别到的文字加入清单。");
       } else {
         setNotice("这张照片没有识别出可用药名，请从清单中手动补充。");
       }
@@ -110,7 +110,7 @@ export function MultiDrugPage() {
           <p className="eyebrow">多药对账 · 当前完整用药清单</p>
           <h1 className="page-title">一次核对所有在用的药</h1>
           <p className="page-description">
-            把处方药、OTC、中药材和保健品放在一起核查，重点发现相同成分、同类药重复、已知相互作用和需要错开服用的药。
+            把处方药、非处方药、中药材和保健品放在一起核查，重点发现相同成分、同类药重复、已知相互作用和需要错开服用的药。
           </p>
         </div>
         <ClipboardList size={32} color="var(--primary)" aria-hidden="true" />
@@ -198,7 +198,7 @@ export function MultiDrugPage() {
           </div>
           <button className="btn" type="button" onClick={print}>
             <Printer size={19} aria-hidden="true" />
-            打印或保存 PDF
+            打印或保存为文件
           </button>
         </div>
 

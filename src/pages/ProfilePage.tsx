@@ -45,6 +45,7 @@ import { VoiceCloneRecorder } from "../components/VoiceCloneRecorder";
 import { LinkedAccountManager } from "../components/LinkedAccountManager";
 import { useAppStore } from "../store/useAppStore";
 import { toChineseErrorMessage } from "../lib/userMessage";
+import { formatTimeZoneLabel } from "../lib/time";
 import type { EmergencyContact } from "../types";
 
 const voiceOptions: Array<{ value: VoiceMode; label: string }> = [
@@ -753,7 +754,7 @@ export function ProfilePage() {
               <strong>吃药提醒通知</strong>
               <span>
                 {preferences.remindersEnabled ? "已经开启" : "已关闭"} ·
-                时区 {profile.timeZone}
+                时区 {formatTimeZoneLabel(profile.timeZone)}
               </span>
             </span>
             <button
@@ -798,7 +799,7 @@ export function ProfilePage() {
               {[
                 ["shareMissedDose", "多次没有确认时告诉家人"],
                 ["shareEmergency", "身体不舒服求助时告诉家人"],
-                ["allowSosContact", "允许 SOS 联系紧急联系人"]
+                ["allowSosContact", "允许紧急求助联系紧急联系人"]
               ].map(([key, title]) => {
                 const consentKey = key as keyof typeof consent;
                 return (
@@ -1165,8 +1166,8 @@ export function ProfilePage() {
             ["shareMedicationSummary", "当前用药摘要", "药名、用法、疾病和过敏史"],
             ["shareMissedDose", "多次未确认", "需要家人协助查看时"],
             ["shareHighRisk", "高危核查结果", "必须保留，不得静默关闭"],
-            ["shareEmergency", "主动求助", "SOS 时发送必要急救信息"],
-            ["allowSosContact", "联系紧急联系人", "允许 SOS 链路联系预设对象"]
+            ["shareEmergency", "主动求助", "紧急求助时发送必要急救信息"],
+            ["allowSosContact", "联系紧急联系人", "允许紧急求助联系预设对象"]
           ].map(([key, title, hint]) => {
             const consentKey = key as keyof typeof consent;
             return (
@@ -1323,7 +1324,10 @@ export function ProfilePage() {
           <div className="settings-row">
             <div className="settings-copy">
               <strong>系统通知</strong>
-              <span>关闭页面后接收提醒所需 · 老人时区 {profile.timeZone}</span>
+              <span>
+                关闭页面后接收提醒所需 · 老人时区{" "}
+                {formatTimeZoneLabel(profile.timeZone)}
+              </span>
             </div>
             <button
               className="btn"

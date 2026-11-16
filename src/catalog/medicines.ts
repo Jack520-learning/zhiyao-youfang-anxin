@@ -245,7 +245,7 @@ const medicineDrafts: MedicineDraft[] = [
     specialGroups: {
       older: "需结合肾功能定期评估，不能只按年龄自行减量。",
       pregnancy: "妊娠期糖尿病治疗需专科医生管理。",
-      kidney: "肾功能下降时药物蓄积风险增加，必须按 eGFR 评估。",
+      kidney: "肾功能下降时药物蓄积风险增加，必须按肾小球滤过率评估。",
       liver: "严重肝功能异常会增加乳酸性酸中毒风险。",
     },
     sourceTitle,
@@ -598,7 +598,7 @@ const medicineDrafts: MedicineDraft[] = [
     specialGroups: {
       older: "需结合肾功能定期评估，不能只按年龄自行减量。",
       pregnancy: "妊娠期糖尿病治疗需专科医生管理。",
-      kidney: "应根据 eGFR 评估是否可用及剂量。",
+      kidney: "应根据肾小球滤过率评估是否可用及剂量。",
       liver: "严重肝功能异常会增加乳酸性酸中毒风险。",
     },
     sourceTitle,

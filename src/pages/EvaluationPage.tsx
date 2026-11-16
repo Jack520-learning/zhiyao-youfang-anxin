@@ -15,6 +15,18 @@ import { medicines } from "../catalog/medicines";
 import { evaluateSafetyScenarios } from "../evaluation/safetyScenarios";
 import { toChineseErrorMessage } from "../lib/userMessage";
 
+const riskLevelLabels: Record<string, string> = {
+  emergency: "紧急",
+  high: "高风险",
+  medium: "需关注",
+  low: "低风险",
+  unknown: "未明确"
+};
+
+function formatRiskLevel(level: string): string {
+  return riskLevelLabels[level] || "未明确";
+}
+
 const comparisonCases = [
   {
     id: "missed-warfarin-model",
@@ -211,8 +223,8 @@ export function EvaluationPage() {
           <strong>{result.title}</strong>
           <small>{result.actualTitle}</small>
         </td>
-        <td>{result.expectedLevels.join(" / ")}</td>
-        <td>{result.actualLevel}</td>
+        <td>{result.expectedLevels.map(formatRiskLevel).join("、")}</td>
+        <td>{formatRiskLevel(result.actualLevel)}</td>
         <td>
           <span className={`evaluation-result ${result.passed ? "pass" : "fail"}`}>
             {result.passed ? "通过" : "需修正"}

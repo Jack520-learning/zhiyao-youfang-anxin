@@ -667,11 +667,11 @@ function HomeSearch() {
             </>
           ) : null}
           {!results.length && !catalogResults.length && !herbResults.length ? (
-            <p className="search-empty">没有直接找到，可以让 AI 继续帮您核对。</p>
+            <p className="search-empty">没有直接找到，可以让智能助手继续帮您核对。</p>
           ) : null}
           <button type="button" className="btn btn-warm search-ask" onClick={askAi}>
             <MessageCircleHeart size={19} aria-hidden="true" />
-            问 AI：“{query.trim()}”
+            问智能助手：“{query.trim()}”
           </button>
         </div>
       ) : null}

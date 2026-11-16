@@ -177,7 +177,7 @@ export function ImpactPage() {
         </div>
         <div className="header-actions" style={{ marginTop: 18 }}>
           <button className="btn btn-primary" type="button" onClick={() => navigate("/chat")}>
-            进入 AI 问药
+            进入智能问药
           </button>
           <button className="btn" type="button" onClick={() => navigate("/evaluation")}>
             打开质量评估

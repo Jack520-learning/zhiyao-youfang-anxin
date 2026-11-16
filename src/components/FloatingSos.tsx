@@ -67,8 +67,8 @@ export function FloatingSos({ onOpen }: { onOpen: () => void }) {
       type="button"
       className="sos-floating-button"
       style={{ left: position.x, top: position.y }}
-      aria-label="SOS 紧急求助，可拖动"
-      title="SOS 求助（可拖动）"
+      aria-label="紧急求助，可拖动"
+      title="紧急求助（可拖动）"
       onClick={(event) => {
         if (event.detail === 0) onOpen();
       }}
@@ -81,7 +81,7 @@ export function FloatingSos({ onOpen }: { onOpen: () => void }) {
       onContextMenu={(event) => event.preventDefault()}
     >
       <ShieldAlert size={19} aria-hidden="true" />
-      <span>SOS</span>
+      <span>求助</span>
     </button>
   );
 }

@@ -1258,10 +1258,10 @@ export function ChatPage() {
       );
       setPhotoNotice(
         photoResults.length > 1
-          ? `AI 已识别 ${photoResults.length} 种药物：${photoResults
+          ? `智能识别已完成，共找到 ${photoResults.length} 种药物：${photoResults
               .map((result) => result.draft.name)
               .join("、")}。每种药物的用法和风险已分别列出。`
-          : `AI 已完成“${photoResults[0].draft.name}”的图像分析；名称不够确定时建议补拍说明书正面。`
+          : `已完成“${photoResults[0].draft.name}”的图像分析；名称不够确定时建议补拍说明书正面。`
       );
     } catch {
       addChatMessage({
@@ -1700,7 +1700,7 @@ export function ChatPage() {
               </span>
               <span>
                 <strong>智药有方</strong>
-                <small>识药问药 · 家庭用药 AI</small>
+                <small>识药问药 · 家庭用药助手</small>
               </span>
             </div>
           </div>

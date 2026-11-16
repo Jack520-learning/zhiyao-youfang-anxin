@@ -2,7 +2,7 @@ export interface SupplementEntry {
   id: string;
   name: string;
   aliases: string[];
-  kind: "OTC" | "保健食品" | "营养素";
+  kind: "非处方药" | "保健食品" | "营养素";
   caution: string;
   affectedMedicationTerms: string[];
 }
@@ -11,7 +11,7 @@ export const supplements: SupplementEntry[] = [
   {
     id: "fish-oil",
     name: "鱼油",
-    aliases: ["深海鱼油", "Omega-3", "欧米伽3"],
+    aliases: ["深海鱼油", "欧米伽3"],
     kind: "保健食品",
     caution:
       "鱼油属于保健食品。正在使用华法林、阿司匹林、氯吡格雷等影响凝血或血小板的药物时，应先咨询医生或药师。",

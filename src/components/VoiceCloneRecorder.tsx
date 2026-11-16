@@ -111,7 +111,7 @@ export function VoiceCloneRecorder({
     stopSpeaking();
     await new Promise((resolve) => window.setTimeout(resolve, 250));
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
-      setError("当前浏览器不支持录音，请使用 Chrome 或 Safari");
+      setError("当前浏览器不支持录音，请使用最新版主流浏览器");
       return;
     }
     try {

@@ -2613,7 +2613,7 @@ const server = createServer(async (request, response) => {
     }
 
     if (shouldServeStatic) return serveStatic(request, response);
-    return json(response, 404, { error: "Not found" });
+    return json(response, 404, { error: "未找到请求内容" });
   } catch (error) {
     console.error(error);
     if (response.headersSent) {

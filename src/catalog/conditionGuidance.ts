@@ -46,7 +46,7 @@ export const conditionGuides: ConditionGuide[] = [
     followUp:
       "为了给出更准确的建议，请补充医生写的心脏病类型，以及正在服用的药物。",
     reference:
-      "WHO Cardiovascular diseases fact sheet；American Heart Association 心脏急症警示信息",
+      "世界卫生组织心血管疾病资料；美国心脏协会心脏急症警示信息",
     sourceIds: ["src-condition-guidance", "src-emergency"]
   },
   {
@@ -70,7 +70,7 @@ export const conditionGuides: ConditionGuide[] = [
     followUp:
       "请说明是稳定型心绞痛、心肌梗死后还是做过支架，并列出当前抗血小板和降脂药。",
     reference:
-      "WHO Cardiovascular diseases fact sheet；American Heart Association Warning Signs of a Heart Attack",
+      "世界卫生组织心血管疾病资料；美国心脏协会心脏病发作警示信息",
     sourceIds: ["src-condition-guidance", "src-emergency"]
   },
   {
@@ -94,7 +94,7 @@ export const conditionGuides: ConditionGuide[] = [
     followUp:
       "请补充医生确认的心衰类型、最近体重和水肿变化，以及是否被要求限制饮水或盐。",
     reference:
-      "NHS Heart failure overview；American Heart Association Heart Failure warning signs",
+      "英国国家医疗服务体系心力衰竭概览；美国心脏协会心力衰竭警示信息",
     sourceIds: ["src-condition-guidance", "src-emergency"]
   },
   {
@@ -118,7 +118,7 @@ export const conditionGuides: ConditionGuide[] = [
     followUp:
       "请补充心律失常的具体名称、是否使用抗凝药，以及发作时的脉搏和持续时间。",
     reference:
-      "NHS Atrial fibrillation overview；American Heart Association Arrhythmia warning signs",
+      "英国国家医疗服务体系心房颤动概览；美国心脏协会心律失常警示信息",
     sourceIds: ["src-condition-guidance", "src-emergency"]
   },
   {
@@ -142,7 +142,7 @@ export const conditionGuides: ConditionGuide[] = [
     followUp:
       "请补充最近几次家庭血压读数、医生给的目标范围和目前使用的降压药。",
     reference:
-      "WHO Hypertension fact sheet；NHS High blood pressure overview",
+      "世界卫生组织高血压资料；英国国家医疗服务体系高血压概览",
     sourceIds: ["src-condition-guidance", "src-emergency"]
   },
   {
@@ -166,7 +166,7 @@ export const conditionGuides: ConditionGuide[] = [
     followUp:
       "请补充卒中发生时间、当前血压、是否服用抗凝或抗血小板药，以及有无吞咽困难。",
     reference:
-      "WHO Stroke fact sheet；CDC Signs and Symptoms of Stroke",
+      "世界卫生组织卒中资料；美国疾病控制与预防中心卒中症状资料",
     sourceIds: ["src-condition-guidance", "src-emergency"]
   },
   {
@@ -190,7 +190,7 @@ export const conditionGuides: ConditionGuide[] = [
     followUp:
       "请补充糖尿病类型、最近空腹和餐后血糖、当前降糖药以及是否发生过低血糖。",
     reference:
-      "WHO Diabetes fact sheet；NHS Type 2 diabetes overview",
+      "世界卫生组织糖尿病资料；英国国家医疗服务体系二型糖尿病概览",
     sourceIds: ["src-condition-guidance", "src-emergency"]
   },
   {
@@ -214,7 +214,7 @@ export const conditionGuides: ConditionGuide[] = [
     followUp:
       "请说明目前最喘的时间、吸入药名称、是否有家庭氧疗以及近期急性加重次数。",
     reference:
-      "WHO Chronic obstructive pulmonary disease fact sheet；NHS COPD overview",
+      "世界卫生组织慢性阻塞性肺疾病资料；英国国家医疗服务体系慢阻肺概览",
     sourceIds: ["src-condition-guidance", "src-emergency"]
   },
   {
@@ -238,7 +238,7 @@ export const conditionGuides: ConditionGuide[] = [
     followUp:
       "请补充吸入药名称、每周急救吸入药使用次数，以及本次发作的诱因。",
     reference:
-      "WHO Asthma fact sheet；NHS Asthma overview",
+      "世界卫生组织哮喘资料；英国国家医疗服务体系哮喘概览",
     sourceIds: ["src-condition-guidance", "src-emergency"]
   },
   {
@@ -248,7 +248,7 @@ export const conditionGuides: ConditionGuide[] = [
     summary:
       "慢性肾病患者的药物剂量、止痛药选择、造影检查和饮水要求常需随肾功能调整。",
     everyday: [
-      "按医生要求复查肌酐、eGFR、尿蛋白和血压；记录尿量、水肿和体重变化。",
+      "按医生要求复查肌酐、肾小球滤过率、尿蛋白和血压；记录尿量、水肿和体重变化。",
       "不要自行高蛋白进补或服用利尿、排毒类保健品，饮食计划听从肾内科或营养师建议。"
     ],
     medicineSafety: [
@@ -260,9 +260,9 @@ export const conditionGuides: ConditionGuide[] = [
       "胸痛、心悸并伴乏力或呼吸急促时不要等待，立即求助。"
     ],
     followUp:
-      "请补充最近一次 eGFR、肌酐、尿蛋白，以及医生给出的饮水和蛋白限制要求。",
+      "请补充最近一次肾小球滤过率、肌酐、尿蛋白，以及医生给出的饮水和蛋白限制要求。",
     reference:
-      "NIDDK Chronic Kidney Disease overview；WHO Kidney health information",
+      "美国国家糖尿病、消化和肾脏疾病研究所慢性肾病概览；世界卫生组织肾脏健康资料",
     sourceIds: ["src-condition-guidance", "src-emergency"]
   },
   {
@@ -286,7 +286,7 @@ export const conditionGuides: ConditionGuide[] = [
     followUp:
       "请说明肝病具体诊断、最近肝功能结果、是否饮酒以及正在使用的所有药物和保健品。",
     reference:
-      "NHS Liver disease overview；NIDDK Liver disease information",
+      "英国国家医疗服务体系肝病概览；美国国家糖尿病、消化和肾脏疾病研究所肝病资料",
     sourceIds: ["src-condition-guidance", "src-emergency"]
   },
   {
@@ -310,7 +310,7 @@ export const conditionGuides: ConditionGuide[] = [
     followUp:
       "请补充是否有幽门螺杆菌治疗史、是否服用抗凝或止痛药，以及最近一次胃镜结果。",
     reference:
-      "NHS Stomach ulcer overview；NIDDK Peptic Ulcer Disease information",
+      "英国国家医疗服务体系胃溃疡概览；美国国家糖尿病、消化和肾脏疾病研究所消化性溃疡资料",
     sourceIds: ["src-condition-guidance", "src-emergency"]
   },
   {
@@ -334,7 +334,7 @@ export const conditionGuides: ConditionGuide[] = [
     followUp:
       "请补充最近尿酸值、急性发作药和长期降尿酸药名称，以及是否有肾病或胃溃疡。",
     reference:
-      "NHS Gout overview；American College of Rheumatology gout patient information",
+      "英国国家医疗服务体系痛风概览；美国风湿病学会痛风患者资料",
     sourceIds: ["src-condition-guidance"]
   },
   {
@@ -358,7 +358,7 @@ export const conditionGuides: ConditionGuide[] = [
     followUp:
       "请补充最近骨密度结果、是否发生过跌倒或骨折，以及当前使用的骨质疏松药。",
     reference:
-      "NHS Osteoporosis overview；NIDDK Bone Health and Osteoporosis information",
+      "英国国家医疗服务体系骨质疏松概览；美国国家糖尿病、消化和肾脏疾病研究所骨骼健康资料",
     sourceIds: ["src-condition-guidance", "src-emergency"]
   },
   {
@@ -382,7 +382,7 @@ export const conditionGuides: ConditionGuide[] = [
     followUp:
       "请补充认知障碍诊断、近期是否突然变差、是否吞咽困难，以及照护者最担心的风险。",
     reference:
-      "WHO Dementia fact sheet；NHS Dementia overview",
+      "世界卫生组织痴呆资料；英国国家医疗服务体系痴呆概览",
     sourceIds: ["src-condition-guidance", "src-emergency"]
   },
   {
@@ -406,7 +406,7 @@ export const conditionGuides: ConditionGuide[] = [
     followUp:
       "请补充药名、每次时间和进食间隔、是否有“开关现象”以及近期跌倒史。",
     reference:
-      "NHS Parkinson's disease overview；Parkinson's Foundation medication safety information",
+      "英国国家医疗服务体系帕金森病概览；帕金森基金会用药安全资料",
     sourceIds: ["src-condition-guidance", "src-emergency"]
   },
   {
@@ -430,7 +430,7 @@ export const conditionGuides: ConditionGuide[] = [
     followUp:
       "请补充抗癫痫药名称、最近一次发作时间和持续时间，以及是否出现漏服。",
     reference:
-      "NHS Epilepsy overview；Epilepsy Foundation seizure first aid guidance",
+      "英国国家医疗服务体系癫痫概览；美国癫痫基金会发作急救指导",
     sourceIds: ["src-condition-guidance", "src-emergency"]
   },
   {
@@ -440,7 +440,7 @@ export const conditionGuides: ConditionGuide[] = [
     summary:
       "甲亢和甲减的药物、复查和症状关注重点不同，是否调整剂量应由甲状腺功能检查结果和医生判断。",
     everyday: [
-      "按医生计划复查 TSH 等指标，记录体重、心率、怕冷怕热、排便和情绪变化。",
+      "按医生计划复查促甲状腺激素等指标，记录体重、心率、怕冷怕热、排便和情绪变化。",
       "服用甲状腺激素的时间和与钙、铁、食物的间隔应固定遵循医嘱或说明书。"
     ],
     medicineSafety: [
@@ -452,9 +452,9 @@ export const conditionGuides: ConditionGuide[] = [
       "胸痛、呼吸困难或晕厥时立即拨打 120。"
     ],
     followUp:
-      "请补充甲亢或甲减类型、最近 TSH 结果、药名和每天服药时间。",
+      "请补充甲亢或甲减类型、最近促甲状腺激素结果、药名和每天服药时间。",
     reference:
-      "NHS Thyroid disease overview；American Thyroid Association patient information",
+      "英国国家医疗服务体系甲状腺疾病概览；美国甲状腺协会患者资料",
     sourceIds: ["src-condition-guidance", "src-emergency"]
   },
   {
@@ -478,7 +478,7 @@ export const conditionGuides: ConditionGuide[] = [
     followUp:
       "请说明症状持续多久、是否影响睡眠和进食、正在使用的药物，以及目前是否有立即求助的人。",
     reference:
-      "WHO Depression fact sheet；NIMH Depression and Anxiety information",
+      "世界卫生组织抑郁资料；美国国家心理健康研究所抑郁与焦虑资料",
     sourceIds: ["src-condition-guidance", "src-emergency"]
   },
   {
@@ -502,7 +502,7 @@ export const conditionGuides: ConditionGuide[] = [
     followUp:
       "请补充夜尿次数、是否完全排不出尿、当前前列腺药以及是否在服用感冒药。",
     reference:
-      "NHS Benign prostate enlargement overview；NIDDK Enlarged Prostate information",
+      "英国国家医疗服务体系前列腺增生概览；美国国家糖尿病、消化和肾脏疾病研究所前列腺增生资料",
     sourceIds: ["src-condition-guidance", "src-emergency"]
   },
   {
@@ -526,7 +526,7 @@ export const conditionGuides: ConditionGuide[] = [
     followUp:
       "请补充癌症类型、当前治疗方案、最近血常规结果和肿瘤科团队的紧急联系电话。",
     reference:
-      "NHS Cancer treatment side effects；American Cancer Society infection and treatment safety information",
+      "英国国家医疗服务体系癌症治疗副作用资料；美国癌症协会感染与治疗安全资料",
     sourceIds: ["src-condition-guidance", "src-emergency"]
   }
 ];

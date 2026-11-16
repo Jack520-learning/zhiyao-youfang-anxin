@@ -8,7 +8,7 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 
 const items = [
-  { path: "/chat", label: "AI 问药", icon: MessageCircleHeart },
+  { path: "/chat", label: "智能问药", icon: MessageCircleHeart },
   { path: "/catalog", label: "药品百科", icon: BookOpenText },
   { path: "/herbs", label: "识中药材", icon: Leaf },
   { path: "/multi-drug", label: "多药对账", icon: ClipboardList },

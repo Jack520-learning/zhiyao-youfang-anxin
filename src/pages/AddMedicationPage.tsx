@@ -976,7 +976,7 @@ export function AddMedicationPage({
               </button>
               <button className="btn btn-large" type="button" onClick={() => saveToMedicationList("chat")}>
                 <Sparkles size={20} aria-hidden="true" />
-                让 AI 解释这盒药
+                让智能助手解释这盒药
               </button>
             </div>
           </section>

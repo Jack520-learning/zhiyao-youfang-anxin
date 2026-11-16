@@ -24,7 +24,7 @@ export function SosModal({
       setNotifyError("");
       return;
     }
-    addAuditEvent("sos-opened", "打开 SOS 求助页面");
+    addAuditEvent("sos-opened", "打开紧急求助页面");
   }, [open, addAuditEvent]);
 
   if (!open) return null;
@@ -132,7 +132,7 @@ export function SosModal({
         ) : (
           <div className="notice warm">
             <ShieldAlert size={21} aria-hidden="true" />
-            您已经关闭 SOS 联系家人。120/110 一键拨号仍可使用，也可以在“我的”里重新开启。
+            您已经关闭紧急求助联系家人。120/110 一键拨号仍可使用，也可以在“我的”里重新开启。
           </div>
         )}
         {notifyError ? (

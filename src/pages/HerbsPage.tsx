@@ -46,7 +46,7 @@ export function HerbsPage() {
       if (!response.ok) {
         throw new Error(
           payload.error ||
-            "AI 识图服务暂未配置，请使用药材名称搜索或手动输入。"
+            "智能识图服务暂未配置，请使用药材名称搜索或手动输入。"
         );
       }
       const names = (payload.candidates || [])
@@ -72,7 +72,7 @@ export function HerbsPage() {
         if (localMatches.length) {
           setIdentifiedNames(localMatches);
           setSummary(
-            `AI 视觉识别暂不可用，已从图片中识别出药材文字：${localMatches.join("、")}。请再次核对实物特征。`
+            `智能识图暂不可用，已从图片中识别出药材文字：${localMatches.join("、")}。请再次核对实物特征。`
           );
         } else {
           setError(
@@ -127,7 +127,7 @@ export function HerbsPage() {
             ) : (
               <Camera size={21} aria-hidden="true" />
             )}
-            {busy ? "AI 正在辨识" : "拍照识别药材"}
+            {busy ? "正在智能辨识" : "拍照识别药材"}
           </button>
           <span className="field-hint">
             拍照识别支持一张照片中的多种药材；服务暂不可用时可继续按名称搜索。

@@ -8,6 +8,21 @@ export function localTimeZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai";
 }
 
+export function formatTimeZoneLabel(timeZone: string): string {
+  const labels: Record<string, string> = {
+    "Asia/Shanghai": "中国标准时间（上海）",
+    "Asia/Chongqing": "中国标准时间（重庆）",
+    "Asia/Harbin": "中国标准时间（哈尔滨）",
+    "Asia/Hong_Kong": "香港时间",
+    "Asia/Macau": "澳门时间",
+    "Asia/Taipei": "台北时间",
+    "Asia/Tokyo": "日本时间",
+    "Asia/Seoul": "韩国时间",
+    UTC: "协调世界时"
+  };
+  return labels[timeZone] || "本地时区";
+}
+
 function dateParts(date: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,
