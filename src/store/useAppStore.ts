@@ -703,15 +703,14 @@ export const useAppStore = create<AppStore>()(
             account.passwordSalt
           ));
         if (localValid) return true;
+        if (!account.serverAccountId) return false;
+        // 服务端账号直接通过目标账号密码校验，无需当前登录态
         const currentAccount = activeLocalAccount(
           state.accounts,
           state.sessionAccountId || ""
         );
-        if (!currentAccount?.sessionToken || !account.serverAccountId) {
-          return false;
-        }
         return verifyServerAccountPassword({
-          token: currentAccount.sessionToken,
+          token: currentAccount?.sessionToken || "",
           accountId: account.serverAccountId,
           password
         });
@@ -728,10 +727,10 @@ export const useAppStore = create<AppStore>()(
           state.accounts,
           state.sessionAccountId || ""
         );
-        if (targetAccount.serverAccountId && currentAccount?.sessionToken) {
+        if (targetAccount.serverAccountId) {
           try {
             await deleteServerAccount({
-              token: currentAccount.sessionToken,
+              token: currentAccount?.sessionToken || "",
               accountId: targetAccount.serverAccountId,
               password
             });

@@ -1510,12 +1510,14 @@ const server = createServer(async (request, response) => {
       request.method === "POST"
     ) {
       const { account: currentAccount } = authenticatedAccount(request);
-      if (!currentAccount) return json(response, 401, { error: "请先登录" });
       const body = await readJson(request, 64 * 1024);
       const target = Object.values(database.accounts).find(
         (account) => account.id === String(body.accountId || "")
       );
-      if (!target || !accountsShareFamily(currentAccount, target)) {
+      if (!target) {
+        return json(response, 404, { error: "没有找到该账号" });
+      }
+      if (currentAccount && !accountsShareFamily(currentAccount, target)) {
         return json(response, 404, { error: "没有找到该账号" });
       }
       const valid = await verifyAccountPassword(
@@ -1530,13 +1532,16 @@ const server = createServer(async (request, response) => {
 
     if (url.pathname === "/api/auth/delete" && request.method === "POST") {
       const { account: currentAccount } = authenticatedAccount(request);
-      if (!currentAccount) return json(response, 401, { error: "请先登录" });
       const body = await readJson(request, 64 * 1024);
       const accountId = String(body.accountId || "");
       const target = Object.values(database.accounts).find(
         (account) => account.id === accountId
       );
-      if (!target || !accountsShareFamily(currentAccount, target)) {
+      if (!target) {
+        return json(response, 404, { error: "没有找到可删除的账号" });
+      }
+      // 若当前已登录其他账号，需校验两者属于同一家庭；未登录时直接校验目标密码即可
+      if (currentAccount && !accountsShareFamily(currentAccount, target)) {
         return json(response, 404, { error: "没有找到可删除的账号" });
       }
       if (!(await verifyAccountPassword(String(body.password || ""), target))) {
