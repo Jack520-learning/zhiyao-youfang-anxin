@@ -6529,7 +6529,7 @@ svg {
 
 @media (max-width: 840px) {
   .chat-page {
-    height: calc(100dvh - 194px);
+    height: calc(100dvh - 176px - env(safe-area-inset-bottom));
     min-height: 0;
   }
 
@@ -6551,6 +6551,12 @@ svg {
 
   .chat-unified-notice {
     margin: 0 14px 8px;
+  }
+
+  .chat-page .ai-voice-status:empty {
+    min-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
   }
 }
 
