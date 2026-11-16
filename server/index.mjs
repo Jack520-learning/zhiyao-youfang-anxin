@@ -362,6 +362,51 @@ function publicSnapshot(snapshot) {
   };
 }
 
+function riskChecksFromSnapshot(snapshot) {
+  const records = new Map();
+  for (const riskCheck of snapshot.riskChecks || []) {
+    if (riskCheck?.id) records.set(riskCheck.id, riskCheck);
+  }
+  for (const conversation of snapshot.conversations || []) {
+    for (const message of conversation.messages || []) {
+      const riskCheck = message.riskCheck;
+      if (!riskCheck?.id) continue;
+      const existing = records.get(riskCheck.id);
+      records.set(riskCheck.id, {
+        ...(existing || {}),
+        ...riskCheck,
+        familyReview: riskCheck.familyReview || existing?.familyReview
+      });
+    }
+  }
+  return [...records.values()].sort(
+    (left, right) =>
+      new Date(right.createdAt || 0).getTime() -
+      new Date(left.createdAt || 0).getTime()
+  );
+}
+
+function mergeRiskChecks(previous = [], incoming = []) {
+  const records = new Map();
+  for (const riskCheck of previous) {
+    if (riskCheck?.id) records.set(riskCheck.id, riskCheck);
+  }
+  for (const riskCheck of incoming) {
+    if (!riskCheck?.id) continue;
+    const existing = records.get(riskCheck.id);
+    records.set(riskCheck.id, {
+      ...(existing || {}),
+      ...riskCheck,
+      familyReview: riskCheck.familyReview || existing?.familyReview
+    });
+  }
+  return [...records.values()].sort(
+    (left, right) =>
+      new Date(right.createdAt || 0).getTime() -
+      new Date(left.createdAt || 0).getTime()
+  );
+}
+
 async function sendPush(subscription, payload) {
   try {
     await webpush.sendNotification(subscription, JSON.stringify(payload));
@@ -2294,24 +2339,13 @@ const server = createServer(async (request, response) => {
       });
       const previousSnapshot = family.snapshot;
       const nextSnapshot = publicSnapshot(body);
-      const previousRisks = new Map(
-        (previousSnapshot?.riskChecks || []).map((riskCheck) => [
-          riskCheck.id,
-          riskCheck
-        ])
-      );
       const previousAlerts = new Map(
         (previousSnapshot?.familyAlerts || []).map((alert) => [alert.id, alert])
       );
-      nextSnapshot.riskChecks = Array.isArray(nextSnapshot.riskChecks)
-        ? nextSnapshot.riskChecks.map((riskCheck) => {
-            const previousReview =
-              previousRisks.get(riskCheck.id)?.familyReview;
-            return previousReview && !riskCheck.familyReview
-              ? { ...riskCheck, familyReview: previousReview }
-              : riskCheck;
-          })
-        : [];
+      nextSnapshot.riskChecks = mergeRiskChecks(
+        previousSnapshot?.riskChecks || [],
+        riskChecksFromSnapshot(nextSnapshot)
+      );
       nextSnapshot.familyAlerts = Array.isArray(nextSnapshot.familyAlerts)
         ? nextSnapshot.familyAlerts.map((alert) => {
             const previousHandled = previousAlerts.get(alert.id);
@@ -2389,7 +2423,11 @@ const server = createServer(async (request, response) => {
       if (isRiskReview) {
         if (!family?.snapshot) return json(response, 404, { error: "未找到家庭" });
         const body = await readJson(request, 128 * 1024);
-        const riskCheck = (family.snapshot.riskChecks || []).find(
+        const allRiskChecks = mergeRiskChecks(
+          family.snapshot.riskChecks || [],
+          riskChecksFromSnapshot(family.snapshot)
+        );
+        const riskCheck = allRiskChecks.find(
           (item) => item.id === pathParts[4]
         );
         if (!riskCheck) return json(response, 404, { error: "未找到风险记录" });
@@ -2405,6 +2443,7 @@ const server = createServer(async (request, response) => {
             reviewedBy: String(body.reviewedBy || "家属").slice(0, 30)
           };
         }
+        family.snapshot.riskChecks = allRiskChecks;
         family.snapshot.updatedAt = new Date().toISOString();
         family.revision = (family.revision || 0) + 1;
         await saveDatabase();
@@ -2481,7 +2520,13 @@ const server = createServer(async (request, response) => {
       }
       if (request.method === "GET") {
         if (!family?.snapshot) return json(response, 404, { error: "未找到家庭" });
-        return json(response, 200, family.snapshot);
+        return json(response, 200, {
+          ...family.snapshot,
+          riskChecks: mergeRiskChecks(
+            family.snapshot.riskChecks || [],
+            riskChecksFromSnapshot(family.snapshot)
+          )
+        });
       }
       if (request.method === "DELETE") {
         delete database.families[familyCode];
