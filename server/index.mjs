@@ -1509,11 +1509,13 @@ const server = createServer(async (request, response) => {
       url.pathname === "/api/auth/verify-password" &&
       request.method === "POST"
     ) {
+      const { account: currentAccount } = authenticatedAccount(request);
+      if (!currentAccount) return json(response, 401, { error: "请先登录" });
       const body = await readJson(request, 64 * 1024);
       const target = Object.values(database.accounts).find(
         (account) => account.id === String(body.accountId || "")
       );
-      if (!target) {
+      if (!target || !accountsShareFamily(currentAccount, target)) {
         return json(response, 404, { error: "没有找到该账号" });
       }
       const valid = await verifyAccountPassword(
@@ -1527,12 +1529,14 @@ const server = createServer(async (request, response) => {
     }
 
     if (url.pathname === "/api/auth/delete" && request.method === "POST") {
+      const { account: currentAccount } = authenticatedAccount(request);
+      if (!currentAccount) return json(response, 401, { error: "请先登录" });
       const body = await readJson(request, 64 * 1024);
       const accountId = String(body.accountId || "");
       const target = Object.values(database.accounts).find(
         (account) => account.id === accountId
       );
-      if (!target) {
+      if (!target || !accountsShareFamily(currentAccount, target)) {
         return json(response, 404, { error: "没有找到可删除的账号" });
       }
       if (!(await verifyAccountPassword(String(body.password || ""), target))) {
