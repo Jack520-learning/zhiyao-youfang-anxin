@@ -332,6 +332,12 @@ export function ChatPage() {
     title: string;
   }>();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem("chat-sidebar-width");
+    const parsed = saved ? Number(saved) : 250;
+    return Number.isFinite(parsed) && parsed >= 180 && parsed <= 420 ? parsed : 250;
+  });
+  const [isResizing, setIsResizing] = useState(false);
   const messagesRef = useRef<HTMLDivElement>(null);
   const initialQueryHandled = useRef(false);
   const autoScrollRef = useRef(false);
@@ -391,6 +397,31 @@ export function ChatPage() {
       void submitQuestion(initialQuery, false);
     }
   }, [searchParams, location.key]);
+
+  // Sidebar resize handling
+  useEffect(() => {
+    if (!isResizing) return;
+    function onMove(event: MouseEvent) {
+      const next = Math.min(420, Math.max(180, event.clientX - 16));
+      setSidebarWidth(next);
+    }
+    function onUp() {
+      setIsResizing(false);
+      localStorage.setItem("chat-sidebar-width", String(sidebarWidth));
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [isResizing, sidebarWidth]);
 
   async function submitQuestion(question = input, autoScroll = true) {
     const clean = question.trim();
@@ -1209,7 +1240,12 @@ export function ChatPage() {
           </div>
         </header>
 
-        <div className={`ai-chat-content ${sidebarOpen ? "sidebar-open" : ""}`}>
+        <div
+          className={`ai-chat-content ${sidebarOpen ? "sidebar-open" : ""} ${isResizing ? "is-resizing" : ""}`}
+          style={{
+            "--sidebar-width": `${sidebarWidth}px`
+          } as React.CSSProperties}
+        >
           <aside className="ai-conversation-sidebar" aria-label="历史对话记录">
             <div className="ai-sidebar-heading">
               <div>
@@ -1264,6 +1300,14 @@ export function ChatPage() {
               ))}
             </div>
           </aside>
+
+          <div
+            className={`ai-sidebar-resizer ${isResizing ? "active" : ""}`}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="拖拽调整对话记录宽度"
+            onMouseDown={() => setIsResizing(true)}
+          />
 
           <div className="ai-chat-main">
         {searchParams.get("concern") === "1" ? (
