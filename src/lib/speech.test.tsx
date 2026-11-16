@@ -2,7 +2,7 @@
 
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   speakText,
   stopSpeaking,
@@ -83,7 +83,7 @@ describe("speech playback start", () => {
     stopSpeaking();
   });
 
-  it("starts browser speech immediately without waiting for server TTS", async () => {
+  it("falls back to stable browser speech when server TTS is unavailable", async () => {
     let spoken = 0;
     const holder: {
       utterance: {
@@ -119,7 +119,7 @@ describe("speech playback start", () => {
     });
 
     const playback = speakText("您好，我马上为您朗读。", true, "warm");
-    expect(spoken).toBe(1);
+    await vi.waitFor(() => expect(spoken).toBe(1));
     expect(holder.utterance).not.toBeNull();
     holder.utterance?.onend?.();
     await expect(playback).resolves.toBe(true);

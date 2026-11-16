@@ -174,6 +174,7 @@ const speechUrlCache = new Map<
   { audioUrl: string; createdAt: number; voice: string }
 >();
 const browserVoiceLocks = new Map<VoiceMode, SpeechSynthesisVoice | null>();
+const speechEngineLocks = new Map<string, "server" | "browser">();
 
 function emitSpeechState() {
   if (typeof window !== "undefined") {
@@ -273,24 +274,35 @@ export async function speakText(
   emitSpeechState();
   const cached = getCachedSpeechAudio(text, voiceMode, customVoiceId);
   try {
-    if (customVoiceId && cached) {
+    if (cached) {
       return await playAudioUrl(cached.audioUrl, requestVersion);
     }
-    const browserPlayback = speakWithBrowserAndWait(
-      text,
-      voiceMode,
-      requestVersion
-    );
-    if (browserPlayback) {
-      speechPending = false;
-      emitSpeechState();
-      const played = await browserPlayback;
-      if (played || requestVersion !== speechRequestVersion) return played;
+    const engineKey =
+      voiceMode === "custom" && customVoiceId
+        ? `custom:${customVoiceId}`
+        : voiceMode;
+    if (speechEngineLocks.get(engineKey) === "browser") {
+      return await playBrowserVoice(
+        text,
+        voiceMode,
+        requestVersion
+      );
     }
-    return await playServerVoice(
+    try {
+      const played = await playServerAudio(
+        text,
+        voiceMode,
+        customVoiceId,
+        requestVersion
+      );
+      speechEngineLocks.set(engineKey, "server");
+      return played;
+    } catch {
+      speechEngineLocks.set(engineKey, "browser");
+    }
+    return await playBrowserVoice(
       text,
       voiceMode,
-      customVoiceId,
       requestVersion
     );
   } finally {
@@ -299,6 +311,22 @@ export async function speakText(
       emitSpeechState();
     }
   }
+}
+
+async function playBrowserVoice(
+  text: string,
+  voiceMode: VoiceMode,
+  requestVersion: number
+): Promise<boolean> {
+  const browserPlayback = speakWithBrowserAndWait(
+    text,
+    voiceMode,
+    requestVersion
+  );
+  if (!browserPlayback) return false;
+  speechPending = false;
+  emitSpeechState();
+  return browserPlayback;
 }
 
 function getCachedSpeechAudio(
@@ -335,25 +363,15 @@ async function playAudioUrl(
   return true;
 }
 
-async function playServerVoice(
+async function playServerAudio(
   text: string,
   voiceMode: VoiceMode,
   customVoiceId: string | undefined,
   requestVersion: number
 ): Promise<boolean> {
-  try {
-    const payload = await getSpeechAudioUrl(text, voiceMode, customVoiceId);
-    if (requestVersion !== speechRequestVersion) return false;
-    return playAudioUrl(payload.audioUrl, requestVersion);
-  } catch {
-    if (requestVersion !== speechRequestVersion) return false;
-    const fallback = speakWithBrowserAndWait(
-      text,
-      voiceMode,
-      requestVersion
-    );
-    return fallback ? await fallback : false;
-  }
+  const payload = await getSpeechAudioUrl(text, voiceMode, customVoiceId);
+  if (requestVersion !== speechRequestVersion) return false;
+  return playAudioUrl(payload.audioUrl, requestVersion);
 }
 
 async function getSpeechAudioUrl(
