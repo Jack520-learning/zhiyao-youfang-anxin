@@ -357,6 +357,7 @@ export function ChatPage() {
   const initialQueryHandled = useRef(false);
   const autoScrollRef = useRef(false);
   const streamTraceRef = useRef<AssistantStage[]>([]);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const speech = useQwenSpeechRecognition((transcript) => {
     setInput(transcript);
@@ -649,6 +650,8 @@ export function ChatPage() {
         });
       };
       try {
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
         const streamed = await streamAssistantAnswer(
           {
             query: clean,
@@ -699,7 +702,8 @@ export function ChatPage() {
                 ),
                 traceStage
               ]);
-            }
+            },
+            signal: controller.signal
           }
         );
         if (!streamed.trim()) throw new Error("模型没有返回内容");
@@ -718,19 +722,37 @@ export function ChatPage() {
           },
           targetConversationId
         );
-      } catch {
+      } catch (err) {
+        const aborted =
+          (err instanceof DOMException && err.name === "AbortError") ||
+          (err as Error | undefined)?.name === "AbortError";
+        // 已收到的流式内容作为最终答案（截断处理）
+        const finalContent =
+          aborted && fullText.trim()
+            ? fullText.trim() + "\n\n_（已停止生成）_"
+            : response.message;
         replaceChatMessage(
           streamedAssistantMessageId,
           {
             ...streamedMessage,
-            content: response.message,
+            content: finalContent,
             pending: false,
-            riskCheck: response.riskCheck
+            riskCheck: aborted ? response.riskCheck : response.riskCheck
           },
           targetConversationId
         );
+        if (aborted) {
+          // 中断后跳过后面的 speakText / setSending
+          stopSpeaking();
+          setStreamingMessageId("");
+          abortControllerRef.current = null;
+          setSending(false);
+          autoScrollRef.current = false;
+          return;
+        }
       } finally {
         setStreamingMessageId("");
+        abortControllerRef.current = null;
       }
     }
 
@@ -1234,6 +1256,11 @@ export function ChatPage() {
     }
   }
 
+  function stopGeneration() {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+  }
+
   function regenerateMessage(messageId: string) {
     // 找到该 AI 消息前面的最近一条用户消息
     const idx = messages.findIndex((m) => m.id === messageId);
@@ -1273,7 +1300,6 @@ export function ChatPage() {
           <div className="message-role">
             {message.role === "assistant" ? "智药有方" : "您"}
           </div>
-          {ts ? <div className="message-timestamp">{ts}</div> : null}
         </div>
         {message.role === "assistant" && message.riskCheck ? (
           <div className="answer-search-meta">
@@ -1392,6 +1418,11 @@ export function ChatPage() {
               <Trash2 size={14} aria-hidden="true" />
               删除
             </button>
+          </div>
+        ) : null}
+        {ts ? (
+          <div className={`message-footer ${message.role}`}>
+            <div className="message-timestamp">{ts}</div>
           </div>
         ) : null}
       </article>
@@ -1812,12 +1843,22 @@ export function ChatPage() {
                   >
                     <Square size={18} aria-hidden="true" />
                   </button>
+                ) : sending ? (
+                  <button
+                    className="ai-send-button stop"
+                    type="button"
+                    aria-label="停止生成"
+                    title="停止生成"
+                    onClick={stopGeneration}
+                  >
+                    <Square size={18} aria-hidden="true" />
+                  </button>
                 ) : (
                   <button
                     className="ai-send-button"
                     type="button"
                     aria-label="发送"
-                    disabled={sending || !input.trim()}
+                    disabled={!input.trim()}
                     onClick={() => void submitQuestion()}
                   >
                     <Send size={20} aria-hidden="true" />
