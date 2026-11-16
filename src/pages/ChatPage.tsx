@@ -567,7 +567,7 @@ export function ChatPage() {
     const generalKnowledgeQuery =
       !dailyConversation &&
       !medicationActivityQuery &&
-      isGeneralKnowledgeQuestion(contextualQuestion);
+      isGeneralKnowledgeQuestion(contextualQuestion, Boolean(composerSkill));
     const effectiveAnswerMode =
       dailyConversation || generalKnowledgeQuery
       ? "quick"

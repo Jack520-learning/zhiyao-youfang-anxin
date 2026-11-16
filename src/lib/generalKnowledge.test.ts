@@ -14,6 +14,13 @@ describe("general knowledge questions", () => {
   it("keeps health questions in the medical flow", () => {
     expect(isGeneralKnowledgeQuestion("阿司匹林怎么吃")).toBe(false);
     expect(isGeneralKnowledgeQuestion("高血压该注意什么")).toBe(false);
+    expect(
+      isGeneralKnowledgeQuestion("枸杞子、葛根、黄芪，还有菟丝子分别是什么作用？")
+    ).toBe(false);
+  });
+
+  it("never applies the off-topic notice when a skill is explicitly selected", () => {
+    expect(isGeneralKnowledgeQuestion("为什么天空是蓝色的", true)).toBe(false);
   });
 
   it("allows science questions that mention everyday objects", () => {

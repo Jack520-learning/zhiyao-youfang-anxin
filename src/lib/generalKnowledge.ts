@@ -1,5 +1,6 @@
 import type { AssistantResponse } from "../types";
 import { findBestMedicine } from "../catalog/retrieval";
+import { herbs } from "../catalog/herbs";
 import { isDailyConversationQuery } from "./dailyConversation";
 import { nowIso } from "./time";
 
@@ -9,12 +10,22 @@ const medicalTerms =
 export const GENERAL_KNOWLEDGE_NOTICE =
   "温馨提示：这个问题与健康用药无关，以下仅作一般常识参考。";
 
-export function isGeneralKnowledgeQuestion(query: string): boolean {
+export function isGeneralKnowledgeQuestion(
+  query: string,
+  hasExplicitSkill = false
+): boolean {
+  if (hasExplicitSkill) return false;
   const normalized = query.trim().replace(/\s+/g, "");
+  const mentionsKnownHerb = herbs.some((herb) =>
+    [herb.name, ...herb.aliases].some((term) =>
+      normalized.includes(term.replace(/\s+/g, ""))
+    )
+  );
   if (
     normalized.length < 3 ||
     medicalTerms.test(normalized) ||
     (findBestMedicine(query)?.score || 0) >= 0.65 ||
+    mentionsKnownHerb ||
     isDailyConversationQuery(query)
   ) {
     return false;

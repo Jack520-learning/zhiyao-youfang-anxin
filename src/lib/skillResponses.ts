@@ -428,12 +428,20 @@ export function buildSkillResponse(
 
   if (skill === "herbs") {
     const normalizedQuery = normalize(query);
-    const herb = herbs.find((item) =>
-      [item.name, ...item.aliases].some((term) =>
-        normalizedQuery.includes(normalize(term))
-      )
-    );
-    if (!herb) {
+    const matchedHerbs = herbs
+      .map((herb) => {
+        const indexes = [herb.name, ...herb.aliases]
+          .map((term) => normalizedQuery.indexOf(normalize(term)))
+          .filter((index) => index >= 0);
+        return {
+          herb,
+          mentionIndex: indexes.length ? Math.min(...indexes) : Number.POSITIVE_INFINITY
+        };
+      })
+      .filter((item) => Number.isFinite(item.mentionIndex))
+      .sort((left, right) => left.mentionIndex - right.mentionIndex)
+      .map((item) => item.herb);
+    if (!matchedHerbs.length) {
       const candidate = candidateForKnowledgeLookup(query, "herbs");
       return looksLikeConcreteName(candidate)
         ? buildUnknownSkillKnowledgeGap("herbs", query, candidate)
@@ -442,7 +450,86 @@ export function buildSkillResponse(
     const hasAnticoagulant = context.currentMedicationNames.some((name) =>
       /华法林|阿司匹林|氯吡格雷|利伐沙班/.test(name)
     );
-    const level: RiskLevel = hasAnticoagulant ? "medium" : "low";
+    const hasBleedingRiskHerb = matchedHerbs.some((herb) =>
+      /三七|丹参|当归|人参/.test(herb.name)
+    );
+    const level: RiskLevel =
+      hasAnticoagulant && hasBleedingRiskHerb
+        ? "high"
+        : hasAnticoagulant
+          ? "medium"
+          : "low";
+    const nextStep = hasAnticoagulant
+      ? "不要自行同服。请携带药材实物和全部处方药，让医生或药师评估。"
+      : "不要用单一症状自行确定体质，也不能用中药材替代处方药。";
+    const herbNames = matchedHerbs.map((herb) => herb.name).join("、");
+
+    if (matchedHerbs.length > 1) {
+      const quickAnswer = `直接回答：${matchedHerbs
+        .map((herb) => `${herb.name}的传统作用为${herb.functions.join("、")}`)
+        .join("；")}。这些作用不能替代医生对具体疾病的诊断和治疗。`;
+      const herbSections = matchedHerbs.flatMap((herb) => [
+        `### ${herb.name}`,
+        `传统作用：${herb.functions.join("、")}`,
+        `性味归经：${herb.nature} · ${herb.flavor} · 归${herb.meridians.join("、")}经`,
+        `辨识要点：${herb.identification.join(" ")}`,
+        ...herb.safety.map((item) => `- ${item}`)
+      ]);
+      return {
+        message:
+          context.answerMode === "quick"
+            ? quickAnswer
+            : [
+                `## 已识别 ${matchedHerbs.length} 种中药材`,
+                `**风险等级：${riskLabel(level)}**`,
+                ...herbSections,
+                "### 共同注意",
+                hasAnticoagulant
+                  ? "您当前有需要关注凝血风险的处方药，不要自行把上述药材加入日常服用；请先让医生或药师逐项核对。"
+                  : "中药材也需要结合体质、炮制方法和正在服用的药物判断，不能仅凭“补益”或“清热”自行长期服用。",
+                `老人特别说明：${context.profile.age >= 65 ? "您年龄较大，更应避免自行叠加药材和保健品。" : "使用前仍需核对年龄和基础疾病。"}`,
+                "### 现在先做",
+                `- ${nextStep}`
+              ].join("\n\n"),
+        riskCheck: {
+          id: createId("skill-herbs"),
+          level,
+          title: `${matchedHerbs.length} 种中药材需要分别判断用途与风险`,
+          summary: matchedHerbs
+            .map((herb) => `${herb.name}：${herb.functions.join("、")}`)
+            .join("；"),
+          nextStep,
+          reasons: [
+            `已分别匹配中药材：${herbNames}`,
+            `当前基础疾病：${context.profile.conditions.join("、") || "未填写"}`
+          ],
+          sourceIds: ["src-herb-catalog"],
+          involvedMedicationIds: [],
+          medicationSnapshot: context.currentMedicationNames,
+          createdAt: nowIso()
+        },
+        stages: [
+          {
+            id: "skill-herb-matches",
+            label: `分别识别中药材：${herbNames}`,
+            status: "done"
+          },
+          {
+            id: "skill-herb-safety",
+            label: "逐项核对用途、辨识与安全提醒",
+            status: "done"
+          },
+          {
+            id: "skill-herb-answer",
+            label: "生成多种药材对应解答",
+            status: "done"
+          }
+        ],
+        mode: "rules"
+      };
+    }
+
+    const herb = matchedHerbs[0];
     return {
       message: [
         `## 识别到中药材：${herb.name}`,
@@ -468,9 +555,7 @@ export function buildSkillResponse(
           ? `${herb.name}与当前抗凝用药需要专业核对`
           : `${herb.name}使用前需要核对`,
         summary: herb.traditionalUse,
-        nextStep: hasAnticoagulant
-          ? "不要自行同服。请携带药材实物和全部处方药，让医生或药师评估。"
-          : "不要用单一症状自行确定体质，也不能用中药材替代处方药。",
+        nextStep,
         reasons: [
           `已匹配中药材：${herb.name}`,
           `当前基础疾病：${context.profile.conditions.join("、") || "未填写"}`
@@ -514,12 +599,20 @@ export function isSkillAnswerCompliant(
   }
 
   if (skill === "herbs") {
-    const match = groundingText.match(/识别到中药材：([^\n]+)/)?.[1]?.trim();
-    const herb = match
-      ? herbs.find((item) => item.name === match || item.aliases.includes(match))
-      : undefined;
-    if (!herb) return /(中药材|药材|性味|归经|辨识|传统用途|配伍)/.test(text);
-    return [herb.name, ...herb.aliases].some((term) => text.includes(term));
+    const expectedHerbs = herbs.filter(
+      (herb) =>
+        groundingText.includes(`识别到中药材：${herb.name}`) ||
+        groundingText.includes(`### ${herb.name}`)
+    );
+    if (!expectedHerbs.length) {
+      return /(中药材|药材|性味|归经|辨识|传统用途|配伍)/.test(text);
+    }
+    return (
+      expectedHerbs.every((herb) =>
+        [herb.name, ...herb.aliases].some((term) => text.includes(term))
+      ) &&
+      /(作用|功效|传统|性味|归经|辨识|安全|注意)/.test(text)
+    );
   }
 
   return /(对账|重复成分|同类药|相互作用|同服|联合用药|错开服用|正在用|用药清单)/.test(

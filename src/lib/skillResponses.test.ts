@@ -68,6 +68,28 @@ describe("skill-specific responses", () => {
     expect(response?.message).toContain("性味归经");
   });
 
+  it("answers every named herb separately without an off-topic notice", () => {
+    const question = "枸杞子、葛根、黄芪，还有菟丝子分别是什么作用？";
+    const response = buildSkillResponse("herbs", question, context);
+    if (!response) throw new Error("没有生成中药材回答");
+    expect(response?.message).toContain("## 已识别 4 种中药材");
+    for (const name of ["枸杞子", "葛根", "黄芪", "菟丝子"]) {
+      expect(response?.message).toContain(`### ${name}`);
+    }
+    const positions = ["枸杞子", "葛根", "黄芪", "菟丝子"].map((name) =>
+      response.message.indexOf(`### ${name}`)
+    );
+    expect(positions).toEqual([...positions].sort((left, right) => left - right));
+    expect(response?.message).not.toContain("这个问题与健康用药无关");
+    expect(
+      isSkillAnswerCompliant(
+        "herbs",
+        response?.message || "",
+        response?.message || ""
+      )
+    ).toBe(true);
+  });
+
   it("builds a real multi-drug reconciliation from the current list and question", () => {
     const response = buildSkillResponse(
       "multi-drug",
