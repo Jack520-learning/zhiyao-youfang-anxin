@@ -101,7 +101,7 @@ export function AppShell() {
   }, [location.pathname, navigate, role, sessionAccountId]);
 
   useEffect(() => {
-    if (!sessionAccountId || role !== "elder") return;
+    if (!sessionAccountId) return;
     const state = useAppStore.getState();
     const timeZone = localTimeZone();
     if (state.profile.timeZone !== timeZone) {

@@ -142,14 +142,10 @@ export function ProfilePage() {
       const granted = await subscribeToPush(familyCode, role);
       updatePreferences({ notificationsEnabled: granted });
       setNotificationState(granted ? "granted" : "denied");
-      setToast(
-        granted
-          ? "系统通知已开启；部署到 HTTPS 后可接收页面关闭时的提醒"
-          : "没有获得通知权限，请检查浏览器设置"
-      );
+      // No toast — state is shown inline on the button below
     } catch {
       setNotificationState("denied");
-      setToast("通知订阅未完成，请确认使用本地预览或 HTTPS 环境");
+      // No toast — state is shown inline on the button below
     }
   }
 
@@ -1279,8 +1275,17 @@ export function ProfilePage() {
           ) : null}
           <div className="settings-row">
             <div className="settings-copy">
-              <strong>系统通知</strong>
-              <span>关闭页面后接收提醒所需 · 老人时区 {profile.timeZone}</span>
+              <strong>吃药提醒通知</strong>
+              <span>
+                {notificationState === "granted"
+                  ? "已经开启"
+                  : notificationState === "denied"
+                    ? "未开启"
+                    : notificationState === "loading"
+                      ? "正在处理"
+                      : "尚未开启"}
+                {" · "}时区 {profile.timeZone}
+              </span>
             </div>
             <button
               className="btn"
@@ -1290,10 +1295,12 @@ export function ProfilePage() {
             >
               <BellRing size={18} aria-hidden="true" />
               {notificationState === "granted"
-                ? "已订阅"
+                ? "已开启"
                 : notificationState === "loading"
-                  ? "正在订阅"
-                  : "开启通知"}
+                  ? "正在开启"
+                  : notificationState === "denied"
+                    ? "重新开启"
+                    : "开启通知"}
             </button>
           </div>
         </section>

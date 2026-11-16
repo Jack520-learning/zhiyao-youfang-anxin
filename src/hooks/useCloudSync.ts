@@ -12,6 +12,7 @@ export function useCloudSync() {
   const [connectionTick, setConnectionTick] = useState(0);
   const lastFamilyUpdateRef = useRef("");
   const lastElderContactUpdateRef = useRef("");
+  const initialSyncDoneRef = useRef<Record<string, boolean>>({});
   const hydrated = useAppStore((state) => state.hydrated);
   const sessionAccountId = useAppStore((state) => state.sessionAccountId);
   const role = useAppStore((state) => state.role);
@@ -33,6 +34,33 @@ export function useCloudSync() {
       window.removeEventListener("offline", retry);
     };
   }, []);
+
+  // After login/register, push local data to server immediately if the server
+  // doesn't have a snapshot yet. This ensures cross-device accounts see data
+  // on first login too — not only after the elder makes a future edit.
+  useEffect(() => {
+    if (!hydrated || !sessionAccountId || !familyCode) return;
+    const key = `${sessionAccountId}:${familyCode}`;
+    if (initialSyncDoneRef.current[key]) return;
+
+    async function bootstrapSync() {
+      try {
+        const existing = await fetchFamilySnapshot(familyCode);
+        // If the server already has data, no need to push empty initial state.
+        // Only push when server is empty — that's the first-login case.
+        if (!existing) {
+          const revision = await syncCloudSnapshot(
+            useAppStore.getState().getCloudSnapshot()
+          );
+          useAppStore.getState().markSynced(revision);
+        }
+        initialSyncDoneRef.current[key] = true;
+      } catch {
+        // Non-blocking — the regular writer/polling loops will catch up.
+      }
+    }
+    void bootstrapSync();
+  }, [hydrated, sessionAccountId, familyCode]);
 
   // The elder device is the writer. Debouncing prevents one request for every
   // keystroke or short-lived status change.

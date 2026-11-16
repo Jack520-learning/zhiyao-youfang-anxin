@@ -1457,6 +1457,10 @@ img {
   cursor: pointer;
 }
 
+.upload-label input[type="file"] {
+  display: none;
+}
+
 .upload-content {
   display: grid;
   justify-items: center;
