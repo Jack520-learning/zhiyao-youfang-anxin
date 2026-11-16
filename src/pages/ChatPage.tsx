@@ -484,9 +484,14 @@ export function ChatPage() {
       clean.includes(medication.genericName) ||
       medication.ingredients.some((ingredient) => clean.includes(ingredient))
     );
+    const catalogQuestionIntent =
+      /(副作用|不良反应|禁忌|禁用|老人|老年|孕妇|孕期|哺乳|肾|肝|饮酒|喝酒|食物|饮食|开车|驾驶|嗜睡|储存|保存|过量|吃多|怎么吃|剂量|注意|价格|漏服)/.test(
+        clean
+      );
     if (
       catalogResponse &&
       (!mentionsCurrentMedication ||
+        catalogQuestionIntent ||
         catalogResponse.riskCheck.level === "high")
     ) {
       localResponse = catalogResponse;

@@ -78,6 +78,28 @@ describe("combined medicine catalog", () => {
     );
     expect(response?.riskCheck.level).toBe("high");
   });
+
+  it("uses structured side-effect, contraindication and older-adult fields", () => {
+    const sideEffects = answerFromDrugCatalog(
+      "布洛芬有哪些副作用",
+      { age: 72, conditions: [] },
+      []
+    );
+    const contraindications = answerFromDrugCatalog(
+      "布洛芬有什么禁忌",
+      { age: 72, conditions: [] },
+      []
+    );
+    const older = answerFromDrugCatalog(
+      "华法林老人用药要注意什么",
+      { age: 78, conditions: [] },
+      []
+    );
+
+    expect(sideEffects?.message).toContain("胃痛");
+    expect(contraindications?.message).toContain("重点警告");
+    expect(older?.message).toContain("老年人");
+  });
 });
 
 describe("herbal catalog", () => {

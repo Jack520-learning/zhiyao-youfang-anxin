@@ -46,16 +46,23 @@
     },
     {
       "id": "src-drug-catalog",
-      "title": "智药有方结构化药品演示资料",
+      "title": "智药有方结构化药品资料",
       "type": "professional-note",
-      "excerpt": "来自参考项目的 29 种结构化药品条目、特殊人群提示与确定性相互作用规则，目前尚未完成药师逐条复核。",
+      "excerpt": "包含 149 种结构化药品条目、特殊人群提示与确定性相互作用规则，目前尚未完成药师逐条复核。",
       "reviewed": false
     },
     {
       "id": "src-herb-catalog",
-      "title": "智药有方中药材演示资料",
+      "title": "智药有方中药材资料",
       "type": "professional-note",
-      "excerpt": "中草药性味、传统用途、辨识要点与安全提醒来自演示整理资料，尚需中医药专业人员逐条复核。",
+      "excerpt": "中草药性味、传统用途、辨识要点与安全提醒来自公开资料整理，尚需中医药专业人员逐条复核。",
+      "reviewed": false
+    },
+    {
+      "id": "src-common-safety",
+      "title": "常见用药安全主题规则",
+      "type": "risk-rule",
+      "excerpt": "用于漏服、重复服药、饮酒、剂型破坏、储存、抗生素、降糖药、抗凝药、保健品和中药等通用安全问题的保守回答，不替代药品说明书或专业判断。",
       "reviewed": false
     },
     {

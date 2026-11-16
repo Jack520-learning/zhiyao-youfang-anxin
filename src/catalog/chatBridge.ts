@@ -21,7 +21,8 @@ export function answerFromDrugCatalog(
   currentMedicineNames: string[],
   currentCompanionSlugs: string[] = []
 ): AssistantResponse | null {
-  const primary = findBestMedicine(query)?.medicine;
+  const primaryMatch = findBestMedicine(query);
+  const primary = primaryMatch?.medicine;
   if (!primary) return null;
 
   const normalized = normalize(query);
@@ -56,7 +57,20 @@ export function answerFromDrugCatalog(
   if (!guidance) return null;
 
   const firstInteraction = guidance.interactions[0];
-  const level = riskLevelForSeverity(firstInteraction?.severity);
+  const personalRisk =
+    profile.age >= 65 ||
+    profile.conditions.some((condition) => /肾|肝|糖尿病|心衰/.test(condition));
+  const overdoseQuestion = /吃多了|过量|误服|重复吃了/.test(query);
+  const level = firstInteraction
+    ? riskLevelForSeverity(firstInteraction.severity)
+    : overdoseQuestion
+      ? "high"
+      : personalRisk
+        ? "medium"
+        : "low";
+  const personalSummary = guidance.personalWarnings.length
+    ? `个人风险提醒：${guidance.personalWarnings.join(" ")}`
+    : "";
   const check: RiskCheck = {
     id: `catalog-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     level,
@@ -64,13 +78,23 @@ export function answerFromDrugCatalog(
       level === "high"
         ? "药品百科发现高风险联合用药"
         : guidance.headline,
-    summary: guidance.questionAnswer || guidance.plainSummary,
+    summary: [guidance.questionAnswer || guidance.plainSummary, personalSummary]
+      .filter(Boolean)
+      .join("\n\n"),
     nextStep:
       firstInteraction?.action ||
+      (overdoseQuestion
+        ? "保留药盒并立即联系急诊、医生或中毒咨询机构；出现意识异常、呼吸困难或抽搐时拨打 120。"
+        : "") ||
+      (personalRisk
+        ? "您当前存在年龄或慢病相关风险，新增用药、调整剂量或出现不适前请先咨询医生或药师。"
+        : "") ||
       "请以手中批准说明书、处方和医生或药师意见为准。",
     reasons: [
       `已匹配：${primary.displayName}`,
+      `命中字段：${primaryMatch?.matchedField || "药名"}`,
       ...(allCompanions.length ? [`同服核查已包含 ${allCompanions.length} 种药品`] : []),
+      ...(personalRisk ? ["已结合年龄、慢病和特殊人群提示"] : []),
       `知识版本：${primary.knowledgeVersion}（待专业复核）`
     ],
     sourceIds: ["src-drug-catalog"],
@@ -80,7 +104,7 @@ export function answerFromDrugCatalog(
   };
 
   return {
-    message: `${guidance.questionAnswer || guidance.plainSummary}\n\n${check.nextStep}`,
+    message: `${check.summary}\n\n${check.nextStep}`,
     riskCheck: check,
     stages: [
       { id: "match", label: `匹配药品百科：${primary.displayName}`, status: "done" },

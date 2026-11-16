@@ -10,6 +10,7 @@ import type {
 } from "../types";
 import { createId } from "./ids";
 import { nowIso } from "./time";
+import { findSafetyTopics } from "../catalog/safetyTopics";
 
 export const knowledge = knowledgeData as SharedKnowledgeBase;
 
@@ -376,6 +377,23 @@ export function answerWithRules(
     return terms.some((term) => normalizedQuery.includes(term));
   };
   const mentionedMedications = currentMedications.filter(mentionMedication);
+  const missedDoseIntent = /漏服|忘了吃|忘记吃|少吃一次|补服|补吃/.test(
+    normalizedQuery
+  );
+  if (missedDoseIntent && mentionedMedications.length) {
+    const medication = mentionedMedications[0];
+    const check = handleMissedDose(medication, currentMedications);
+    return {
+      message: `${check.summary}\n\n${check.nextStep}`,
+      riskCheck: check,
+      stages: [
+        { id: "intent", label: `识别${medication.name}漏服问题`, status: "done" },
+        { id: "profile", label: "读取药物风险级别", status: "done" },
+        { id: "risk", label: "应用药物专属漏服停止线", status: "done" }
+      ],
+      mode: "rules"
+    };
+  }
   const usageIntent =
     /(怎么吃|怎么用|什么时候吃|几点吃|饭前|饭后|吃几次|每日几次|剂量|注意什么|能不能吃|可以吃)/.test(
       normalizedQuery
@@ -471,6 +489,39 @@ export function answerWithRules(
         { id: "intent", label: "发现问题缺少具体药名", status: "done" },
         { id: "profile", label: "读取可用药物清单", status: "done" },
         { id: "risk", label: "停止猜测具体药物", status: "done" }
+      ],
+      mode: "rules"
+    };
+  }
+
+  const matchedTopics = findSafetyTopics(query);
+  if (matchedTopics.length) {
+    const { topic, matchedKeywords } = matchedTopics[0];
+    const check = makeCheck(
+      {
+        level: topic.riskLevel,
+        title: topic.title,
+        summary: topic.summary,
+        nextStep: topic.nextStep,
+        reasons: [
+          `命中安全主题：${topic.title}`,
+          `关键词：${matchedKeywords.join("、")}`
+        ],
+        sourceIds: topic.sourceIds,
+        involvedMedicationIds: currentMedications.map(
+          (medication) => medication.id
+        )
+      },
+      currentMedications
+    );
+    return {
+      message: `${check.summary}\n\n${check.nextStep}`,
+      riskCheck: check,
+      stages: [
+        { id: "intent", label: "识别常见用药安全问题", status: "done" },
+        { id: "rag", label: `命中安全主题：${topic.title}`, status: "done" },
+        { id: "profile", label: "结合当前用药与个人档案", status: "done" },
+        { id: "risk", label: "应用安全边界", status: "done" }
       ],
       mode: "rules"
     };
