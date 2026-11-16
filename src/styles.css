@@ -3788,6 +3788,27 @@ img {
   animation: spin 1s linear infinite;
 }
 
+@keyframes route-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.app-main > .page {
+  animation: route-enter 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-main > .page {
+    animation: none;
+  }
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);

@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ReactNode } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
+import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
 
 const AddMedicationPage = lazy(() =>
   import("./pages/AddMedicationPage").then((module) => ({
@@ -104,42 +105,45 @@ function loadRoute(element: ReactNode) {
 }
 
 export default function App() {
+  const location = useLocation();
   return (
-    <Routes>
-      <Route element={<AppShell />}>
-        <Route index element={loadRoute(<RoleHome />)} />
-        <Route path="today" element={loadRoute(<HomePage />)} />
-        <Route path="home" element={loadRoute(<HomePage />)} />
-        <Route path="chat" element={loadRoute(<ChatPage />)} />
-        <Route path="catalog" element={loadRoute(<CatalogPage />)} />
-        <Route
-          path="catalog/:slug"
-          element={loadRoute(<CatalogDetailPage />)}
-        />
-        <Route path="herbs" element={loadRoute(<HerbsPage />)} />
-        <Route path="herbs/:id" element={loadRoute(<HerbDetailPage />)} />
-        <Route path="multi-drug" element={loadRoute(<MultiDrugPage />)} />
-        <Route path="impact" element={loadRoute(<ImpactPage />)} />
-        <Route path="evaluation" element={loadRoute(<EvaluationPage />)} />
-        <Route path="medications" element={loadRoute(<MedicationsPage />)} />
-        <Route
-          path="medications/:id"
-          element={loadRoute(<MedicationDetailPage />)}
-        />
-        <Route
-          path="emergency-card"
-          element={loadRoute(<EmergencyCardPage />)}
-        />
-        <Route
-          path="add-medication"
-          element={loadRoute(<AddMedicationPage />)}
-        />
-        <Route path="reminder/:id" element={loadRoute(<ReminderPage />)} />
-        <Route path="family" element={loadRoute(<FamilyPage />)} />
-        <Route path="profile" element={loadRoute(<ProfilePage />)} />
-        <Route path="safety" element={loadRoute(<SafetyPage />)} />
-        <Route path="*" element={loadRoute(<NotFoundPage />)} />
-      </Route>
-    </Routes>
+    <RouteErrorBoundary resetKey={location.pathname}>
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route index element={loadRoute(<RoleHome />)} />
+          <Route path="today" element={loadRoute(<HomePage />)} />
+          <Route path="home" element={loadRoute(<HomePage />)} />
+          <Route path="chat" element={loadRoute(<ChatPage />)} />
+          <Route path="catalog" element={loadRoute(<CatalogPage />)} />
+          <Route
+            path="catalog/:slug"
+            element={loadRoute(<CatalogDetailPage />)}
+          />
+          <Route path="herbs" element={loadRoute(<HerbsPage />)} />
+          <Route path="herbs/:id" element={loadRoute(<HerbDetailPage />)} />
+          <Route path="multi-drug" element={loadRoute(<MultiDrugPage />)} />
+          <Route path="impact" element={loadRoute(<ImpactPage />)} />
+          <Route path="evaluation" element={loadRoute(<EvaluationPage />)} />
+          <Route path="medications" element={loadRoute(<MedicationsPage />)} />
+          <Route
+            path="medications/:id"
+            element={loadRoute(<MedicationDetailPage />)}
+          />
+          <Route
+            path="emergency-card"
+            element={loadRoute(<EmergencyCardPage />)}
+          />
+          <Route
+            path="add-medication"
+            element={loadRoute(<AddMedicationPage />)}
+          />
+          <Route path="reminder/:id" element={loadRoute(<ReminderPage />)} />
+          <Route path="family" element={loadRoute(<FamilyPage />)} />
+          <Route path="profile" element={loadRoute(<ProfilePage />)} />
+          <Route path="safety" element={loadRoute(<SafetyPage />)} />
+          <Route path="*" element={loadRoute(<NotFoundPage />)} />
+        </Route>
+      </Routes>
+    </RouteErrorBoundary>
   );
 }
