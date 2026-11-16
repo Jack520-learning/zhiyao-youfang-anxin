@@ -202,7 +202,11 @@ function renderInlineMarkdown(text: string): ReactNode[] {
 }
 
 function AssistantMarkdown({ content }: { content: string }) {
-  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const cleaned = content
+    .replace(/^\s*[\-*_]{3,}\s*$/gm, "")
+    .replace(/^\s*\|.*\|\s*$/gm, "")
+    .replace(/^\s*:?-{2,}:?\s*$/gm, "");
+  const lines = cleaned.replace(/\r\n/g, "\n").split("\n");
   const blocks: ReactNode[] = [];
   let listItems: string[] = [];
   let listType: "ul" | "ol" | null = null;

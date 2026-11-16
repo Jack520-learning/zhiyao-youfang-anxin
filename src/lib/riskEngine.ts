@@ -273,20 +273,34 @@ function findArticle(query: string) {
 export type AnswerMode = "quick" | "safety" | "detailed";
 
 export function buildRulesMessage(check: RiskCheck, mode: AnswerMode): string {
+  const levelLabel = check.level === "emergency"
+    ? "紧急"
+    : check.level === "high"
+      ? "高"
+      : check.level === "medium"
+        ? "中"
+        : check.level === "low"
+          ? "低"
+          : "未明确";
+
   if (mode === "quick") {
-    // 快速回答：只给结论标题 + 一句核心建议，不超过两句话
     const firstSentence = check.summary.split(/[。！？\n]/)[0] || check.summary;
-    return `${check.title}：${firstSentence}。${check.nextStep.split(/[。！？\n]/)[0] || ""}`.trim();
+    const firstStep = check.nextStep.split(/[。！？\n]/)[0] || check.nextStep;
+    return `${check.title}：${firstSentence}。${firstStep}`.trim();
   }
+
   if (mode === "detailed") {
-    // 详细解释：标题 + 完整摘要 + 原因列表 + 下一步
-    const reasons = check.reasons?.length
-      ? "\n\n**依据：**\n" + check.reasons.map((r) => `• ${r}`).join("\n")
+    const reasonsBlock = check.reasons?.length
+      ? `\n\n## 风险依据\n${check.reasons.map((r) => `- ${r}`).join("\n")}`
       : "";
-    return `**${check.title}**\n\n${check.summary}${reasons}\n\n**下一步：**${check.nextStep}`;
+    return `## 风险等级：${levelLabel}\n\n${check.summary}${reasonsBlock}\n\n## 下一步\n${check.nextStep}`;
   }
-  // safety（默认）：摘要 + 下一步
-  return `${check.summary}\n\n${check.nextStep}`;
+
+  // safety（默认）：三段式
+  const dangerItems = check.reasons?.length
+    ? check.reasons.map((r) => `- ${r}`).join("\n")
+    : `- ${check.summary.split(/[。！？]/)[0] || check.title}`;
+  return `## ⚠️风险核对\n**风险等级：${levelLabel}**\n\n${dangerItems}\n\n## 结论\n${check.summary}\n\n## 下一步\n${check.nextStep}`;
 }
 
 export function answerWithRules(
@@ -808,7 +822,7 @@ export function answerWithRules(
     currentMedications
   );
   return {
-    message: `${check.summary}\n\n${check.nextStep}`,
+    message: buildRulesMessage(check, mode),
     riskCheck: check,
     stages: [
       { id: "intent", label: "理解问题", status: "done" },
