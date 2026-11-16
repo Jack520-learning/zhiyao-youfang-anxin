@@ -39,9 +39,15 @@ describe("dynamic public knowledge", () => {
       sources: [{ title: "公开来源", url: "https://example.org" }],
       fetchedAt: "2026-11-16T00:00:00.000Z",
       cached: false
+    }, {
+      age: 72,
+      conditions: ["高血压"],
+      medicationNames: ["阿司匹林肠溶片"]
     });
     expect(response.message).toContain("知识库已根据公开资料完成更新");
     expect(response.message).toContain("https://example.org");
+    expect(response.message).toContain("72岁、高血压");
+    expect(response.message).toContain("老年人安全视角");
     expect(response.groundingOnly).toBe(true);
   });
 

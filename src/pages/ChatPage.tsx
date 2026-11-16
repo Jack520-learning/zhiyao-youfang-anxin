@@ -659,9 +659,24 @@ export function ChatPage() {
       setThinkingLabel("正在检索可追溯的公开资料并更新知识库…");
       try {
         const publicKnowledge = await lookupPublicKnowledge(
-          contextualQuestion
+          contextualQuestion,
+          {
+            age: profile.age,
+            conditions: profile.conditions,
+            allergies: profile.allergies,
+            medicationNames: activeMedications.map(
+              (medication) => medication.name
+            )
+          }
         );
-        localResponse = buildPublicKnowledgeResponse(publicKnowledge);
+        localResponse = buildPublicKnowledgeResponse(publicKnowledge, {
+          age: profile.age,
+          conditions: profile.conditions,
+          allergies: profile.allergies,
+          medicationNames: activeMedications.map(
+            (medication) => medication.name
+          )
+        });
       } catch {
         const unavailable = buildUnavailableAnswer(contextualQuestion);
         localResponse = {

@@ -1263,32 +1263,67 @@ async function publicSourceList(value) {
   return checked.filter(Boolean).slice(0, 4);
 }
 
-async function lookupPublicKnowledge(query) {
-  const queryKey = normalizeKnowledgeQuery(query);
+async function lookupPublicKnowledge(query, rawProfile = {}) {
+  const profile = {
+    age: Math.max(0, Math.min(120, Number(rawProfile.age) || 0)),
+    conditions: Array.isArray(rawProfile.conditions)
+      ? rawProfile.conditions
+          .filter((item) => typeof item === "string")
+          .slice(0, 12)
+          .map((item) => item.slice(0, 60))
+      : [],
+    allergies: Array.isArray(rawProfile.allergies)
+      ? rawProfile.allergies
+          .filter((item) => typeof item === "string")
+          .slice(0, 12)
+          .map((item) => item.slice(0, 60))
+      : [],
+    medicationNames: Array.isArray(rawProfile.medicationNames)
+      ? rawProfile.medicationNames
+          .filter((item) => typeof item === "string")
+          .slice(0, 20)
+          .map((item) => item.slice(0, 80))
+      : []
+  };
+  const baseQueryKey = normalizeKnowledgeQuery(query);
+  const profileKey = [
+    profile.age,
+    ...profile.conditions,
+    ...profile.allergies,
+    ...profile.medicationNames
+  ]
+    .map(normalizeKnowledgeQuery)
+    .join("|");
+  const queryKey = `${baseQueryKey}|${profileKey}`;
   const now = Date.now();
   const cached = dynamicKnowledge.find(
     (entry) =>
       entry &&
       now - new Date(entry.fetchedAt).getTime() < 7 * 24 * 60 * 60 * 1000 &&
-      (entry.queryKey === queryKey ||
-        (queryKey.length >= 5 &&
-          (entry.queryKey.includes(queryKey) ||
-            queryKey.includes(entry.queryKey))))
+      entry.queryKey === queryKey
   );
   if (cached) return { ...cached, cached: true };
 
   const prompt = [
     "请联网检索并回答用户问题。",
+    "提问者是一位老年人。必须优先从老年人安全视角回答，不得把青少年、职业运动员或普通成年人的运动、用药标准直接套用给老人。",
+    "先直接回答当前问题，再说明对这位老人最关键的差异和注意事项；没有提供的信息不要猜测。",
+    "涉及运动时，要结合年龄、慢病、骨质疏松或跌倒风险、心肺症状和当前用药，必要时建议先经医生或康复专业人员评估，并给出低冲击替代方案。",
+    "不要用与当前问题无关的青少年生长板、职业赛事发生率或泛化统计填充回答。",
     "只依据可访问的公开资料，不诊断疾病，不提供个体化处方、具体剂量、停药或补服决定。",
     "只返回 JSON，不要 Markdown 代码块。",
     '格式：{"found":true或false,"title":"具体主题","summary":"不超过180字的核心回答","plainText":"更完整的公开资料摘要，不超过1200字","nextStep":"何时应向医生或药师求助","sources":[{"title":"来源标题","url":"https://完整网址"}]}',
-    "至少提供一个真实可访问的 https 来源；找不到可靠来源时 found=false，sources 返回空数组。",
+    "优先提供真实可访问的 https 来源；没有可点击链接时仍可根据搜索增强结果作答，sources 返回空数组。只有确实找不到相关信息时才返回 found=false。",
+    `老人年龄：${profile.age || "未填写"}`,
+    `慢性病：${profile.conditions.join("、") || "未填写"}`,
+    `过敏史：${profile.allergies.join("、") || "未填写"}`,
+    `当前药物：${profile.medicationNames.join("、") || "未填写"}`,
     `用户问题：${String(query || "").slice(0, 800)}`
   ].join("\n");
   const makeRequest = (enableSearch) =>
     fetch(`${getAiBaseUrl()}/chat/completions`, {
       method: "POST",
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(25000),
       headers: {
         Authorization: `Bearer ${getAiKey()}`,
         "Content-Type": "application/json"
@@ -1296,7 +1331,7 @@ async function lookupPublicKnowledge(query) {
       body: JSON.stringify({
         model: getTextModel(),
         temperature: 0.1,
-        max_tokens: 1200,
+        max_tokens: 900,
         ...(enableSearch ? { enable_search: true } : {}),
         messages: [
           {
@@ -1332,6 +1367,7 @@ async function lookupPublicKnowledge(query) {
   const entry = {
     id: randomUUID(),
     query,
+    baseQueryKey,
     queryKey,
     found: true,
     title: sanitizePublicText(parsed.title || "公开资料补充", 120),
@@ -2435,7 +2471,7 @@ const server = createServer(async (request, response) => {
         return json(response, 400, { error: "请提供需要检索的问题" });
       }
       try {
-        const result = await lookupPublicKnowledge(query);
+        const result = await lookupPublicKnowledge(query, body.profile);
         return json(response, 200, result);
       } catch (error) {
         return json(response, 502, {

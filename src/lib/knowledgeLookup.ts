@@ -33,19 +33,31 @@ export function isKnowledgeGap(response: AssistantResponse): boolean {
 }
 
 export async function lookupPublicKnowledge(
-  query: string
+  query: string,
+  context?: {
+    age?: number;
+    conditions?: string[];
+    allergies?: string[];
+    medicationNames?: string[];
+  }
 ): Promise<PublicKnowledgeResult> {
   const response = await fetch("/api/knowledge/query", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query })
+    body: JSON.stringify({ query, profile: context || {} })
   });
   if (!response.ok) throw new Error("公开资料检索暂时不可用");
   return (await response.json()) as PublicKnowledgeResult;
 }
 
 export function buildPublicKnowledgeResponse(
-  result: PublicKnowledgeResult
+  result: PublicKnowledgeResult,
+  context?: {
+    age?: number;
+    conditions?: string[];
+    allergies?: string[];
+    medicationNames?: string[];
+  }
 ): AssistantResponse {
   const sources = (result.sources || [])
     .filter((source) => /^https:\/\//i.test(source.url))
@@ -106,10 +118,20 @@ export function buildPublicKnowledgeResponse(
         "### 检索说明",
         "本次回答使用了搜索增强资料；服务未返回可点击链接，内容已标记为待专业复核。"
       ];
+  const profileFactors = [
+    context?.age ? `${context.age}岁` : "",
+    ...(context?.conditions || []),
+    ...(context?.allergies || []).map((item) => `过敏：${item}`),
+    ...(context?.medicationNames || []).slice(0, 8).map((item) => `正在用药：${item}`)
+  ].filter(Boolean);
+  const profileLine = profileFactors.length
+    ? `结合您的档案（${profileFactors.join("、")}），以下内容按老年人安全视角整理。`
+    : "以下内容按老年人一般安全视角整理，未填写的年龄和慢病情况仍需补充。";
   return {
     message: [
       `## ${riskCheck.title}`,
       cleanVisibleText(result.summary),
+      profileLine,
       result.plainText ? `### 补充说明\n${cleanVisibleText(result.plainText)}` : "",
       "### 下一步",
       riskCheck.nextStep,
