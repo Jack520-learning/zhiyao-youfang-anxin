@@ -1394,6 +1394,14 @@ export const useAppStore = create<AppStore>()(
           const familyAlerts = pruneHandledAlerts(
             snapshot.familyAlerts ?? state.familyAlerts
           );
+          const conversations =
+            snapshot.conversations ?? state.conversations;
+          const activeConversationId = conversations.some(
+            (conversation) =>
+              conversation.id === state.activeConversationId
+          )
+            ? state.activeConversationId
+            : conversations[0]?.id ?? state.activeConversationId;
           const next = {
           profile: {
             ...state.profile,
@@ -1419,7 +1427,8 @@ export const useAppStore = create<AppStore>()(
           emergencyContacts: snapshot.emergencyContacts,
           familyAlerts,
           consent: snapshot.consent,
-          conversations: snapshot.conversations ?? state.conversations,
+          conversations,
+          activeConversationId,
           preferences: snapshot.preferences
             ? {
                 ...state.preferences,

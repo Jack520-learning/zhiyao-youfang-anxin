@@ -3,6 +3,7 @@ import {
   fetchFamilySnapshot,
   syncCloudSnapshot
 } from "../lib/cloud";
+import { cloudSnapshotFingerprint } from "../lib/cloudSnapshot";
 import { useAppStore } from "../store/useAppStore";
 
 export type SyncStatus = "idle" | "syncing" | "synced" | "offline" | "error";
@@ -13,6 +14,8 @@ export function useCloudSync() {
   const lastFamilyUpdateRef = useRef("");
   const lastElderContactUpdateRef = useRef("");
   const initialSyncDoneRef = useRef<Record<string, boolean>>({});
+  const lastUploadedElderFingerprintRef = useRef("");
+  const pendingElderWriteRef = useRef(false);
   const hydrated = useAppStore((state) => state.hydrated);
   const sessionAccountId = useAppStore((state) => state.sessionAccountId);
   const role = useAppStore((state) => state.role);
@@ -26,6 +29,13 @@ export function useCloudSync() {
   const familyAlerts = useAppStore((state) => state.familyAlerts);
   const conversations = useAppStore((state) => state.conversations);
   const preferences = useAppStore((state) => state.preferences);
+
+  useEffect(() => {
+    lastElderContactUpdateRef.current = "";
+    lastFamilyUpdateRef.current = "";
+    lastUploadedElderFingerprintRef.current = "";
+    pendingElderWriteRef.current = false;
+  }, [sessionAccountId, familyCode, role]);
 
   useEffect(() => {
     const retry = () => setConnectionTick((value) => value + 1);
@@ -51,9 +61,12 @@ export function useCloudSync() {
         // If the server already has data, no need to push empty initial state.
         // Only push when server is empty — that's the first-login case.
         if (!existing) {
+          const snapshot = useAppStore.getState().getCloudSnapshot();
           const revision = await syncCloudSnapshot(
-            useAppStore.getState().getCloudSnapshot()
+            snapshot
           );
+          lastUploadedElderFingerprintRef.current =
+            cloudSnapshotFingerprint(snapshot);
           useAppStore.getState().markSynced(revision);
         }
         initialSyncDoneRef.current[key] = true;
@@ -70,23 +83,35 @@ export function useCloudSync() {
     if (!hydrated || !sessionAccountId || !familyCode || role !== "elder") {
       return;
     }
+    pendingElderWriteRef.current = true;
     const timer = window.setTimeout(async () => {
       if (!navigator.onLine) {
+        pendingElderWriteRef.current = false;
         setStatus("offline");
         return;
       }
       setStatus((current) => (current === "synced" ? current : "syncing"));
       try {
-        const revision = await syncCloudSnapshot(
-          useAppStore.getState().getCloudSnapshot()
-        );
+        const snapshot = useAppStore.getState().getCloudSnapshot();
+        const fingerprint = cloudSnapshotFingerprint(snapshot);
+        if (fingerprint === lastUploadedElderFingerprintRef.current) {
+          setStatus("synced");
+          return;
+        }
+        const revision = await syncCloudSnapshot(snapshot);
+        lastUploadedElderFingerprintRef.current = fingerprint;
         useAppStore.getState().markSynced(revision);
         setStatus("synced");
       } catch {
         setStatus("offline");
+      } finally {
+        pendingElderWriteRef.current = false;
       }
     }, 150);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      pendingElderWriteRef.current = false;
+    };
   }, [
     hydrated,
     sessionAccountId,
@@ -104,9 +129,8 @@ export function useCloudSync() {
     connectionTick
   ]);
 
-  // Emergency contacts are the one health-adjacent field that caregivers may
-  // update. Elder devices listen for those edits while remaining the writer for
-  // medications, profile details and the rest of the archive.
+  // Every elder device is a writer and a reader. This keeps conversations,
+  // medications, reminders and profile data consistent across phone and web.
   useEffect(() => {
     if (!hydrated || !sessionAccountId || !familyCode || role !== "elder") {
       lastElderContactUpdateRef.current = "";
@@ -116,30 +140,42 @@ export function useCloudSync() {
     let cancelled = false;
     lastElderContactUpdateRef.current = "";
 
-    async function loadEmergencyContacts() {
+    async function loadElderSnapshot() {
       try {
         const snapshot = await fetchFamilySnapshot(familyCode);
         if (cancelled || !snapshot) return;
-        if (snapshot.updatedAt !== lastElderContactUpdateRef.current) {
-          lastElderContactUpdateRef.current = snapshot.updatedAt;
-          useAppStore
-            .getState()
-            .mergeFamilyEmergencyContacts(snapshot.emergencyContacts);
+        if (snapshot.updatedAt === lastElderContactUpdateRef.current) return;
+        lastElderContactUpdateRef.current = snapshot.updatedAt;
+        if (pendingElderWriteRef.current) return;
+        const localFingerprint = cloudSnapshotFingerprint(
+          useAppStore.getState().getCloudSnapshot()
+        );
+        const remoteFingerprint = cloudSnapshotFingerprint(snapshot);
+        if (remoteFingerprint === localFingerprint) {
+          lastUploadedElderFingerprintRef.current = remoteFingerprint;
+          setStatus("synced");
+          return;
         }
+        lastUploadedElderFingerprintRef.current = remoteFingerprint;
+        useAppStore.getState().mergeFamilySummary(snapshot);
+        setStatus("synced");
       } catch {
         // The regular writer reports connection status.
       }
     }
 
-    void loadEmergencyContacts();
+    void loadElderSnapshot();
     const source = new EventSource(
       `/api/family/${encodeURIComponent(familyCode.toUpperCase())}/events`
     );
     source.onmessage = () => {
-      void loadEmergencyContacts();
+      void loadElderSnapshot();
+    };
+    source.onerror = () => {
+      if (!cancelled) setStatus("offline");
     };
     const interval = window.setInterval(() => {
-      void loadEmergencyContacts();
+      void loadElderSnapshot();
     }, 30_000);
     return () => {
       cancelled = true;
