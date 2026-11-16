@@ -726,23 +726,21 @@ export function ChatPage() {
         const aborted =
           (err instanceof DOMException && err.name === "AbortError") ||
           (err as Error | undefined)?.name === "AbortError";
-        // 已收到的流式内容作为最终答案（截断处理）
-        const finalContent =
-          aborted && fullText.trim()
-            ? fullText.trim() + "\n\n_（已停止生成）_"
-            : response.message;
-        replaceChatMessage(
-          streamedAssistantMessageId,
-          {
-            ...streamedMessage,
-            content: finalContent,
-            pending: false,
-            riskCheck: aborted ? response.riskCheck : response.riskCheck
-          },
-          targetConversationId
-        );
         if (aborted) {
-          // 中断后跳过后面的 speakText / setSending
+          // 使用已 flush 到 store 的 fullText + 初始 riskCheck（streamedMessage 自带）
+          const trimmed = fullText.trim();
+          const finalContent = trimmed
+            ? trimmed + "\n\n_（已停止生成）_"
+            : "_（已停止生成）_";
+          replaceChatMessage(
+            streamedAssistantMessageId,
+            {
+              ...streamedMessage,
+              content: finalContent,
+              pending: false
+            },
+            targetConversationId
+          );
           stopSpeaking();
           setStreamingMessageId("");
           abortControllerRef.current = null;
@@ -750,6 +748,17 @@ export function ChatPage() {
           autoScrollRef.current = false;
           return;
         }
+        // 非 abort 错误：response 此时已赋值
+        replaceChatMessage(
+          streamedAssistantMessageId,
+          {
+            ...streamedMessage,
+            content: response.message,
+            pending: false,
+            riskCheck: response.riskCheck
+          },
+          targetConversationId
+        );
       } finally {
         setStreamingMessageId("");
         abortControllerRef.current = null;
@@ -1418,6 +1427,11 @@ export function ChatPage() {
               <Trash2 size={14} aria-hidden="true" />
               删除
             </button>
+          </div>
+        ) : null}
+        {ts ? (
+          <div className={`message-footer ${message.role}`}>
+            <div className="message-timestamp">{ts}</div>
           </div>
         ) : null}
       </article>
