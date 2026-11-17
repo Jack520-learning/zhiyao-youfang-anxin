@@ -7,7 +7,7 @@ export function CameraCaptureModal({
   onClose,
   onCapture,
   eyebrow = "拍照识药",
-  title = "把药盒放在画面中间"
+  title = "把药品包装或中药材放在画面中间"
 }: {
   open: boolean;
   onClose: () => void;
@@ -121,7 +121,7 @@ export function CameraCaptureModal({
       const imageDataUrl = await fileToCompressedDataUrl(file);
       onCapture(imageDataUrl);
     } catch {
-      setLibraryError("这张图片无法读取，请换一张清晰的药盒照片。");
+      setLibraryError("这张图片无法读取，请换一张清晰的药品或中药材照片。");
     }
   }
 
@@ -145,7 +145,7 @@ export function CameraCaptureModal({
         </div>
 
         {captured ? (
-          <img className="camera-preview" src={captured} alt="刚拍摄的药盒照片" />
+          <img className="camera-preview" src={captured} alt="刚拍摄的药品或中药材照片" />
         ) : (
           <div className="camera-live">
             <video ref={videoRef} playsInline muted aria-label="摄像头实时画面" />
@@ -223,7 +223,7 @@ export function CameraCaptureModal({
           className="visually-hidden-file"
           type="file"
           accept="image/*"
-          aria-label="从相册选择药盒照片"
+          aria-label="从相册选择药品或中药材照片"
           onChange={(event) => {
             const file = event.currentTarget.files?.[0];
             event.currentTarget.value = "";
@@ -236,7 +236,7 @@ export function CameraCaptureModal({
           type="file"
           accept="image/*"
           capture="environment"
-          aria-label="使用手机系统相机拍摄药盒"
+          aria-label="使用手机系统相机拍摄药品或中药材"
           onChange={(event) => {
             const file = event.currentTarget.files?.[0];
             event.currentTarget.value = "";

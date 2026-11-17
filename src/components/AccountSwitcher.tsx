@@ -109,6 +109,11 @@ export function AccountSwitcher({
       role: "family",
       title: "家属端",
       accounts: accounts.filter((account) => account.role === "family")
+    },
+    {
+      role: "admin",
+      title: "后台管理端",
+      accounts: accounts.filter((account) => account.role === "admin")
     }
   ];
 
@@ -121,7 +126,13 @@ export function AccountSwitcher({
       }
     }
     onClose();
-    navigate(account.role === "family" ? "/family" : "/");
+    navigate(
+      account.role === "admin"
+        ? "/admin"
+        : account.role === "family"
+          ? "/family"
+          : "/"
+    );
   }
 
   function closeSwitcher() {
@@ -448,7 +459,9 @@ export function AccountSwitcher({
                               <strong>{account.displayName}</strong>
                               <small>
                                 {account.username}
-                                {account.role === "family"
+                                {account.role === "admin"
+                                  ? " · 后台管理员"
+                                  : account.role === "family"
                                   ? ` · 关联 ${linkedCount} 位老人`
                                   : ` · ${account.familyCode}`}
                               </small>

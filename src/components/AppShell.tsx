@@ -7,6 +7,7 @@ import {
   CloudOff,
   FileHeart,
   House,
+  LayoutDashboard,
   MessageCircleHeart,
   Pill,
   RefreshCw,
@@ -46,8 +47,13 @@ const familyNav: NavItem[] = [
   { to: "/family", label: "概览", icon: UsersRound },
   { to: "/safety", label: "风险", icon: ShieldAlert },
   { to: "/medications", label: "用药", icon: FileHeart },
-  { to: "/impact", label: "效果", icon: TrendingUp },
   { to: "/profile", label: "授权", icon: CircleUserRound }
+];
+
+const adminNav: NavItem[] = [
+  { to: "/admin", label: "后台概览", icon: LayoutDashboard },
+  { to: "/evaluation", label: "质量评估", icon: ShieldAlert },
+  { to: "/impact", label: "效果评估", icon: TrendingUp }
 ];
 
 function syncLabel(status: SyncStatus): string {
@@ -99,9 +105,16 @@ export function AppShell() {
       navigate("/family", { replace: true });
     } else if (
       role === "elder" &&
-      ["/family", "/impact", "/evaluation"].includes(location.pathname)
+      ["/family", "/admin", "/impact", "/evaluation"].includes(
+        location.pathname
+      )
     ) {
       navigate("/chat", { replace: true });
+    } else if (
+      role === "admin" &&
+      !["/admin", "/evaluation", "/impact"].includes(location.pathname)
+    ) {
+      navigate("/admin", { replace: true });
     }
   }, [location.pathname, navigate, role, sessionAccountId]);
 
@@ -129,8 +142,10 @@ export function AppShell() {
 
   if (!sessionAccountId) return <AuthGate />;
 
-  const nav = role === "elder" ? elderNav : familyNav;
-  const roleName = role === "elder" ? "老人端" : "家属端";
+  const nav =
+    role === "elder" ? elderNav : role === "family" ? familyNav : adminNav;
+  const roleName =
+    role === "elder" ? "老人端" : role === "family" ? "家属端" : "后台管理端";
   const account = accounts.find((item) => item.id === sessionAccountId);
 
   function navClass({ isActive }: { isActive: boolean }) {
@@ -203,7 +218,10 @@ export function AppShell() {
         </aside>
 
         <header className="mobile-topbar">
-          <NavLink to={role === "elder" ? "/" : "/family"} className="brand">
+          <NavLink
+            to={role === "elder" ? "/" : role === "family" ? "/family" : "/admin"}
+            className="brand"
+          >
             <span className="brand-mark">
               <Pill size={23} aria-hidden="true" />
             </span>
@@ -219,7 +237,11 @@ export function AppShell() {
               aria-label="切换登录账号"
               onClick={() => setAccountSwitcherOpen(true)}
             >
-              {role === "elder" ? <UserRound size={21} /> : <UsersRound size={21} />}
+              {role === "elder" ? (
+                <UserRound size={21} />
+              ) : (
+                <UsersRound size={21} />
+              )}
             </button>
             <button
               type="button"
@@ -237,9 +259,13 @@ export function AppShell() {
         </main>
       </div>
 
-      <FloatingSos onOpen={() => setSosOpen(true)} />
-      <HealthProfilePrompt key={sessionAccountId || "signed-out"} />
-      <SpeechPlaybackDock />
+      {role === "elder" ? (
+        <FloatingSos onOpen={() => setSosOpen(true)} />
+      ) : null}
+      {role !== "admin" ? (
+        <HealthProfilePrompt key={sessionAccountId || "signed-out"} />
+      ) : null}
+      {role !== "admin" ? <SpeechPlaybackDock /> : null}
 
       <nav
         className="mobile-nav"
@@ -266,12 +292,14 @@ export function AppShell() {
         ))}
       </nav>
 
-      <SosModal open={sosOpen} onClose={() => setSosOpen(false)} />
+      {role === "elder" ? (
+        <SosModal open={sosOpen} onClose={() => setSosOpen(false)} />
+      ) : null}
       <AccountSwitcher
         open={accountSwitcherOpen}
         onClose={() => setAccountSwitcherOpen(false)}
       />
-      <ReminderOverlay />
+      {role !== "admin" ? <ReminderOverlay /> : null}
     </div>
   );
 }

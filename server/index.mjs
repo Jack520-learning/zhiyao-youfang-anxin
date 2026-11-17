@@ -172,6 +172,7 @@ function publicAccount(account) {
     role: account.role,
     familyCode: account.familyCode,
     linkedFamilyCodes: account.linkedFamilyCodes,
+    disabled: Boolean(account.disabled),
     createdAt: account.createdAt
   };
 }
@@ -1832,8 +1833,14 @@ const server = createServer(async (request, response) => {
       const body = await readJson(request, 128 * 1024);
       const username = normalizeUsername(body.username);
       const password = String(body.password || "");
-      const role = body.role === "family" ? "family" : "elder";
-      const familyCode = sanitizeFamilyCode(body.familyCode);
+      const role =
+        body.role === "admin"
+          ? "admin"
+          : body.role === "family"
+            ? "family"
+            : "elder";
+      const familyCode =
+        role === "admin" ? "ADMIN" : sanitizeFamilyCode(body.familyCode);
       if (!usernamePattern.test(username)) {
         return json(response, 400, {
           error: "账号需为 3 到 24 位中文、字母、数字或下划线"
@@ -1842,18 +1849,32 @@ const server = createServer(async (request, response) => {
       if (password.length < 6) {
         return json(response, 400, { error: "密码至少需要 6 位" });
       }
-      if (familyCode.length < 6) {
+      if (role !== "admin" && familyCode.length < 6) {
         return json(response, 400, { error: "家庭连接码需要 6 到 8 位" });
       }
       if (database.accounts[username]) {
         return json(response, 409, { error: "这个账号已经注册，请直接登录" });
+      }
+      if (
+        role === "admin" &&
+        Object.values(database.accounts).some(
+          (account) => account.role === "admin"
+        )
+      ) {
+        return json(response, 403, {
+          error: "后台管理员已经创建，请直接登录"
+        });
       }
       const codeExists = Object.values(database.accounts).some(
         (account) =>
           account.role === "elder" &&
           accountCodes(account).includes(familyCode)
       );
-      if (role === "family" && !codeExists && !database.families[familyCode]?.snapshot) {
+      if (
+        role === "family" &&
+        !codeExists &&
+        !database.families[familyCode]?.snapshot
+      ) {
         return json(response, 404, {
           error: "没有找到这个家庭连接码对应的老人账号"
         });
@@ -1873,7 +1894,8 @@ const server = createServer(async (request, response) => {
         displayName: sanitizeDisplayName(body.displayName, username),
         role,
         familyCode,
-        linkedFamilyCodes: [familyCode],
+        linkedFamilyCodes: role === "admin" ? [] : [familyCode],
+        disabled: false,
         ...passwordRecord,
         createdAt: new Date().toISOString()
       };
@@ -1894,6 +1916,7 @@ const server = createServer(async (request, response) => {
       const account = database.accounts[username];
       const valid =
         account &&
+        !account.disabled &&
         (await verifyAccountPassword(String(body.password || ""), account));
       if (!valid) {
         return json(response, 401, { error: "账号或密码不正确" });
@@ -2146,6 +2169,92 @@ const server = createServer(async (request, response) => {
       }
       await saveDatabase();
       return json(response, 200, { ok: true });
+    }
+
+    if (url.pathname === "/api/admin/overview" && request.method === "GET") {
+      const { account } = authenticatedAccount(request);
+      if (!account || account.role !== "admin") {
+        return json(response, 403, { error: "需要后台管理员权限" });
+      }
+      const allAccounts = Object.values(database.accounts);
+      const elderAccounts = allAccounts.filter(
+        (item) => item.role === "elder"
+      );
+      const familyCodes = new Set(
+        elderAccounts.flatMap((item) => accountCodes(item))
+      );
+      const familyRecords = Array.from(familyCodes)
+        .map((code) => database.families[code])
+        .filter(Boolean);
+      const snapshots = familyRecords
+        .map((family) => family.snapshot)
+        .filter(Boolean);
+      return json(response, 200, {
+        overview: {
+          totalAccounts: allAccounts.length,
+          elderAccounts: elderAccounts.length,
+          familyAccounts: allAccounts.filter((item) => item.role === "family")
+            .length,
+          adminAccounts: allAccounts.filter((item) => item.role === "admin")
+            .length,
+          disabledAccounts: allAccounts.filter((item) => item.disabled).length,
+          linkedFamilies: familyCodes.size,
+          syncedFamilies: snapshots.length,
+          medicationRecords: snapshots.reduce(
+            (total, snapshot) => total + (snapshot.medications?.length || 0),
+            0
+          ),
+          riskRecords: snapshots.reduce(
+            (total, snapshot) => total + (snapshot.riskChecks?.length || 0),
+            0
+          ),
+          generatedAt: new Date().toISOString()
+        },
+        accounts: allAccounts
+          .sort((left, right) => {
+            const roleOrder = { admin: 0, elder: 1, family: 2 };
+            const roleDelta =
+              (roleOrder[left.role] ?? 9) - (roleOrder[right.role] ?? 9);
+            return roleDelta || left.username.localeCompare(right.username);
+          })
+          .map((item) => ({
+            ...publicAccount(item),
+            hasSession: Object.values(database.sessions).some(
+              (session) =>
+                session.accountId === item.id &&
+                new Date(session.expiresAt).getTime() > Date.now()
+            )
+          }))
+      });
+    }
+
+    if (
+      url.pathname === "/api/admin/accounts/status" &&
+      request.method === "POST"
+    ) {
+      const { account } = authenticatedAccount(request);
+      if (!account || account.role !== "admin") {
+        return json(response, 403, { error: "需要后台管理员权限" });
+      }
+      const body = await readJson(request, 64 * 1024);
+      const target = Object.values(database.accounts).find(
+        (item) => item.id === body.accountId
+      );
+      if (!target) return json(response, 404, { error: "账号不存在" });
+      if (target.id === account.id || target.role === "admin") {
+        return json(response, 400, { error: "不能停用当前管理员账号" });
+      }
+      target.disabled = Boolean(body.disabled);
+      if (target.disabled) {
+        for (const [token, session] of Object.entries(database.sessions)) {
+          if (session.accountId === target.id) delete database.sessions[token];
+        }
+      }
+      await saveDatabase();
+      return json(response, 200, {
+        ok: true,
+        account: publicAccount(target)
+      });
     }
 
     if (url.pathname === "/api/mcp" && request.method === "POST") {

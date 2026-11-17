@@ -3,6 +3,7 @@ import {
   HeartHandshake,
   LockKeyhole,
   Pill,
+  Settings2,
   ShieldCheck,
   UserRound,
   UsersRound
@@ -58,9 +59,9 @@ export function AuthGate() {
       return;
     }
     const permission = await notificationPermission;
-    if (permission === "granted") {
+    if (permission === "granted" && role !== "admin") {
       const state = useAppStore.getState();
-      const enabled = await subscribeToPush(state.familyCode, state.role);
+      const enabled = await subscribeToPush(state.familyCode, role);
       state.updatePreferences({ notificationsEnabled: enabled });
     }
   }
@@ -139,6 +140,18 @@ export function AuthGate() {
                 </button>
                 <button
                   type="button"
+                  className={role === "admin" ? "active" : ""}
+                  aria-pressed={role === "admin"}
+                  onClick={() => setRole("admin")}
+                >
+                  <Settings2 size={24} aria-hidden="true" />
+                  <span>
+                    <strong>后台管理员</strong>
+                    <small>管理账号、效果与质量评估</small>
+                  </span>
+                </button>
+                <button
+                  type="button"
                   className={role === "family" ? "active" : ""}
                   aria-pressed={role === "family"}
                   onClick={() => setRole("family")}
@@ -155,7 +168,13 @@ export function AuthGate() {
                 <input
                   value={displayName}
                   onChange={(event) => setDisplayName(event.target.value)}
-                  placeholder={role === "elder" ? "例如：林阿姨" : "例如：林晓"}
+                  placeholder={
+                    role === "elder"
+                      ? "例如：林阿姨"
+                      : role === "family"
+                        ? "例如：林晓"
+                        : "例如：系统管理员"
+                  }
                   autoComplete="name"
                 />
               </label>
@@ -198,7 +217,12 @@ export function AuthGate() {
                   required
                 />
               </label>
-              {role === "family" ? (
+              {role === "admin" ? (
+                <div className="notice">
+                  <ShieldCheck size={20} aria-hidden="true" />
+                  首次注册会创建唯一后台管理员账号，之后请直接登录。管理员不绑定家庭连接码。
+                </div>
+              ) : role === "family" ? (
                 <label className="auth-field">
                   <span>老人端的家庭连接码</span>
                   <input

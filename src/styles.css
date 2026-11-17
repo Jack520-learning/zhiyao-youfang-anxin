@@ -2951,6 +2951,122 @@ img {
   padding: 34px 0;
 }
 
+.admin-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.admin-stat {
+  display: grid;
+  gap: 6px;
+  padding: 18px;
+}
+
+.admin-stat > svg {
+  color: var(--primary);
+}
+
+.admin-stat span,
+.admin-stat small {
+  color: var(--muted);
+}
+
+.admin-stat strong {
+  font-size: calc(32px * var(--font-scale));
+  line-height: 1;
+}
+
+.admin-content-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
+  gap: 16px;
+}
+
+.admin-content-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.admin-content-list > div {
+  display: grid;
+  gap: 5px;
+  border-radius: 14px;
+  padding: 14px;
+  background: var(--surface-soft);
+}
+
+.admin-content-list strong {
+  font-size: calc(24px * var(--font-scale));
+}
+
+.admin-content-list span {
+  color: var(--muted);
+  font-size: calc(13px * var(--font-scale));
+}
+
+.admin-account-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.admin-account-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.admin-account-row > span:nth-child(2) {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.admin-account-row small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.admin-account-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+@media (max-width: 900px) {
+  .admin-stat-grid,
+  .admin-content-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-account-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .admin-account-row > .chip,
+  .admin-account-row > .btn,
+  .admin-account-row > .field-hint {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
 .auth-page::before,
 .auth-page::after {
   position: fixed;
@@ -3110,11 +3226,17 @@ img {
 
 .auth-role-choice {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 9px;
   margin: 0;
   border: 0;
   padding: 0;
+}
+
+@media (max-width: 620px) {
+  .auth-role-choice {
+    grid-template-columns: 1fr;
+  }
 }
 
 .auth-role-choice legend {

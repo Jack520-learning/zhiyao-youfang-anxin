@@ -236,8 +236,8 @@ export function EvaluationPage() {
     ));
   }
 
-  if (role !== "family") {
-    return <Navigate to="/chat" replace />;
+  if (role !== "admin") {
+    return <Navigate to={role === "family" ? "/family" : "/chat"} replace />;
   }
 
   return (

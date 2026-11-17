@@ -1,4 +1,4 @@
-export type UserRole = "elder" | "family";
+export type UserRole = "elder" | "family" | "admin";
 
 export type RiskLevel = "low" | "medium" | "high" | "unknown" | "emergency";
 
@@ -116,6 +116,7 @@ export interface LocalAccount {
   passwordSalt: string;
   encryptedPassword?: string;
   createdAt: string;
+  disabled?: boolean;
 }
 
 export interface ElderProfile {

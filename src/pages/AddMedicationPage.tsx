@@ -310,7 +310,7 @@ export function AddMedicationPage({
         setError(
           vision?.rejectionReason ||
             visionError ||
-            "未识别到药物或与药物相关的包装、说明书。请重新拍照，或从相册选择清晰的药盒照片。"
+            "未识别到药品或中药材。请重新拍照，或从相册选择清晰的药品包装、药材、说明书或处方单。"
         );
         setPhase("unrecognized");
         return;
@@ -605,7 +605,7 @@ export function AddMedicationPage({
       reminderEnabled: !isAsNeededFrequency(draft.frequency),
       source: {
         type: draft.imageDataUrl ? "medicine-label" : "professional-note",
-        title: draft.imageDataUrl ? "用户拍摄并确认的药盒/说明书" : "用户手动录入",
+        title: draft.imageDataUrl ? "用户拍摄并确认的药品或中药材" : "用户手动录入",
         capturedAt: createdAt,
         imageDataUrl: draft.imageDataUrl,
         confirmed: true
@@ -658,7 +658,7 @@ export function AddMedicationPage({
       reminderEnabled: !isAsNeededFrequency(draft.frequency),
       source: {
         type: draft.imageDataUrl ? "medicine-label" : "professional-note",
-        title: draft.imageDataUrl ? "用户拍摄并确认的药盒/说明书" : "用户手动录入",
+        title: draft.imageDataUrl ? "用户拍摄并确认的药品或中药材" : "用户手动录入",
         capturedAt: createdAt,
         imageDataUrl: draft.imageDataUrl,
         confirmed: true
@@ -720,9 +720,9 @@ export function AddMedicationPage({
           </p>
           <h1 className="page-title">
             {phase === "upload"
-              ? "把药盒拍给我看"
+              ? "把药品或中药材拍给我看"
               : phase === "recognizing"
-                ? "正在识别，请稍等"
+                  ? "正在识别药品或中药材，请稍等"
                   : phase === "unrecognized"
                     ? "没有识别到药物"
                 : phase === "review"
@@ -731,7 +731,7 @@ export function AddMedicationPage({
           </h1>
           <p className="page-description">
             {phase === "upload"
-              ? "拍药盒、说明书或处方单都可以。看不清的地方，我会请您重新确认。"
+              ? "拍药品包装、中药材、说明书或处方单都可以。看不清的地方，我会请您重新确认。"
               : phase === "recognizing"
                 ? "图片已经保存在本机。识别完成后，原图和字段都会保留。"
                   : phase === "unrecognized"
@@ -749,7 +749,7 @@ export function AddMedicationPage({
             <span className="upload-icon">
               <ImagePlus size={38} aria-hidden="true" />
             </span>
-            <h2>拍清楚药名和剂量</h2>
+            <h2>拍清楚名称、规格和用法</h2>
             <p>
               照片只用于本地识别和您的家庭档案。无法识别时，可以进入手动填写。
             </p>
@@ -798,7 +798,7 @@ export function AddMedicationPage({
             </div>
           </div>
           {draft?.imageDataUrl ? (
-            <img className="preview-image" src={draft.imageDataUrl} alt="已保存的药盒原图" />
+            <img className="preview-image" src={draft.imageDataUrl} alt="已保存的药品或中药材原图" />
           ) : null}
         </section>
       ) : null}
@@ -811,7 +811,7 @@ export function AddMedicationPage({
           <h2>未识别到药物</h2>
           <p>
             {error ||
-              "请重新拍摄药盒正面、说明书或处方单，确保药名、规格和用法清晰可见。"}
+              "请重新拍摄药品包装、中药材、说明书或处方单，确保名称、规格和用法清晰可见。"}
           </p>
           <div className="header-actions">
             <button
@@ -845,7 +845,7 @@ export function AddMedicationPage({
         <div className="intake-layout">
           <aside className="card card-pad progress-panel">
             {draft.imageDataUrl ? (
-              <img className="preview-image" src={draft.imageDataUrl} alt="药盒或说明书原图" />
+              <img className="preview-image" src={draft.imageDataUrl} alt="药品、中药材或说明书原图" />
             ) : (
               <div className="upload-icon" style={{ margin: "0 auto" }}>
                 <FileImage size={34} aria-hidden="true" />
@@ -1238,7 +1238,7 @@ export function AddMedicationPage({
         className="visually-hidden-file"
         type="file"
         accept="image/*"
-        aria-label="从相册选择药盒图片"
+        aria-label="从相册选择药品或中药材图片"
         onChange={(event) => {
           const file = event.currentTarget.files?.[0];
           event.currentTarget.value = "";

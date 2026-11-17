@@ -52,7 +52,14 @@ export function useCloudSync() {
   // doesn't have a snapshot yet. This ensures cross-device accounts see data
   // on first login too — not only after the elder makes a future edit.
   useEffect(() => {
-    if (!hydrated || !sessionAccountId || !familyCode) return;
+    if (
+      !hydrated ||
+      !sessionAccountId ||
+      !familyCode ||
+      role === "admin"
+    ) {
+      return;
+    }
     const key = `${sessionAccountId}:${familyCode}`;
     if (initialSyncDoneRef.current[key]) return;
 
@@ -76,7 +83,7 @@ export function useCloudSync() {
       }
     }
     void bootstrapSync();
-  }, [hydrated, sessionAccountId, familyCode]);
+  }, [hydrated, sessionAccountId, familyCode, role]);
 
   // The elder device is the writer. Debouncing prevents one request for every
   // keystroke or short-lived status change.

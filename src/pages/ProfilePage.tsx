@@ -147,6 +147,7 @@ export function ProfilePage() {
   }
 
   async function enableNotifications() {
+    if (role === "admin") return;
     setNotificationState("loading");
     try {
       const granted = await subscribeToPush(familyCode, role);

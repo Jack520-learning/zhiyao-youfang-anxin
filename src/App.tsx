@@ -8,6 +8,11 @@ const AddMedicationPage = lazy(() =>
     default: module.AddMedicationPage
   }))
 );
+const AdminPage = lazy(() =>
+  import("./pages/AdminPage").then((module) => ({
+    default: module.AdminPage
+  }))
+);
 const ChatPage = lazy(() =>
   import("./pages/ChatPage").then((module) => ({ default: module.ChatPage }))
 );
@@ -112,6 +117,7 @@ export default function App() {
         <Route element={<AppShell />}>
           <Route index element={loadRoute(<RoleHome />)} />
           <Route path="today" element={loadRoute(<HomePage />)} />
+          <Route path="admin" element={loadRoute(<AdminPage />)} />
           <Route path="home" element={loadRoute(<HomePage />)} />
           <Route path="chat" element={loadRoute(<ChatPage />)} />
           <Route path="catalog" element={loadRoute(<CatalogPage />)} />

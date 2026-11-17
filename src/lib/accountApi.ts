@@ -8,6 +8,7 @@ export interface ServerAccount {
   familyCode: string;
   linkedFamilyCodes: string[];
   createdAt: string;
+  disabled?: boolean;
 }
 
 export interface AccountSessionResponse {
@@ -139,6 +140,42 @@ export async function deleteServerAccount(input: {
       accountId: input.accountId,
       password: input.password
     }
+  });
+}
+
+export interface AdminOverview {
+  totalAccounts: number;
+  elderAccounts: number;
+  familyAccounts: number;
+  adminAccounts: number;
+  disabledAccounts: number;
+  linkedFamilies: number;
+  syncedFamilies: number;
+  medicationRecords: number;
+  riskRecords: number;
+  generatedAt: string;
+}
+
+export interface AdminAccountSummary extends ServerAccount {
+  hasSession: boolean;
+}
+
+export function fetchAdminOverview(token: string): Promise<{
+  overview: AdminOverview;
+  accounts: AdminAccountSummary[];
+}> {
+  return accountRequest("/api/admin/overview", { token });
+}
+
+export function setAdminAccountDisabled(
+  token: string,
+  accountId: string,
+  disabled: boolean
+): Promise<{ ok: boolean; account: ServerAccount }> {
+  return accountRequest("/api/admin/accounts/status", {
+    method: "POST",
+    token,
+    body: { accountId, disabled }
   });
 }
 

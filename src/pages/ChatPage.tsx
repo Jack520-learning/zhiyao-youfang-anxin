@@ -87,6 +87,7 @@ import {
   resolveAdaptiveAnswerMode
 } from "../lib/dailyConversation";
 import { buildRecentConversationQuestion } from "../lib/conversationMemory";
+import { buildHerbChatResponse } from "../lib/herbAnswers";
 import {
   buildPublicKnowledgeResponse,
   isKnowledgeGap,
@@ -626,6 +627,9 @@ export function ChatPage() {
               content: message.content
             }))
           });
+    const responseHerb = dailyConversation
+      ? undefined
+      : findHerbsInText(contextualQuestion)[0];
     const medicationActivityQuery =
       !dailyConversation && isMedicationActivityQuery(contextualQuestion);
     const generalKnowledgeQuery =
@@ -646,7 +650,10 @@ export function ChatPage() {
             : "正在思考并组织回答…"
     );
     const plannedTools =
-      dailyConversation || medicationActivityQuery || generalKnowledgeQuery
+      dailyConversation ||
+      medicationActivityQuery ||
+      generalKnowledgeQuery ||
+      Boolean(responseHerb)
       ? []
       : planAgentTools(
           contextualQuestion,
@@ -664,7 +671,14 @@ export function ChatPage() {
       summary: run.summary,
       durationMs: run.durationMs
     }));
-    let localResponse = medicationActivityQuery
+    let localResponse = responseHerb
+      ? buildHerbChatResponse(
+          responseHerb,
+          contextualQuestion,
+          activeMedications,
+          profile
+        )
+      : medicationActivityQuery
       ? buildMedicationActivityResponse(
           contextualQuestion,
           activeMedications,
@@ -700,7 +714,10 @@ export function ChatPage() {
     );
     if (explicitSkillResponse) localResponse = explicitSkillResponse;
     const catalogResponse =
-      dailyConversation || medicationActivityQuery || generalKnowledgeQuery
+      dailyConversation ||
+        medicationActivityQuery ||
+        generalKnowledgeQuery ||
+        Boolean(responseHerb)
       ? null
       : catalogResponseFromRuns(agentRuns) ??
         answerFromDrugCatalog(
@@ -1086,7 +1103,7 @@ export function ChatPage() {
     if (!imageDataUrl || photoBusy) return;
     setView("conversation");
     setPhotoBusy(true);
-    setPhotoProgress("正在读取药盒图片和文字");
+    setPhotoProgress("正在读取药品或中药材图片和文字");
     setPhotoNotice("");
     autoScrollRef.current = true;
     const targetConversationId =
@@ -1094,7 +1111,8 @@ export function ChatPage() {
     addChatMessage({
       id: createId("chat"),
       role: "user",
-      content: "我拍了一张药盒照片，请帮我识别风险、用法和价格。",
+      content:
+        "我拍了一张药品或中药材照片，请帮我识别名称、用途和安全注意事项。",
       createdAt: nowIso(),
       imageDataUrls: [imageDataUrl]
     }, targetConversationId);
@@ -1108,12 +1126,12 @@ export function ChatPage() {
       ).catch(() => null);
       try {
         draft = await recognizeMedicineImage(imageDataUrl, (_value, label) => {
-          setPhotoProgress(label || "正在识别药盒");
+          setPhotoProgress(label || "正在识别药品或中药材");
         });
       } catch {
         draft = createManualDraft(imageDataUrl);
       }
-      setPhotoProgress("正在核对药名、用法和当前用药风险");
+      setPhotoProgress("正在核对名称、用途和当前用药风险");
       const vision = await visionPromise;
       setPhotoProgress("正在整理识别结果和风险提示");
       const activeMedications = medications.filter(
@@ -1224,7 +1242,7 @@ export function ChatPage() {
           reminderEnabled: true,
           source: {
             type: "medicine-label" as const,
-            title: "问药页拍摄并识别的药盒",
+            title: "问药页拍摄并识别的药品或中药材",
             capturedAt: createdAt,
             imageDataUrl,
             confirmed: false
@@ -1378,11 +1396,11 @@ export function ChatPage() {
       setStages(
         riskCheck.level === "unknown"
           ? [
-              { id: "photo", label: "完成药盒识别", status: "done" },
+              { id: "photo", label: "完成药品或中药材识别", status: "done" },
               { id: "check", label: "发现字段仍需确认", status: "active" }
             ]
           : [
-              { id: "photo", label: "完成药盒识别", status: "done" },
+              { id: "photo", label: "完成药品或中药材识别", status: "done" },
               { id: "profile", label: "匹配当前用药与已确认历史", status: "done" },
               { id: "risk", label: "完成安全分析", status: "done" }
             ]
@@ -2096,7 +2114,7 @@ export function ChatPage() {
                           aria-hidden="true"
                         />
                         <span>
-                          <strong>正在核对这张药盒照片</strong>
+                          <strong>正在核对这张药品或中药材照片</strong>
                           <br />
                           {photoProgress || "正在准备识别"}
                         </span>

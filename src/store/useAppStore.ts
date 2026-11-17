@@ -118,6 +118,14 @@ function normalizeAccount(account: LocalAccount): LocalAccount {
   };
 }
 
+function roleName(role: UserRole): string {
+  return role === "elder"
+    ? "老人端"
+    : role === "family"
+      ? "家属端"
+      : "后台管理端";
+}
+
 function removeAccountWorkspaces(
   workspaces: Record<string, AccountWorkspace>,
   accountIds: Iterable<string>
@@ -319,10 +327,11 @@ export const useAppStore = create<AppStore>()(
         ) {
           return { ok: false, error: "这个账号已经注册，请直接登录" };
         }
-        const cleanFamilyCode = normalizeFamilyCode(
-          familyCode || state.familyCode
-        );
-        if (cleanFamilyCode.length < 6) {
+        const cleanFamilyCode =
+          role === "admin"
+            ? "ADMIN"
+            : normalizeFamilyCode(familyCode || state.familyCode);
+        if (role !== "admin" && cleanFamilyCode.length < 6) {
           return {
             ok: false,
             error:
@@ -381,7 +390,13 @@ export const useAppStore = create<AppStore>()(
         };
         const registrationAudit = auditEvent(
           "settings-updated",
-          `注册并登录${role === "elder" ? "老人端" : "家属端"}账号`
+          `注册并登录${
+            role === "elder"
+              ? "老人端"
+              : role === "family"
+                ? "家属端"
+                : "后台管理端"
+          }账号`
         );
         setState((current) => ({
           ...workspacePatch(blankWorkspace),
@@ -626,7 +641,7 @@ export const useAppStore = create<AppStore>()(
             auditEvents: [
               auditEvent(
                 "settings-updated",
-                `登录${account.role === "elder" ? "老人端" : "家属端"}账号`
+                `登录${roleName(account.role)}账号`
               ),
               ...targetWorkspace.auditEvents
             ].slice(0, 100)
@@ -722,9 +737,7 @@ export const useAppStore = create<AppStore>()(
           auditEvents: [
             auditEvent(
               "settings-updated",
-              `切换为${account.displayName}的${
-                account.role === "elder" ? "老人端" : "家属端"
-              }`
+              `切换为${account.displayName}的${roleName(account.role)}`
             ),
             ...targetWorkspace.auditEvents
           ].slice(0, 100)
@@ -980,7 +993,7 @@ export const useAppStore = create<AppStore>()(
             auditEvents: [
               auditEvent(
                 "settings-updated",
-                `恢复${role === "elder" ? "老人端" : "家属端"}登录身份`
+                `恢复${roleName(role)}登录身份`
               ),
               ...state.auditEvents
             ].slice(0, 100)
