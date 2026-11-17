@@ -1,4 +1,5 @@
 import type { ChatMessage } from "../types";
+import { findHerbsInText } from "../catalog/herbs";
 
 function normalize(value: string): string {
   return value.toLowerCase().replace(/[\s，。！？、,.!?；;：:（）()]/g, "");
@@ -33,6 +34,7 @@ export function buildFollowUpQuestions(input: {
   const answer = input.answer.trim();
   const combined = `${query}\n${answer}`;
   const medicineName = input.medicineName?.trim() || "";
+  const herb = medicineName ? findHerbsInText(medicineName)[0] : undefined;
   const questions: string[] = [];
 
   if (/你是谁|你叫什么|你能做什么|你能干什么|你会做什么|你有什么功能|你会哪些功能/.test(query)) {
@@ -42,7 +44,13 @@ export function buildFollowUpQuestions(input: {
       "怎么判断药物之间有没有冲突？"
     );
   } else if (/(药盒照片|拍了.*药|图片分析|图像识别|识别到.*药)/.test(combined)) {
-    if (medicineName) {
+    if (herb) {
+      questions.push(
+        `${herb.name}的传统功用和性味归经是什么？`,
+        `${herb.name}怎么辨识？`,
+        "这种中药材和我现在吃的西药有冲突吗？"
+      );
+    } else if (medicineName) {
       questions.push(
         `${medicineName}每天怎么吃？`,
         `${medicineName}漏服了怎么办？`,
@@ -86,6 +94,12 @@ export function buildFollowUpQuestions(input: {
       "停药后多久才能考虑饮酒？",
       "现在出现心慌、脸红或呼吸困难该怎么办？",
       "查看这几种药的相互作用"
+    );
+  } else if (herb) {
+    questions.push(
+      `${herb.name}的传统功用是什么？`,
+      `${herb.name}使用前要注意哪些安全事项？`,
+      "这种中药材和我现在吃的西药有冲突吗？"
     );
   } else if (medicineName) {
     questions.push(

@@ -12,6 +12,7 @@ import {
   Mic,
   Leaf,
   LoaderCircle,
+  PenLine,
   Pill,
   Search,
   ShieldAlert,
@@ -20,6 +21,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { RiskBadge } from "../components/RiskBadge";
+import { HandwritingPad } from "../components/HandwritingPad";
 import { ProactiveRiskPanel } from "../components/ProactiveRiskPanel";
 import { formatChineseDate, formatTime, getNextDose, getTodayDoses, humanizeRelation } from "../lib/time";
 import { speakText } from "../lib/speech";
@@ -543,6 +545,7 @@ function HomeSearch() {
   const navigate = useNavigate();
   const medications = useAppStore((state) => state.medications);
   const [query, setQuery] = useState("");
+  const [handwritingOpen, setHandwritingOpen] = useState(false);
   const composingRef = useRef(false);
   const speech = useQwenSpeechRecognition((transcript) => setQuery(transcript));
   const results = useMemo(() => {
@@ -612,6 +615,15 @@ function HomeSearch() {
           placeholder="搜药名，或直接说不舒服"
           aria-label="搜索药物或提问"
         />
+        <button
+          type="button"
+          className="search-handwriting"
+          aria-label="手写输入药名或问题"
+          onClick={() => setHandwritingOpen(true)}
+        >
+          <PenLine size={20} aria-hidden="true" />
+          手写
+        </button>
         <button
           type="button"
           className={`search-voice ${speech.listening ? "listening" : ""}`}
@@ -743,6 +755,11 @@ function HomeSearch() {
           </button>
         </div>
       ) : null}
+      <HandwritingPad
+        open={handwritingOpen}
+        onClose={() => setHandwritingOpen(false)}
+        onText={(text) => setQuery(text)}
+      />
     </section>
   );
 }

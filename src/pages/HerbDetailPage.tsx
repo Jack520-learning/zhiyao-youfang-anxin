@@ -13,9 +13,55 @@ import { DiscoveryNav } from "../components/DiscoveryNav";
 import { getHerb } from "../catalog/herbs";
 import { useAppStore } from "../store/useAppStore";
 
-function answerHerbQuestion(herbName: string, question: string, hasHighRiskMedication: boolean) {
+export function answerHerbQuestion(
+  herbName: string,
+  question: string,
+  hasHighRiskMedication: boolean,
+  herb?: {
+    aliases: string[];
+    nature: string;
+    flavor: string;
+    meridians: string[];
+    functions: string[];
+    traditionalUse: string;
+    safety: string[];
+    identification: string[];
+  }
+) {
   const normalized = question.trim();
   if (!normalized) return "";
+  if (/成分|有效成分|含什么|化学组成/.test(normalized)) {
+    return `结论：当前药材资料主要收录${herbName}的性味、归经、传统功用、辨识和安全提醒，没有足够可靠数据列出完整化学成分。
+
+重点：${herb?.functions.join("、") || "传统功用需结合具体品种和炮制方法理解"}。
+
+下一步：如需核对化学成分、质量标准或含量，请以《中国药典》、正式饮片包装和中药师审核结果为准，不要凭网传成分表自行使用。`;
+  }
+  if (/是什么|功效|作用|有什么用|治什么|传统功用/.test(normalized)) {
+    return `结论：${herbName}${herb ? `性${herb.nature}、味${herb.flavor}，归${herb.meridians.join("、")}经` : ""}。
+
+传统功用：${herb?.functions.join("、") || "请查看当前药材条目"}。
+
+使用边界：${herb?.traditionalUse || "这些资料用于传统知识参考，不能替代诊断或处方。"}
+
+下一步：是否适合您需要结合体质、症状、炮制方法和正在使用的药物，由中医师或药师判断。`;
+  }
+  if (/辨识|怎么认|长什么样|外观|别名/.test(normalized)) {
+    return `结论：辨识${herbName}不能只看颜色或单一特征，需要结合形态、气味、质地和来源。
+
+辨识要点：${herb?.identification.join("；") || "请查看当前药材条目的辨识说明"}。
+
+别名参考：${herb?.aliases.join("、") || "暂无别名资料"}。
+
+下一步：不确定品种时不要食用；饮片应保留正规包装并让药师核对。`;
+  }
+  if (/禁忌|副作用|安全|不能吃|哪些人不能|注意什么/.test(normalized)) {
+    return `结论：${herbName}不是人人都适合，也不能因为属于传统药材就认为没有风险。
+
+安全提醒：${herb?.safety.join("；") || "使用前需要专业评估"}。
+
+下一步：${hasHighRiskMedication ? "您当前有需要重点关注的处方药，使用前必须让医生或药师核对。" : "同时使用西药、慢病用药或保健品时，应先让医生或药师核对。"} 出现严重不适应立即就医。`;
+  }
   if (/多少钱|价格|价钱|哪里买|购买|最便宜/.test(normalized)) {
     return "结论：目前没有可靠的中药材实时价格数据，不能自动判断哪里购买最便宜。\n\n下一步：请到正规医疗机构药房或正规药店核对品种、产地和规格。不要因价格便宜购买来源不明的药材。";
   }
@@ -37,6 +83,7 @@ export function HerbDetailPage() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [asking, setAsking] = useState(false);
+  const [answerProgress, setAnswerProgress] = useState("");
   const hasHighRiskMedication = medications.some(
     (item) =>
       /\u534e\u6cd5\u6797|\u963f\u53f8\u5339\u6797|\u6c2f\u5421\u683c\u96f7|\u80f0\u5c9b\u7d20/.test(
@@ -62,12 +109,17 @@ export function HerbDetailPage() {
     const clean = question.trim();
     if (!clean || asking || !herb) return;
     setAsking(true);
+    setAnswer("");
+    setAnswerProgress("正在匹配药材性味、功用和安全资料…");
+    await new Promise((resolve) => window.setTimeout(resolve, 140));
     const localAnswer = answerHerbQuestion(
       herb.name,
       clean,
-      hasHighRiskMedication
+      hasHighRiskMedication,
+      herb
     );
     setAnswer(localAnswer);
+    setAnswerProgress("正在结合当前药物核对中西药同用风险…");
     try {
       const response = await fetch("/api/assistant", {
         method: "POST",
@@ -92,6 +144,7 @@ export function HerbDetailPage() {
       // The deterministic answer remains available.
     } finally {
       setAsking(false);
+      setAnswerProgress("");
     }
   }
 
@@ -189,6 +242,12 @@ export function HerbDetailPage() {
               )}
               {asking ? "正在回答" : "发送问题"}
             </button>
+            {asking && answerProgress ? (
+              <div className="notice" style={{ marginTop: 10 }} aria-live="polite">
+                <LoaderCircle size={19} className="spin" aria-hidden="true" />
+                {answerProgress}
+              </div>
+            ) : null}
             {answer ? (
               <div className="catalog-answer" aria-live="polite">
                 {answer}

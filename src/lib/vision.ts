@@ -2,6 +2,7 @@ import {
   findBestMedicine,
   findCatalogMedicineForRecognition
 } from "../catalog/retrieval";
+import { findHerbsInText } from "../catalog/herbs";
 import { isAsNeededFrequency, splitDosageText } from "./dosage";
 import { suggestDoseFromText } from "./doseAutofill";
 import type { IntakeDraft } from "../types";
@@ -69,7 +70,7 @@ function normalizeExplicitSingleDose(value?: string): string {
 
 export async function requestVisionIdentification(
   imageDataUrl: string,
-  mode: "medicine" | "herb" = "medicine",
+  mode: "medicine" | "herb" | "auto" = "medicine",
   timeoutMs = 50000
 ): Promise<VisionIdentification> {
   const controller = new AbortController();
@@ -141,6 +142,7 @@ export function hasMedicineEvidence(
 ): boolean {
   if (getVisionMedicines(vision).length > 0) return true;
   if (vision?.isMedicine === true) return true;
+  if (findHerbsInText(rawText).length > 0) return true;
   const compact = rawText.replace(/\s+/g, "");
   return (
     /(国药准字|批准文号|药品名称|说明书|处方笺|片剂|胶囊|颗粒|口服液|滴丸|软膏|乳膏|滴眼液|注射液|mg|毫克|ml)/i.test(
@@ -161,9 +163,11 @@ export function buildDraftsFromVision(
 
   return items.map((item, index) => {
     const recognizedName = cleanName(item.name);
+    const herb = findHerbsInText(recognizedName)[0];
     const medicine = findCatalogMedicineForRecognition(recognizedName) ?? undefined;
     const name =
-      medicine && recognizedName ? medicine.displayName : recognizedName;
+      herb?.name ||
+      (medicine && recognizedName ? medicine.displayName : recognizedName);
     const rawDosage = normalizeExplicitSingleDose(
       item.singleDose ||
         item.dosage ||
@@ -173,11 +177,13 @@ export function buildDraftsFromVision(
     const visibleSpecification = splitDosageText(
       cleanName(item.strength) || cleanName(item.dosage)
     );
-    const labelDose = suggestDoseFromText(
-      `${item.instructions || ""} ${!multiple ? fallbackDraft.instructions : ""}`,
-      "label"
-    );
-    const catalogDose = medicine
+    const labelDose = herb
+      ? null
+      : suggestDoseFromText(
+          `${item.instructions || ""} ${!multiple ? fallbackDraft.instructions : ""}`,
+          "label"
+        );
+    const catalogDose = medicine && !herb
       ? suggestDoseFromText(medicine.howToTake, "catalog")
       : null;
     const suggestedDose = labelDose || catalogDose;
@@ -194,33 +200,38 @@ export function buildDraftsFromVision(
         visibleSpecification.packageSpec
     );
     const frequency = cleanName(
-      item.frequency ||
-        (!multiple ? fallbackDraft.frequency : "") ||
-        "每日 1 次"
+      herb
+        ? item.frequency || ""
+        : item.frequency ||
+            (!multiple ? fallbackDraft.frequency : "") ||
+            "每日 1 次"
     );
     const relation = cleanName(
-      item.relation ||
-        (!multiple ? fallbackDraft.relation : "") ||
-        (medicine && /餐后|饭后|随餐/.test(medicine.timing)
-          ? /随餐/.test(medicine.timing)
-            ? "随餐"
-            : "饭后"
-          : "按说明书")
+      herb
+        ? item.relation || "按说明书"
+        : item.relation ||
+            (!multiple ? fallbackDraft.relation : "") ||
+            (medicine && /餐后|饭后|随餐/.test(medicine.timing)
+              ? /随餐/.test(medicine.timing)
+                ? "随餐"
+                : "饭后"
+              : "按说明书")
     );
     const ingredients = cleanName(
       item.activeIngredient ||
+        (herb ? herb.name : "") ||
         medicine?.activeIngredient ||
         (!multiple ? fallbackDraft.ingredientsText : "")
     );
     const confidence = Math.max(
       index === 0 ? fallbackDraft.confidence : 0,
       item.confidence || 0,
-      medicine ? 0.72 : 0
+      herb ? 0.72 : medicine ? 0.72 : 0
     );
     const lowConfidenceFields = [
       !name ? "name" : "",
       !dosage ? "dosage" : "",
-      !item.frequency && multiple ? "frequency" : "",
+      !item.frequency && (multiple || herb) ? "frequency" : "",
       !relation ? "relation" : "",
       !ingredients ? "ingredientsText" : ""
     ].filter(Boolean);
@@ -230,6 +241,7 @@ export function buildDraftsFromVision(
       name,
       genericName: cleanName(
         item.genericName ||
+          herb?.aliases[0] ||
           medicine?.activeIngredient ||
           (!multiple ? fallbackDraft.genericName : "")
       ),
@@ -249,7 +261,7 @@ export function buildDraftsFromVision(
         : undefined,
       frequency,
       times:
-        isAsNeededFrequency(frequency)
+        herb || isAsNeededFrequency(frequency)
           ? []
           : !multiple && fallbackDraft.times.length
             ? fallbackDraft.times
@@ -258,6 +270,9 @@ export function buildDraftsFromVision(
       instructions:
         cleanName(item.instructions) ||
         cleanName(item.labelText) ||
+        (herb
+          ? `传统功用：${herb.functions.join("、")}。安全提醒：${herb.safety.join("；")}`
+          : "") ||
         medicine?.howToTake ||
         (!multiple ? fallbackDraft.instructions : ""),
       price:

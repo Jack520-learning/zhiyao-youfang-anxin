@@ -14,4 +14,12 @@ describe("chat answer cleanup", () => {
       "> 温馨提示：这个问题与健康用药无关，以下仅作一般常识参考。\n\n天空呈蓝色。";
     expect(cleanAnswerForChat(content)).toBe(content);
   });
+
+  it("removes a leading bold title while preserving the answer body", () => {
+    expect(
+      cleanAnswerForChat(
+        "## 这次漏服怎么处理的安全要点\n\n结论：不要自行加倍。\n\n### 现在先做\n- 联系医生或药师。"
+      )
+    ).toBe("结论：不要自行加倍。\n\n### 现在先做\n- 联系医生或药师。");
+  });
 });

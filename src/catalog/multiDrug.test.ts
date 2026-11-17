@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest";
 import { reconcileMedicationList } from "./multiDrug";
 
 describe("multi medicine reconciliation", () => {
+  it("recognizes a known Chinese patent medicine instead of leaving it unresolved", () => {
+    const result = reconcileMedicationList(["速效救心丸"]);
+    expect(result.entries[0].kind).toBe("medicine");
+    expect(result.entries[0].label).toBe("速效救心丸");
+    expect(result.unresolved).not.toContain("速效救心丸");
+  });
+
   it("finds duplicate ingredients across different dosage forms", () => {
     const result = reconcileMedicationList([
       "布洛芬缓释胶囊",

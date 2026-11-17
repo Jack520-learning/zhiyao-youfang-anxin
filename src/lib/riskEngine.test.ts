@@ -3,6 +3,7 @@ import { answerWithRules, checkNewMedication, handleMissedDose } from "./riskEng
 import { createInitialState } from "../data/seed";
 import type { Medication } from "../types";
 import { nowIso } from "./time";
+import { buildRecentConversationQuestion } from "./conversationMemory";
 
 const state = createInitialState();
 
@@ -239,5 +240,52 @@ describe("riskEngine", () => {
     expect(result.message).toContain("具体不适部位");
     expect(result.message).not.toContain("仅凭头晕");
     expect(result.message).toContain("120");
+  });
+
+  it("answers a dropped follow-up about who to contact from recent medicine context", () => {
+    const nitroglycerin = medication(
+      "硝酸甘油片",
+      "硝酸甘油",
+      ["硝酸甘油"]
+    );
+    const contextualQuestion = buildRecentConversationQuestion({
+      query: "如果漏服时间比较久，应该联系谁？",
+      medicineName: "硝酸甘油片",
+      recentMessages: [
+        {
+          role: "user",
+          content: "我拍了一张药盒照片"
+        }
+      ]
+    });
+    const result = answerWithRules(
+      contextualQuestion,
+      [nitroglycerin],
+      profile
+    );
+    expect(result.message).toContain("开药医生或药师");
+    expect(result.message).toContain("120");
+  });
+
+  it("answers reminder-setting follow-ups with the real product path", () => {
+    const result = answerWithRules(
+      "下一次服药提醒怎么设置？",
+      [aspirin],
+      profile
+    );
+    expect(result.message).toContain("用药");
+    expect(result.message).toContain("提醒开关");
+    expect(result.message).toContain("今日");
+  });
+
+  it("checks high-risk missed-dose status against the current list", () => {
+    const warfarin = medication("华法林钠片", "华法林", ["华法林"]);
+    const result = answerWithRules(
+      "我现在吃的药里有高危漏服药物吗？",
+      [warfarin],
+      profile
+    );
+    expect(result.message).toContain("华法林钠片");
+    expect(result.message).toContain("不能自行加倍");
   });
 });

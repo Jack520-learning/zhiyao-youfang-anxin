@@ -346,13 +346,13 @@ export function buildRulesMessage(
 
   if (mode === "detailed") {
     const reasonsBlock = check.reasons?.length
-      ? `\n\n### 判断依据\n${check.reasons.map((r) => `- ${r}`).join("\n")}`
+      ? check.reasons.map((r) => `- ${r}`).join("\n")
       : "";
     return [
       options.hideHeading ? "" : `## ${questionHeading(query)}的详细说明`,
       `**风险等级：${levelLabel}**`,
-      "### 完整解释",
       check.summary,
+      "### 判断依据",
       reasonsBlock,
       "### 现在应该做什么",
       check.nextStep,
@@ -566,6 +566,118 @@ export function answerWithRules(
   const missedDoseIntent = /漏服|忘了吃|忘记吃|少吃一次|补服|补吃/.test(
     normalizedQuery
   );
+  if (
+    /(服药|用药)?提醒.*(怎么设置|如何设置|设置在哪|在哪里设置)/.test(
+      normalizedQuery
+    )
+  ) {
+    const check = makeCheck(
+      {
+        level: "low",
+        title: "下一次服药提醒设置方法",
+        summary:
+          "请进入“用药”页面选择对应药物，打开提醒开关并核对每日次数和具体时间；提醒生成后会显示在“今日”页面。",
+        nextStep:
+          "保存后再检查“今日”中的下一次服药时间。如果药物名称或时间不正确，先修改用药档案，不要仅依赖语音提醒。",
+        reasons: [
+          "识别为服药提醒设置问题",
+          "回答依据当前产品实际提醒功能"
+        ],
+        sourceIds: ["src-chat"],
+        involvedMedicationIds: mentionedMedications.map(
+          (medication) => medication.id
+        )
+      },
+      currentMedications
+    );
+    return {
+      message: buildRulesMessage(check, mode, query),
+      riskCheck: check,
+      stages: [
+        { id: "intent", label: "识别提醒设置问题", status: "done" },
+        { id: "profile", label: "定位当前用药与提醒入口", status: "done" },
+        { id: "answer", label: "给出实际设置步骤", status: "done" }
+      ],
+      mode: "rules"
+    };
+  }
+  if (missedDoseIntent && /高危.*漏服|漏服.*高危/.test(normalizedQuery)) {
+    const highRiskMedications = currentMedications.filter((medication) =>
+      Boolean(findHighRiskMedication(medication))
+    );
+    const check = makeCheck(
+      {
+        level: highRiskMedications.length ? "high" : "low",
+        title: highRiskMedications.length
+          ? "当前清单中有高危漏服药物"
+          : "当前清单未发现高危漏服药物",
+        summary: highRiskMedications.length
+          ? `需要重点关注：${highRiskMedications
+              .map((medication) => medication.name)
+              .join("、")}。这些药物漏服后不能自行加倍或停药。`
+          : "当前已确认用药中没有命中需要专门拦截漏服的高危药物，但这不代表所有药物都能按同一规则补服。",
+        nextStep:
+          "请按每种药的处方或说明书处理，并联系开药医生或药师核对；核对范围是当前用药档案，未录入药物不在本次结果内。",
+        reasons: [
+          "识别到高危漏服核查问题",
+          `已核对当前 ${currentMedications.length} 种药物`,
+          "系统不会为高危药物生成补服剂量"
+        ],
+        sourceIds: ["src-emergency", "src-no-evidence"],
+        involvedMedicationIds: currentMedications.map(
+          (medication) => medication.id
+        )
+      },
+      currentMedications
+    );
+    return {
+      message: buildRulesMessage(check, mode, query),
+      riskCheck: check,
+      stages: [
+        { id: "intent", label: "识别高危漏服核查", status: "done" },
+        { id: "profile", label: "逐项读取当前用药", status: "done" },
+        { id: "risk", label: "标注高危停止线", status: "done" }
+      ],
+      mode: "rules"
+    };
+  }
+  if (missedDoseIntent && /联系谁|找谁|问谁|咨询谁/.test(normalizedQuery)) {
+    const medication = mentionedMedications[0];
+    const base = medication
+      ? handleMissedDose(medication, currentMedications)
+      : null;
+    const names = mentionedMedications.map((item) => item.name);
+    const check = makeCheck(
+      {
+        level: base?.level || "unknown",
+        title: "漏服较久时先联系开药医生或药师",
+        summary: medication
+          ? `“${medication.name}”漏服时间较久时，先联系开药医生或药师核对，不要为了补上而自行加倍。`
+          : `当前涉及${names.length ? `“${names.join("、")}”` : "处方药"}时，漏服处理需要由开药医生或药师确认。`,
+        nextStep:
+          "请说明药物名称、原定服药时间、实际漏服了多久以及现在的身体状态。出现胸痛、呼吸困难、意识异常、晕厥、明显出血或严重低血糖表现时，不要等待回复，立即拨打 120。",
+        reasons: [
+          "问题重点是如何联系专业人员，而不是自行补服",
+          ...(base?.reasons || ["缺少该药明确的漏服规则"])
+        ],
+        sourceIds: base?.sourceIds || ["src-no-evidence"],
+        involvedMedicationIds: mentionedMedications.map(
+          (item) => item.id
+        )
+      },
+      currentMedications
+    );
+    return {
+      message: buildRulesMessage(check, mode, query),
+      riskCheck: check,
+      stages: [
+        { id: "intent", label: "识别“应该联系谁”问题", status: "done" },
+        { id: "profile", label: "读取漏服药物与危险信号", status: "done" },
+        { id: "risk", label: "给出联系对象和求助边界", status: "done" }
+      ],
+      mode: "rules"
+    };
+  }
   if (missedDoseIntent && mentionedMedications.length) {
     const medication = mentionedMedications[0];
     const check = handleMissedDose(medication, currentMedications);

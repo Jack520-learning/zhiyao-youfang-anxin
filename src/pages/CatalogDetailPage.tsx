@@ -2,6 +2,8 @@ import {
   ArrowLeft,
   BookOpenText,
   CircleHelp,
+  LoaderCircle,
+  Send,
   ShieldCheck,
   ShoppingBag
 } from "lucide-react";
@@ -22,6 +24,9 @@ export function CatalogDetailPage() {
   const appProfile = useAppStore((state) => state.profile);
   const appMedications = useAppStore((state) => state.medications);
   const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [answerProgress, setAnswerProgress] = useState("");
   const currentCompanions = useMemo(
     () =>
       [...new Set(
@@ -56,12 +61,28 @@ export function CatalogDetailPage() {
       ? ["liver" as const]
       : [])
   ];
-  const guidance = buildLocalGuidance({
-    medicineSlug: medicine.slug,
-    companionSlugs: currentCompanions,
-    healthContext: contexts,
-    question: question || undefined
-  });
+  async function askCatalogQuestion() {
+    const clean = question.trim();
+    if (!clean || asking || !medicine) return;
+    setAsking(true);
+    setAnswer("");
+    setAnswerProgress("正在匹配当前药品条目和问题关键词…");
+    await new Promise((resolve) => window.setTimeout(resolve, 160));
+    const guidance = buildLocalGuidance({
+      medicineSlug: medicine.slug,
+      companionSlugs: currentCompanions,
+      healthContext: contexts,
+      question: clean
+    });
+    setAnswerProgress("正在核对同服药物、个人提醒和安全边界…");
+    await new Promise((resolve) => window.setTimeout(resolve, 140));
+    setAnswer(
+      guidance?.questionAnswer ||
+        "当前药品资料没有找到对应答案，请换一个更具体的问题。"
+    );
+    setAnswerProgress("");
+    setAsking(false);
+  }
 
   return (
     <div className="page">
@@ -155,17 +176,42 @@ export function CatalogDetailPage() {
               <textarea
                 className="textarea"
                 value={question}
-                placeholder="例如：漏服怎么办？服药期间能喝酒吗？"
-                onChange={(event) => setQuestion(event.target.value)}
+                placeholder="例如：成分是什么？漏服怎么办？服药期间能喝酒吗？"
+                onChange={(event) => {
+                  setQuestion(event.target.value);
+                  setAnswer("");
+                  setAnswerProgress("");
+                }}
               />
             </label>
-            {guidance?.questionAnswer ? (
+            <button
+              className="btn btn-primary"
+              type="button"
+              disabled={!question.trim() || asking}
+              onClick={() => void askCatalogQuestion()}
+              style={{ width: "100%", marginTop: 10 }}
+            >
+              {asking ? (
+                <LoaderCircle size={19} className="spin" aria-hidden="true" />
+              ) : (
+                <Send size={19} aria-hidden="true" />
+              )}
+              {asking ? "正在核对资料" : "发送问题"}
+            </button>
+            {asking ? (
               <div className="catalog-answer" aria-live="polite">
-                {guidance.questionAnswer}
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <LoaderCircle size={19} className="spin" aria-hidden="true" />
+                  {answerProgress}
+                </span>
+              </div>
+            ) : answer ? (
+              <div className="catalog-answer" aria-live="polite">
+                {answer}
               </div>
             ) : (
               <p className="field-hint">
-                输入问题后会先给出结论，再说明原因和下一步。价格与购买平台不做猜测。
+                输入问题后，我会先匹配成分、用法、安全提醒或同服药物，再给出结论和下一步。价格与购买平台不做猜测。
               </p>
             )}
           </section>

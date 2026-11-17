@@ -64,6 +64,7 @@ import {
   currentCatalogCompanionSlugs
 } from "../catalog/chatBridge";
 import { findBestMedicine } from "../catalog/retrieval";
+import { findHerbsInText } from "../catalog/herbs";
 import { buildLocalGuidance } from "../catalog/guidance";
 import {
   buildDraftsFromVision,
@@ -85,10 +86,7 @@ import {
   isContextualDailyReply,
   resolveAdaptiveAnswerMode
 } from "../lib/dailyConversation";
-import {
-  buildContextualQuestion,
-  shouldUseConversationContext
-} from "../lib/conversationMemory";
+import { buildRecentConversationQuestion } from "../lib/conversationMemory";
 import {
   buildPublicKnowledgeResponse,
   isKnowledgeGap,
@@ -123,6 +121,8 @@ import type {
   RiskCheck
 } from "../types";
 import { dateKey } from "../lib/time";
+import { resolveInitialChatView } from "../lib/chatView";
+import { varyRegeneratedAnswer } from "../lib/answerVariation";
 
 const sampleQuestions = [
   "今天这些药要怎么吃？",
@@ -328,7 +328,15 @@ export function ChatPage() {
   const [reminderNotice, setReminderNotice] = useState("");
   const [cameraOpen, setCameraOpen] = useState(false);
   const [view, setView] = useState<"home" | "conversation">(
-    searchParams.get("q") ? "conversation" : "home"
+    resolveInitialChatView({
+      query: searchParams.get("q"),
+      messageCount: activeConversation?.messages.length ?? 0,
+      hasMedicineContext: Boolean(activeConversation?.medicineContext),
+      savedConversationId: sessionStorage.getItem(
+        "chat-open-conversation"
+      ),
+      activeConversationId
+    })
   );
   const [composerSkill, setComposerSkill] = useState<ComposerSkill>();
   const [answerMode, setAnswerMode] = useState<AnswerMode>("safety");
@@ -354,12 +362,14 @@ export function ChatPage() {
   const resizeStartRef = useRef<{ mouseX: number; width: number } | null>(null);
   const latestSidebarWidth = useRef(220);
   const messagesRef = useRef<HTMLDivElement>(null);
+  const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const initialQueryHandled = useRef(false);
   const autoScrollRef = useRef(false);
   const streamTraceRef = useRef<AssistantStage[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const generationRunRef = useRef(0);
   const speechRunRef = useRef(0);
+  const regenerationVariationRef = useRef(0);
 
   const speech = useQwenSpeechRecognition((transcript) => {
     setInput(transcript);
@@ -372,6 +382,25 @@ export function ChatPage() {
     setSpeechNotice("");
     stopSpeaking();
   }, [automaticSpeechEnabled]);
+
+  useEffect(() => {
+    if (view === "conversation" && activeConversationId) {
+      sessionStorage.setItem(
+        "chat-open-conversation",
+        activeConversationId
+      );
+    }
+  }, [view, activeConversationId]);
+
+  useEffect(() => {
+    if (
+      activeConversationId &&
+      sessionStorage.getItem("chat-open-conversation") ===
+        activeConversationId
+    ) {
+      setView("conversation");
+    }
+  }, [activeConversationId]);
 
   function updateScrollAvailability() {
     const container = messagesRef.current;
@@ -507,6 +536,9 @@ export function ChatPage() {
     if (!clean || sending) return;
     const regenerateMessageId = options?.regenerateMessageId;
     const isRegeneration = Boolean(regenerateMessageId);
+    const regenerationSeed = isRegeneration
+      ? (regenerationVariationRef.current += 1)
+      : 0;
     const runId = generationRunRef.current + 1;
     generationRunRef.current = runId;
     const generationController = new AbortController();
@@ -583,21 +615,17 @@ export function ChatPage() {
         isContextualDailyReply(clean, previousAssistantMessage?.content));
     const currentConversationDraft =
       currentConversation?.medicineContext ?? stateAfterMessage.intakeDraft;
-    const draftContextQuestion =
-      currentConversationDraft &&
-      /(这个药|这种药|它|这盒药|图片里)/.test(clean) &&
-      currentConversationDraft.name
-        ? `${currentConversationDraft.name} ${clean}`
-        : clean;
-    const medicalFollowUp =
-      !dailyConversation &&
-      Boolean(previousUserMessage) &&
-      needsMedicationReview(previousUserMessage?.content || "", composerSkill) &&
-      shouldUseConversationContext(clean);
     const contextualQuestion =
-      medicalFollowUp && previousUserMessage
-        ? buildContextualQuestion(clean, previousUserMessage.content)
-        : draftContextQuestion;
+      dailyConversation
+        ? clean
+        : buildRecentConversationQuestion({
+            query: clean,
+            medicineName: currentConversationDraft?.name,
+            recentMessages: previousMessages.slice(-8).map((message) => ({
+              role: message.role,
+              content: message.content
+            }))
+          });
     const medicationActivityQuery =
       !dailyConversation && isMedicationActivityQuery(contextualQuestion);
     const generalKnowledgeQuery =
@@ -738,6 +766,17 @@ export function ChatPage() {
       }
     }
     localResponse = toElderVoiceResponse(localResponse);
+    if (isRegeneration) {
+      localResponse = {
+        ...localResponse,
+        message: varyRegeneratedAnswer(
+          localResponse.message,
+          effectiveAnswerMode,
+          clean,
+          regenerationSeed
+        )
+      };
+    }
     const discomfortRegex = /(不舒服|头晕|难受|胸闷|恶心|心慌)/;
     if (
       !dailyConversation &&
@@ -919,11 +958,19 @@ export function ChatPage() {
         if (!isAnswerModeCompliant(streamed, effectiveAnswerMode)) {
           throw new Error("模型回答未满足所选回答方式，已切换本地结构化回答");
         }
+        const variedStream = isRegeneration
+          ? varyRegeneratedAnswer(
+              streamed,
+              effectiveAnswerMode,
+              clean,
+              regenerationSeed
+            )
+          : streamed;
         response = toElderVoiceResponse({
           ...localResponse,
           message: generalKnowledgeQuery
-            ? withGeneralKnowledgeNotice(streamed)
-            : streamed,
+            ? withGeneralKnowledgeNotice(variedStream)
+            : variedStream,
           mode: "llm"
         });
         replaceChatMessage(
@@ -1056,7 +1103,7 @@ export function ChatPage() {
       let draft;
       const visionPromise = requestVisionIdentification(
         imageDataUrl,
-        "medicine",
+        "auto",
         50000
       ).catch(() => null);
       try {
@@ -1096,6 +1143,7 @@ export function ChatPage() {
       }
       const photoResults = recognizedDrafts.map((recognizedDraft) => {
         let nextDraft = recognizedDraft;
+        const herb = findHerbsInText(nextDraft.name)[0];
         const compactText = `${nextDraft.name}${nextDraft.rawText}`.replace(
           /\s+/g,
           ""
@@ -1229,7 +1277,19 @@ export function ChatPage() {
           nextDraft.price ||
           "暂无可靠价格数据，请以药房价格或购买记录为准";
         const body =
-          catalogMatch && catalogGuidance
+          herb
+            ? [
+                `识别结果：${herb.name}`,
+                `性味归经：${herb.nature}，${herb.flavor}，归${herb.meridians.join("、")}经`,
+                `传统功用：${herb.functions.join("、")}`,
+                `传统用途参考：${herb.traditionalUse}`,
+                "安全提醒：",
+                ...herb.safety.map((item) => `· ${item}`),
+                "辨识要点：",
+                ...herb.identification.map((item) => `· ${item}`),
+                "识别边界：照片只能提供名称候选，不能代替中药师对品种、炮制方法和质量的实物鉴别；不提供自行剂量或配伍方案。"
+              ].join("\n")
+            : catalogMatch && catalogGuidance
             ? [
                 buildAutomaticMedicineReport(
                   catalogMatch,
@@ -1359,24 +1419,14 @@ export function ChatPage() {
 
   function startNewConversation() {
     speech.stop();
-    const current = useAppStore
-      .getState()
-      .conversations.find(
-        (conversation) =>
-          conversation.id === useAppStore.getState().activeConversationId
-      );
-    if (
-      current?.messages.some((message) => message.role === "user") ||
-      current?.medicineContext
-    ) {
-      createConversation();
-    }
-    setView("home");
+    createConversation();
+    setView("conversation");
     setInput("");
     setStages([]);
     setPhotoNotice("");
     setComposerSkill(undefined);
     setShowScrollToBottom(false);
+    window.setTimeout(() => composerInputRef.current?.focus(), 0);
   }
 
   function toggleReminders() {
@@ -1440,13 +1490,8 @@ export function ChatPage() {
   }
 
   function openConversation(id: string) {
-    const selected = conversations.find((conversation) => conversation.id === id);
     setActiveConversation(id);
-    setView(
-      selected?.messages.some((message) => message.role === "user")
-        ? "conversation"
-        : "home"
-    );
+    setView("conversation");
     setInput("");
     setPhotoNotice("");
     setComposerSkill(undefined);
@@ -2091,6 +2136,7 @@ export function ChatPage() {
             <div className="ai-search-field">
               <span className="sr-only">输入您想问的用药问题</span>
               <textarea
+                ref={composerInputRef}
                 rows={1}
                 value={input}
                 placeholder={

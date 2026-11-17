@@ -53,4 +53,15 @@ describe("contextual follow-up questions", () => {
     expect(questions).not.toContain("阿司匹林肠溶片每天怎么吃？");
     expect(questions.length).toBeGreaterThan(0);
   });
+
+  it("uses herb-specific follow-ups after a Chinese herb photo", () => {
+    const questions = buildFollowUpQuestions({
+      query: "我拍了一张中药材照片",
+      answer: "已识别为枸杞子",
+      medicineName: "枸杞子"
+    });
+    expect(questions[0]).toContain("传统功用");
+    expect(questions.some((question) => question.includes("西药"))).toBe(true);
+    expect(questions).not.toContain("枸杞子每天怎么吃？");
+  });
 });

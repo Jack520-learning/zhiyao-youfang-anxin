@@ -16,6 +16,7 @@ import {
   extractRecognizedMedicineNames,
   recognizeMedicineImage
 } from "../lib/ocr";
+import { findHerbsInText } from "../catalog/herbs";
 import {
   getVisionMedicineNames,
   requestVisionIdentification
@@ -55,13 +56,16 @@ export function MultiDrugPage() {
     try {
       const visionPromise = requestVisionIdentification(
         imageDataUrl,
-        "medicine",
+        "auto",
         50000
       ).catch(() => null);
       let ocrNames: string[] = [];
       try {
         const ocr = await recognizeMedicineImage(imageDataUrl);
-        ocrNames = extractRecognizedMedicineNames(ocr.rawText);
+        ocrNames = [
+          ...extractRecognizedMedicineNames(ocr.rawText),
+          ...findHerbsInText(ocr.rawText).map((herb) => herb.name)
+        ];
       } catch {
         // Vision candidates can still complete the reconciliation.
       }

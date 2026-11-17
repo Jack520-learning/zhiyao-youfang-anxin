@@ -101,7 +101,24 @@ describe("multi-medicine vision results", () => {
 
   it("uses OCR text as medicine evidence when vision times out", () => {
     expect(hasMedicineEvidence(null, "苯磺酸氨氯地平片 5mg")).toBe(true);
+    expect(hasMedicineEvidence(null, "枸杞子")).toBe(true);
     expect(getVisionMedicineNames(null)).toEqual([]);
+  });
+
+  it("turns an automatically detected Chinese herb into an herb-safe draft", () => {
+    const drafts = buildDraftsFromVision(
+      "data:image/jpeg;base64,test",
+      createManualDraft("data:image/jpeg;base64,test"),
+      {
+        isMedicine: true,
+        medicines: [{ name: "枸杞", confidence: 0.84 }]
+      }
+    );
+    expect(drafts[0].name).toBe("枸杞子");
+    expect(drafts[0].dosage).toBe("");
+    expect(drafts[0].frequency).toBe("");
+    expect(drafts[0].times).toEqual([]);
+    expect(drafts[0].instructions).toContain("滋补肝肾");
   });
 
   it("fills a catalog dose instead of treating package quantity as a single dose", () => {

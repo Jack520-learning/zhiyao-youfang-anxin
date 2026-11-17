@@ -498,7 +498,7 @@ export function EvaluationPage() {
         <div className="section-heading">
           <div>
             <h2>下一步评估建议</h2>
-            <p>让比赛展示从“功能列表”升级为可验证的工程闭环。</p>
+            <p>让功能展示从“列表说明”升级为可验证的工程闭环。</p>
           </div>
           <ClipboardCheck size={24} color="var(--primary)" aria-hidden="true" />
         </div>
@@ -510,7 +510,7 @@ export function EvaluationPage() {
           </div>
           <div>
             <b>02</b>
-            <span>双评审标注</span>
+            <span>双人复核标注</span>
             <small>由至少两名专业人员独立确认预期风险和来源。</small>
           </div>
           <div>

@@ -267,7 +267,7 @@ export function AddMedicationPage({
     try {
       const visionPromise = requestVisionIdentification(
         dataUrl,
-        "medicine",
+        "auto",
         50000
       ).catch((error) => {
         visionError =
@@ -381,7 +381,7 @@ export function AddMedicationPage({
     try {
       const visionPromise = requestVisionIdentification(
         imageDataUrl,
-        "medicine",
+        "auto",
         50000
       ).catch(() => null);
       let recognized: IntakeDraft;
@@ -705,7 +705,11 @@ export function AddMedicationPage({
 
   return (
     <div className={embedded ? "embedded-add-medication" : "page"}>
-      <button type="button" className="btn btn-ghost" onClick={exitPage}>
+      <button
+        type="button"
+        className="btn btn-ghost intake-back-button"
+        onClick={exitPage}
+      >
         <ArrowLeft size={19} aria-hidden="true" />
         {backLabel}
       </button>

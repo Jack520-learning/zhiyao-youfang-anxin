@@ -75,6 +75,31 @@ function answerKnownQuestion(
   const normalized = question.trim();
   if (!normalized) return "";
 
+  if (/成分|有效成分|主要成分|通用名|含什么|组成/.test(normalized)) {
+    return `结论：${medicine.displayName}的通用名为${medicine.activeIngredient}，主要有效成分是${medicine.activeIngredient}。
+
+剂型与常见规格：${medicine.dosageForm}，${medicine.strength}。
+
+重点注意：${medicine.keyWarnings[0]}
+
+下一步：请再核对药盒或说明书“成份”一栏，确认是否存在复方成分、不同盐型或同一成分的重复用药；不要仅凭商品名判断成分。`;
+  }
+  if (/治什么|(?<!副)作用|用途|适应症|用于什么|管什么/.test(normalized)) {
+    return `结论：${medicine.displayName}属于${medicine.category}用药。
+
+常见用途参考：${medicine.howToTake}
+
+使用边界：药品是否适合您，需要结合医生确认的诊断、年龄、肝肾功能和同服药物判断。当前资料不能替代诊断或处方。
+
+下一步：核对包装适应症和医生处方；如果症状持续、加重或出现说明书警示信号，应及时就医。`;
+  }
+  if (/剂型|规格|多少毫克|每片|每粒/.test(normalized)) {
+    return `结论：这份资料中的剂型是${medicine.dosageForm}，常见规格为${medicine.strength}。
+
+为什么不能直接套用：不同厂家、不同剂型的单片或单粒含量可能不同，缓释、肠溶和普通片也不能直接互换。
+
+下一步：以您手中包装正面的规格和说明书为准，并让医生或药师确认实际服用量。`;
+  }
   if (/多少钱|价格|价钱|最便宜|哪个平台|哪里买|购买|医保|报销/.test(normalized)) {
     return `结论：我无法核实实时价格，也不能判断哪个平台最便宜。
 
@@ -96,6 +121,20 @@ function answerKnownQuestion(
 原因：药物过量可能出现延迟或严重反应，处理方式取决于具体剂量、时间和个人情况。
 
 下一步：保留药盒并立即联系急诊、医生或中毒咨询机构；出现意识异常、呼吸困难、抽搐或剧烈不适时拨打 120。`;
+  }
+  if (/提醒.*(怎么设置|如何设置|设置在哪|在哪里设置)/.test(normalized)) {
+    return `结论：请在“用药”页面选择${medicine.displayName}，打开提醒开关，并核对每日次数、具体时间和饭前饭后要求。
+
+原因：提醒必须基于当前已确认的药物名称和时间，名称或剂量未核实时不应直接生成提醒。
+
+下一步：保存后到“今日”页面检查下一次提醒是否出现；若时间不正确，先修改药物信息。`;
+  }
+  if (/漏服/.test(normalized) && /联系谁|找谁|问谁|咨询谁/.test(normalized)) {
+    return `结论：漏服时间较久时，优先联系给您开具${medicine.displayName}的医生或药师，不要自行加倍补服。
+
+联系时需要说明：药名、规格、原定服药时间、实际漏服了多久，以及现在是否出现不适。
+
+紧急情况：如果出现胸痛、呼吸困难、晕厥、意识异常、明显出血或严重低血糖表现，应立即拨打 120 或前往急诊，不要等待在线回答。`;
   }
   if (/漏服|忘了|少吃一次/.test(normalized)) {
     return `结论：不要为了补服而自行加倍。
@@ -170,11 +209,9 @@ function answerKnownQuestion(
     return medicine.specialGroups.liver;
   }
 
-  return `结论：${medicine.howToTake}
+  return `结论：当前药品资料没有找到能准确回答“${normalized}”的对应字段，因此不能套用其他剂型或药物的用法答案。
 
-重点注意：${medicine.keyWarnings[0]}
-
-下一步：这个问题可能涉及你的年龄、肝肾功能、同服药物或其他个体情况。当前知识卡不足以保证个体化判断，请把药盒和完整用药清单交给开药医生或药师确认。`;
+下一步：请换成具体问题，例如“主要成分是什么”“常见副作用”“漏服怎么办”“饭前还是饭后吃”；涉及个体化用药时，请核对药盒、说明书并咨询医生或药师。`;
 }
 
 export function buildLocalGuidance(request: AdviseRequest): Guidance | null {

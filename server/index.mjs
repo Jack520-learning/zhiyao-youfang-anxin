@@ -594,7 +594,9 @@ async function callVisionIdentification(imageDataUrl, mode) {
   const baseUrl = getAiBaseUrl();
   const model = getVisionModel();
   const subject =
-    mode === "herb"
+    mode === "auto"
+      ? "药品包装、说明书、处方笺、散装药片胶囊，或中药材、中草药、饮片实物"
+      : mode === "herb"
       ? "中药材、中草药或饮片实物"
       : "药品包装、瓶身标签、铝箔板、散装药片胶囊、说明书或处方笺";
   const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -613,14 +615,14 @@ async function callVisionIdentification(imageDataUrl, mode) {
         {
           role: "system",
           content:
-            "你是谨慎的药品标签识别器。先定位每一个独立包装或独立对象，再逐字读取最大、最清晰、最具体的药品名称；品牌名、商品名、通用名和生产企业必须区分，不能把生产企业、广告语、批准文号、规格或用法说明当成药名。只输出照片中确实可见的信息，不诊断、不推荐剂量、不提供处方，也不得凭药名猜测价格。看不清时降低置信度并说明原因。必须输出 JSON。"
+            "你是谨慎的药品与中药材图文识别器。先判断照片是西药、中药饮片还是混合对象，再定位每一个独立包装或独立实物。包装药品要逐字读取最具体名称；中药材要结合形态、颜色、质地和排列特征列出可能名称，不能只凭相似外观给单一结论。品牌名、商品名、通用名、炮制规格和生产企业必须区分。只输出照片中确实可见的信息，不诊断、不推荐剂量、不提供处方，也不得凭名称猜测价格。看不清时降低置信度并说明原因。必须输出 JSON。"
         },
         {
           role: "user",
           content: [
             {
               type: "text",
-              text: `请逐项识别照片中的所有${subject}。不同包装、不同颜色或不同药名分别作为独立条目；同一药品重复出现只输出一次。照片只要含药品或用药资料，isMedicine 就应为 true；仅在完全与药品无关时才为 false。输出 JSON：{"isMedicine":true或false,"rejectionReason":"仅在与药品无关时说明原因","candidates":[{"name":"核实后的药名","confidence":0到1,"visibleFeatures":["名称附近可直接看到的文字"]}],"medicines":[{"position":"例如：上/中/下或左/右","name":"包装上最完整且最具体的药名","genericName":"可见通用名，没有则留空","activeIngredient":"可见有效成分，没有则留空","labelText":"逐字摘录药名、规格和用法附近可见文字","singleDose":"仅填明确写出的每次实际服用量，例如每次1片或每次0.5mg；只有单片规格、包装数量或‘5mg×28片’时必须留空","dosage":"可见的单片或单剂规格，不要把包装数量当单次剂量","price":"只填包装或价签上明确可见的价格，未标价则留空","dosageForm":"剂型","strength":"单片或单粒规格","packageSpec":"包装数量，例如28片/盒","frequency":"明确写出的频次，否则留空","relation":"明确写出的饭前/饭后/随餐/睡前，否则留空","instructions":"仅摘录该药品可见的用法说明","confidence":0到1,"visibleFeatures":["用于区分该药品的可见特征"]}],"summary":"不超过120字的谨慎结论","cautions":["需要人工核实的点"]}。逐项检查是否遗漏左、右、后方的包装。中药材形态相似时不要给单一确定结论，应列出可能候选。药品优先读取每个包装上的文字，不根据外观猜品牌，不估算价格，不把‘国药准字’、生产厂家或规格当成名称。`
+              text: `请逐项识别照片中的所有${subject}。不同包装、不同颜色、不同药名或不同药材分别作为独立条目；同一对象重复出现只输出一次。照片含西药、中药材或相关用药资料时，isMedicine 均应为 true；仅在完全无关时才为 false。输出 JSON：{"isMedicine":true或false,"rejectionReason":"仅在与药品或药材无关时说明原因","candidates":[{"name":"核实后的药名或药材名","confidence":0到1,"visibleFeatures":["名称附近文字或辨识特征"]}],"medicines":[{"position":"例如：上/中/下或左/右","name":"西药填最完整药名，中药材填最可能的标准药材名","genericName":"西药通用名或药材别名，没有则留空","activeIngredient":"西药有效成分；中药可填已知主要成分，不确定则留空","labelText":"包装或药材可见文字/特征","singleDose":"西药仅填明确写出的每次实际服用量；中药不得推荐自行剂量","dosage":"仅填包装可见规格，不把包装数量当单次剂量","price":"只填包装或价签明确可见价格","dosageForm":"西药剂型；中药可填饮片、果实、根茎等形态","strength":"单片或单粒规格","packageSpec":"包装数量","frequency":"西药明确频次，否则留空","relation":"明确写出的服用时机，否则留空","instructions":"仅摘录可见说明；中药不得生成自行煎服方案","confidence":0到1,"visibleFeatures":["用于区分对象的可见特征"]}],"summary":"不超过120字的谨慎结论","cautions":["需要人工核实的点"]}。逐项检查是否遗漏后方对象。中药材形态相似时列出可能候选并说明不能只凭照片确定；西药优先读取每个包装文字，不估算价格。`
             },
             {
               type: "image_url",
@@ -723,6 +725,51 @@ async function callVisionIdentification(imageDataUrl, mode) {
     medicines,
     medicine: medicines[0],
     mode: "live"
+  };
+}
+
+async function callHandwritingRecognition(imageDataUrl) {
+  const response = await fetch(`${getAiBaseUrl()}/chat/completions`, {
+    method: "POST",
+    signal: AbortSignal.timeout(45000),
+    headers: {
+      Authorization: `Bearer ${getAiKey()}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: getVisionModel(),
+      temperature: 0,
+      max_tokens: 300,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            "你是手写中文转录器。只转录白色画布上的黑色手写内容，保留用户原本的问题或药名，不回答问题、不补全不确定的汉字、不诊断、不给建议。无法辨认时返回空文本。必须输出 JSON。"
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: '请转录这张手写画布，输出 {"text":"转录文字"}。不要添加解释。'
+            },
+            {
+              type: "image_url",
+              image_url: { url: imageDataUrl, detail: "high" }
+            }
+          ]
+        }
+      ]
+    })
+  });
+  if (!response.ok) {
+    throw new Error(`手写识别模型返回 ${response.status}`);
+  }
+  const payload = await response.json();
+  const parsed = parseModelJson(payload.choices?.[0]?.message?.content);
+  return {
+    text: typeof parsed.text === "string" ? parsed.text.trim().slice(0, 200) : ""
   };
 }
 
@@ -1021,17 +1068,17 @@ function buildAssistantRequest(payload) {
     temperature: 0.55
   } : {
     quick: {
-      style: "只说两三句话，第一句直接给结论，最后一句给一个最该做的下一步。不展开原理，不列清单，不重复用户问题。绝对不要输出任何Markdown表格、|字符、---分隔线或#标题符号，保持纯文本。",
+      style: "只说两句话：第一句直接回答用户的问题，第二句给一个最该做的下一步。第一行不得是加粗标题或#标题，不展开原理，不列清单，不重复用户问题。绝对不要输出表格、|字符、---分隔线或#标题符号，保持纯文本。",
       maxTokens: 360,
       temperature: 0.05
     },
     safety: {
-      style: "先识别用户真正问的是用法、漏服、同服、价格、症状、储存还是禁忌，再直接回答这个具体问题。标题和内容必须随问题变化，不要固定套用「风险核对—结论—下一步」，也不要复用与问题无关的通用段落。用法题要落到具体药名、剂量、时间和饭前饭后；漏服题要说明具体处理边界；同服题要指出涉及的具体药；价格题要明确未核实实时价格；症状题要先给危险信号。保留 groundingText 的风险等级、禁忌和下一步，不得增加新药事实。不要输出表格或---分隔线。",
+      style: "第一行直接写针对当前问题的结论，禁止加粗标题、#标题或“安全要点”标题。随后只保留与当前问题直接相关的两个小节：### 判断依据 和 ### 现在先做什么。用法题落实到具体药名、剂量、时间和饭前饭后；询问联系谁时直接说明医生、药师或紧急求助的边界；提醒题说明真实设置入口；同服题指出具体药物；价格题说明未核实实时价格；症状题先给危险信号。不得复用与问题无关的通用段落，不得增加 groundingText 之外的新药事实。不要输出表格或 --- 分隔线。",
       maxTokens: 900,
       temperature: 0.05
     },
     detailed: {
-      style: "先给一句话总论，然后用标准Markdown二级标题「## 」分小节展开：## 是什么/为什么、## 用法用量与时间、## 注意事项与禁忌、## 可能的副作用、## 特殊人群提醒、## 储存与有效期、## 下一步建议。内容要具体、有可操作性，但不诊断、不开处方、不调整剂量。绝对不要输出表格、|字符或---分隔线。",
+      style: "第一行直接给出当前问题的详细结论，禁止加粗标题、#标题或泛化的“详细说明”标题。根据问题选择且仅选择真正相关的小节，使用 ### 标题，例如 ### 问题说明、### 判断依据、### 具体行动、### 何时联系医生或拨打 120。内容要明显比安全问药更详细，但不得堆入与该问题无关的用途、储存、副作用或特殊人群段落。不诊断、不开处方、不调整剂量。绝对不要输出表格、|字符或 --- 分隔线。",
       maxTokens: 1400,
       temperature: 0.2
     }
@@ -1433,7 +1480,7 @@ async function lookupPublicKnowledge(query, rawProfile = {}) {
     "提问者是一位老年人。必须优先从老年人安全视角回答，不得把青少年、职业运动员或普通成年人的运动、用药标准直接套用给老人。",
     "先直接回答当前问题，再说明对这位老人最关键的差异和注意事项；没有提供的信息不要猜测。",
     "涉及运动时，要结合年龄、慢病、骨质疏松或跌倒风险、心肺症状和当前用药，必要时建议先经医生或康复专业人员评估，并给出低冲击替代方案。",
-    "不要用与当前问题无关的青少年生长板、职业赛事发生率或泛化统计填充回答。",
+    "不要用与当前问题无关的青少年生长板、职业运动统计或泛化数据填充回答。",
     "只依据可访问的公开资料，不诊断疾病，不提供个体化处方、具体剂量、停药或补服决定。",
     "只返回 JSON，不要 Markdown 代码块。",
     '格式：{"found":true或false,"title":"具体主题","summary":"不超过180字的核心回答","plainText":"更完整的公开资料摘要，不超过1200字","nextStep":"何时应向医生或药师求助","sources":[{"title":"来源标题","url":"https://完整网址"}]}',
@@ -2799,7 +2846,11 @@ const server = createServer(async (request, response) => {
       try {
         const result = await callVisionIdentification(
           body.imageDataUrl,
-          body.mode === "herb" ? "herb" : "medicine"
+          body.mode === "herb"
+            ? "herb"
+            : body.mode === "auto"
+              ? "auto"
+              : "medicine"
         );
         return json(response, 200, result);
       } catch (error) {
@@ -2809,6 +2860,39 @@ const server = createServer(async (request, response) => {
           error: timedOut
             ? "智能识图等待超时，请重试或补拍更清晰的照片。"
             : `智能识图暂未完成：${
+                error instanceof Error ? error.message : "上游服务异常"
+              }`
+        });
+      }
+    }
+
+    if (
+      url.pathname === "/api/handwriting-identify" &&
+      request.method === "POST"
+    ) {
+      const body = await readJson(request, 10 * 1024 * 1024);
+      if (
+        typeof body.imageDataUrl !== "string" ||
+        !/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(body.imageDataUrl)
+      ) {
+        return json(response, 400, { error: "请上传有效的手写图片。" });
+      }
+      if (!hasAiKey()) {
+        return json(response, 503, { error: "手写识别服务尚未配置。" });
+      }
+      try {
+        return json(
+          response,
+          200,
+          await callHandwritingRecognition(body.imageDataUrl)
+        );
+      } catch (error) {
+        const timedOut =
+          error?.name === "TimeoutError" || error?.name === "AbortError";
+        return json(response, timedOut ? 504 : 502, {
+          error: timedOut
+            ? "手写识别等待超时，请重新写清楚一些。"
+            : `手写识别暂未完成：${
                 error instanceof Error ? error.message : "上游服务异常"
               }`
         });
