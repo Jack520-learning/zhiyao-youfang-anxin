@@ -47,8 +47,8 @@ export function CameraCaptureModal({
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: "environment" },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
+            width: { ideal: 2560 },
+            height: { ideal: 1440 }
           },
           audio: false
         });
@@ -96,7 +96,7 @@ export function CameraCaptureModal({
     const video = videoRef.current;
     if (!video || !video.videoWidth || !video.videoHeight) return;
     const canvas = document.createElement("canvas");
-    const maxDimension = 1800;
+    const maxDimension = 2400;
     const scale = Math.min(
       1,
       maxDimension / Math.max(video.videoWidth, video.videoHeight)
@@ -106,7 +106,7 @@ export function CameraCaptureModal({
     const context = canvas.getContext("2d");
     if (!context) return;
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imageDataUrl = canvas.toDataURL("image/jpeg", 0.9);
+    const imageDataUrl = canvas.toDataURL("image/jpeg", 0.92);
     setCaptured(imageDataUrl);
   }
 

@@ -12,7 +12,14 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CameraCaptureModal } from "../components/CameraCaptureModal";
 import { DiscoveryNav } from "../components/DiscoveryNav";
-import { recognizeMedicineImage } from "../lib/ocr";
+import {
+  extractRecognizedMedicineNames,
+  recognizeMedicineImage
+} from "../lib/ocr";
+import {
+  getVisionMedicineNames,
+  requestVisionIdentification
+} from "../lib/vision";
 import { reconcileMedicationList } from "../catalog/multiDrug";
 import { useAppStore } from "../store/useAppStore";
 
@@ -46,41 +53,43 @@ export function MultiDrugPage() {
     setBusy(true);
     setNotice("正在识别照片中的多个药品…");
     try {
-      const response = await fetch("/api/vision-identify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageDataUrl, mode: "medicine" })
-      });
-      if (response.ok) {
-        const payload = (await response.json()) as {
-          candidates?: Array<{ name: string; confidence?: number }>;
-        };
-        const recognized = (payload.candidates || [])
-          .filter((item) => item.name && (item.confidence ?? 0) >= 0.35)
-          .map((item) => item.name.trim());
-        if (recognized.length) {
-          setPhotoNames((current) => [
-            ...current,
-            ...recognized.filter((name) => !current.includes(name))
-          ]);
-          setNotice(`已从照片加入 ${recognized.length} 个药品候选，请核对名称后再看结果。`);
-          return;
-        }
+      const visionPromise = requestVisionIdentification(
+        imageDataUrl,
+        "medicine",
+        50000
+      ).catch(() => null);
+      let ocrNames: string[] = [];
+      try {
+        const ocr = await recognizeMedicineImage(imageDataUrl);
+        ocrNames = extractRecognizedMedicineNames(ocr.rawText);
+      } catch {
+        // Vision candidates can still complete the reconciliation.
       }
-      const ocr = await recognizeMedicineImage(imageDataUrl);
-      const lines = ocr.rawText
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter((line) => line.length >= 2)
-        .slice(0, 8);
-      if (lines.length) {
+      const vision = await visionPromise;
+      const recognized = [
+        ...getVisionMedicineNames(vision),
+        ...ocrNames
+      ].filter(
+        (name, index, list) =>
+          name &&
+          list.findIndex(
+            (item) =>
+              item.replace(/\s+/g, "").toLowerCase() ===
+              name.replace(/\s+/g, "").toLowerCase()
+          ) === index
+      );
+      if (recognized.length) {
         setPhotoNames((current) => [
           ...current,
-          ...lines.filter((line) => !current.includes(line))
+          ...recognized.filter((name) => !current.includes(name))
         ]);
-        setNotice("智能识图未返回唯一名称，已把图片中识别到的文字加入清单。");
+        setNotice(
+          `已从照片加入 ${recognized.length} 个药品候选，并完成目录纠错；请核对名称后再看结果。`
+        );
       } else {
-        setNotice("这张照片没有识别出可用药名，请从清单中手动补充。");
+        setNotice(
+          "照片中没有得到可靠的药名。请拍清正面药名和规格，或从清单中手动补充。"
+        );
       }
     } catch {
       setNotice("照片识别未完成，可以继续手动输入药名。");

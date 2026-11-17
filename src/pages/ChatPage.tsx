@@ -67,7 +67,7 @@ import { findBestMedicine } from "../catalog/retrieval";
 import { buildLocalGuidance } from "../catalog/guidance";
 import {
   buildDraftsFromVision,
-  type VisionIdentification
+  requestVisionIdentification
 } from "../lib/vision";
 import {
   getSpeechStatus,
@@ -1064,16 +1064,11 @@ export function ChatPage() {
 
     try {
       let draft;
-      const visionPromise = fetch("/api/vision-identify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageDataUrl, mode: "medicine" })
-      })
-        .then(async (response) => {
-          if (!response.ok) return null;
-          return (await response.json()) as VisionIdentification;
-        })
-        .catch(() => null);
+      const visionPromise = requestVisionIdentification(
+        imageDataUrl,
+        "medicine",
+        50000
+      ).catch(() => null);
       try {
         draft = await recognizeMedicineImage(imageDataUrl, (_value, label) => {
           setPhotoProgress(label || "正在识别药盒");

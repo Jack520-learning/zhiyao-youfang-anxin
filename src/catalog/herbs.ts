@@ -330,6 +330,20 @@ export function searchHerbs(query: string): HerbEntry[] {
   );
 }
 
+export function findHerbsInText(text: string): HerbEntry[] {
+  const normalizedText = normalize(text);
+  if (!normalizedText) return [];
+  return herbs.filter((herb) =>
+    [herb.name, ...herb.aliases]
+      .map(normalize)
+      .some(
+        (term) =>
+          term.length >= 2 &&
+          normalizedText.includes(term)
+      )
+  );
+}
+
 export function getHerb(id: string): HerbEntry | undefined {
   return herbs.find((herb) => herb.id === id);
 }

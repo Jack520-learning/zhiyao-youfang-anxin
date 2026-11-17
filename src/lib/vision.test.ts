@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { createManualDraft } from "./ocr";
 import {
   buildDraftsFromVision,
+  getVisionMedicineNames,
   getVisionMedicines,
+  hasMedicineEvidence,
   type VisionIdentification
 } from "./vision";
 
@@ -72,6 +74,36 @@ describe("multi-medicine vision results", () => {
     ).toHaveLength(1);
   });
 
+  it("merges detailed medicines with additional candidate names", () => {
+    const merged = getVisionMedicines({
+      medicines: [{ name: "苯磺酸氨氯地平片", confidence: 0.9 }],
+      candidates: [
+        { name: "苯磺酸氨氯地平片", confidence: 0.9 },
+        { name: "阿托伐他汀钙片", confidence: 0.82 }
+      ]
+    });
+    expect(merged.map((item) => item.name)).toEqual([
+      "苯磺酸氨氯地平片",
+      "阿托伐他汀钙片"
+    ]);
+  });
+
+  it("normalizes a near-match to the catalog name", () => {
+    const drafts = buildDraftsFromVision(
+      "data:image/jpeg;base64,test",
+      createManualDraft("data:image/jpeg;base64,test"),
+      {
+        candidates: [{ name: "未磺酸氨握地平片", confidence: 0.62 }]
+      }
+    );
+    expect(drafts[0].name).toBe("苯磺酸氨氯地平片");
+  });
+
+  it("uses OCR text as medicine evidence when vision times out", () => {
+    expect(hasMedicineEvidence(null, "苯磺酸氨氯地平片 5mg")).toBe(true);
+    expect(getVisionMedicineNames(null)).toEqual([]);
+  });
+
   it("fills a catalog dose instead of treating package quantity as a single dose", () => {
     const drafts = buildDraftsFromVision(
       "data:image/jpeg;base64,test",
@@ -90,5 +122,25 @@ describe("multi-medicine vision results", () => {
     expect(drafts[0].dosageSource).toBe("catalog");
     expect(drafts[0].strength).toBe("0.5mg/片");
     expect(drafts[0].packageSpec).toBe("100片/盒");
+  });
+
+  it("never treats a visible strength as the amount taken each time", () => {
+    const drafts = buildDraftsFromVision(
+      "data:image/jpeg;base64,test",
+      createManualDraft("data:image/jpeg;base64,test"),
+      {
+        medicines: [
+          {
+            name: "苯磺酸氨氯地平片",
+            dosage: "5mg",
+            strength: "5mg",
+            packageSpec: "28片/盒"
+          }
+        ]
+      }
+    );
+    expect(drafts[0].dosage).toBe("5mg");
+    expect(drafts[0].dosageSource).toBe("catalog");
+    expect(drafts[0].strength).toBe("5mg");
   });
 });

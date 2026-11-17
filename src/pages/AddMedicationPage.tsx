@@ -16,7 +16,11 @@ import { RiskBadge } from "../components/RiskBadge";
 import { SourcesBlock } from "../components/SourcesBlock";
 import { CameraCaptureModal } from "../components/CameraCaptureModal";
 import { DosageFormSafetyNotice } from "../components/DosageFormSafetyNotice";
-import { createManualDraft, recognizeMedicineImage } from "../lib/ocr";
+import {
+  createManualDraft,
+  hasMedicineTextEvidence,
+  recognizeMedicineImage
+} from "../lib/ocr";
 import { fileToCompressedDataUrl } from "../lib/image";
 import { createId } from "../lib/ids";
 import { requestDoseSuggestion } from "../lib/doseAutofill";
@@ -32,8 +36,9 @@ import {
 import { dateKey, nowIso } from "../lib/time";
 import {
   buildDraftsFromVision,
-  getVisionMedicines,
-  type VisionIdentification
+  getVisionMedicineNames,
+  hasMedicineEvidence,
+  requestVisionIdentification
 } from "../lib/vision";
 import { useAppStore } from "../store/useAppStore";
 import type { IntakeDraft, Medication, RiskCheck } from "../types";
@@ -199,24 +204,17 @@ export function AddMedicationPage({
         Math.min(0.985, current + (0.985 - current) * 0.08 + 0.0015)
       );
     }, 120);
-    const visionController = new AbortController();
-    let visionTimedOut = false;
-    const visionTimeout = window.setTimeout(() => {
-      visionTimedOut = true;
-      visionController.abort();
-    }, 8000);
+    let visionError = "";
     try {
-      const visionPromise = fetch("/api/vision-identify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: visionController.signal,
-        body: JSON.stringify({ imageDataUrl: dataUrl, mode: "medicine" })
-      })
-        .then(async (response) => {
-          if (!response.ok) return null;
-          return (await response.json()) as VisionIdentification;
-        })
-        .catch(() => null);
+      const visionPromise = requestVisionIdentification(
+        dataUrl,
+        "medicine",
+        50000
+      ).catch((error) => {
+        visionError =
+          error instanceof Error ? error.message : "智能识图暂不可用";
+        return null;
+      });
 
       let recognized: IntakeDraft;
       try {
@@ -234,22 +232,17 @@ export function AddMedicationPage({
       }
       setProgress((current) => Math.max(current, 0.58));
       setProgressLabel(
-        visionTimedOut
-          ? "智能识别等待超时，正在使用本地文字识别结果"
-          : "正在匹配药名、规格、单次剂量和包装信息"
+        "正在交叉核对图片药名、规格、单次剂量和包装信息"
       );
       const vision = await visionPromise;
-      window.clearTimeout(visionTimeout);
-      const visionMedicines = getVisionMedicines(vision);
+      const visionMedicineNames = getVisionMedicineNames(vision);
       const medicalText = `${recognized.rawText} ${
         vision?.summary || ""
-      } ${visionMedicines.map((item) => item.name).join(" ")}`;
+      } ${visionMedicineNames.join(" ")}`;
       const hasMedicineSignal =
-        visionMedicines.length > 0 ||
-        /(国药准字|说明书|处方|胶囊|片剂|颗粒|口服液|注射液|mg|毫克|g\/|ml)/i.test(
-          medicalText
-        );
-      if (vision?.isMedicine === false || !hasMedicineSignal) {
+        hasMedicineEvidence(vision, recognized.rawText) ||
+        hasMedicineTextEvidence(`${medicalText} ${recognized.name}`);
+      if (!hasMedicineSignal) {
         const unrecognized = createManualDraft(dataUrl);
         setDraft(unrecognized);
         setDetectedDrafts([unrecognized]);
@@ -257,6 +250,7 @@ export function AddMedicationPage({
         saveIntakeDraft(unrecognized);
         setError(
           vision?.rejectionReason ||
+            visionError ||
             "未识别到药物或与药物相关的包装、说明书。请重新拍照，或从相册选择清晰的药盒照片。"
         );
         setPhase("unrecognized");
@@ -275,11 +269,14 @@ export function AddMedicationPage({
       setProgressLabel(
         `识别完成，共找到 ${nextDrafts.length} 种药物，请逐项核对`
       );
-      if (vision?.summary || vision?.cautions?.length) {
+      if (vision?.summary || vision?.cautions?.length || visionError) {
         setError(
           [
-            vision.summary,
-            ...(vision.cautions || []).map((item) => `注意：${item}`)
+            vision?.summary,
+            ...(vision?.cautions || []).map((item) => `注意：${item}`),
+            visionError
+              ? `智能识图补充信息暂未返回，已使用本地文字识别和药品目录交叉纠正：${visionError}`
+              : ""
           ]
             .filter(Boolean)
             .join("；")
@@ -299,7 +296,6 @@ export function AddMedicationPage({
       );
       setPhase("review");
     } finally {
-      window.clearTimeout(visionTimeout);
       if (progressTickerRef.current) {
         window.clearInterval(progressTickerRef.current);
         progressTickerRef.current = undefined;

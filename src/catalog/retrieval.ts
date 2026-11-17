@@ -136,6 +136,45 @@ export function findBestMedicine(query: string): MedicineMatch | null {
   return matches[0] ?? null;
 }
 
+export function findCatalogMedicineForRecognition(
+  recognizedName: string,
+  minimumScore = 0.58
+): Medicine | null {
+  const directMatch = findBestMedicine(recognizedName);
+  const correctedName = correctCommonOcrConfusions(recognizedName);
+  const match =
+    directMatch && directMatch.score >= minimumScore
+      ? directMatch
+      : correctedName !== recognizedName
+        ? findBestMedicine(correctedName)
+        : directMatch;
+  if (!match || match.score < minimumScore) return null;
+  const queryCodes: string[] = recognizedName
+    .toUpperCase()
+    .match(/[A-Z]?\d+/g) ?? [];
+  const candidateCodes: string[] = match.medicine.displayName
+    .toUpperCase()
+    .match(/[A-Z]?\d+/g) ?? [];
+  if (
+    queryCodes.length &&
+    candidateCodes.length &&
+    !queryCodes.some((code) => candidateCodes.includes(code))
+  ) {
+    return null;
+  }
+  return match.medicine;
+}
+
+export function correctCommonOcrConfusions(value: string): string {
+  return value
+    .replace(/[未末]/g, "苯")
+    .replace(/[握]/g, "氯")
+    .replace(/[所]/g, "氨")
+    .replace(/氯氨/g, "氨氯")
+    .replace(/[股遥]/g, "胍")
+    .replace(/[户]/g, "片");
+}
+
 export type IdentificationMatch = {
   medicine: Medicine | null;
   detectedForm: { key: DosageFormKey; label: string } | null;

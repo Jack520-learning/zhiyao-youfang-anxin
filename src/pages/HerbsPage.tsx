@@ -10,9 +10,10 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CameraCaptureModal } from "../components/CameraCaptureModal";
 import { DiscoveryNav } from "../components/DiscoveryNav";
-import { herbs, searchHerbs } from "../catalog/herbs";
+import { findHerbsInText, herbs, searchHerbs } from "../catalog/herbs";
 import { recognizeMedicineImage } from "../lib/ocr";
 import { toChineseErrorMessage } from "../lib/userMessage";
+import { requestVisionIdentification } from "../lib/vision";
 
 export function HerbsPage() {
   const navigate = useNavigate();
@@ -32,26 +33,30 @@ export function HerbsPage() {
     setIdentifiedNames([]);
     setSummary("");
     try {
-      const response = await fetch("/api/vision-identify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageDataUrl, mode: "herb" })
-      });
-      const payload = (await response.json()) as {
-        candidates?: Array<{ name: string; confidence?: number }>;
-        summary?: string;
-        cautions?: string[];
-        error?: string;
-      };
-      if (!response.ok) {
-        throw new Error(
-          payload.error ||
-            "智能识图服务暂未配置，请使用药材名称搜索或手动输入。"
-        );
-      }
-      const names = (payload.candidates || [])
-        .map((item) => item.name.trim())
-        .filter(Boolean);
+      const visionPromise = requestVisionIdentification(
+        imageDataUrl,
+        "herb",
+        50000
+      );
+      const ocrPromise = recognizeMedicineImage(imageDataUrl)
+        .then((ocr) => findHerbsInText(ocr.rawText))
+        .catch(() => []);
+      const [payload, localHerbs] = await Promise.all([
+        visionPromise,
+        ocrPromise
+      ]);
+      const names = [
+        ...(payload.candidates || []).map((item) => item.name?.trim() || ""),
+        ...localHerbs.map((herb) => herb.name)
+      ].filter(
+        (name, index, list) =>
+          name &&
+          list.findIndex(
+            (item) =>
+              item.replace(/\s+/g, "").toLowerCase() ===
+              name.replace(/\s+/g, "").toLowerCase()
+          ) === index
+      );
       setIdentifiedNames(names);
       setSummary(
         [payload.summary, ...(payload.cautions || [])]
@@ -68,7 +73,9 @@ export function HerbsPage() {
       );
       try {
         const ocr = await recognizeMedicineImage(imageDataUrl);
-        const localMatches = searchHerbs(ocr.rawText).map((item) => item.name);
+        const localMatches = findHerbsInText(ocr.rawText).map(
+          (item) => item.name
+        );
         if (localMatches.length) {
           setIdentifiedNames(localMatches);
           setSummary(
@@ -90,7 +97,10 @@ export function HerbsPage() {
   }
 
   const photoMatches = identifiedNames
-    .flatMap((name) => searchHerbs(name))
+    .flatMap((name) => {
+      const textMatches = findHerbsInText(name);
+      return textMatches.length ? textMatches : searchHerbs(name);
+    })
     .filter(
       (herb, index, list) =>
         list.findIndex((item) => item.id === herb.id) === index

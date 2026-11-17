@@ -593,9 +593,13 @@ function parseModelJson(content) {
 async function callVisionIdentification(imageDataUrl, mode) {
   const baseUrl = getAiBaseUrl();
   const model = getVisionModel();
-  const subject = mode === "herb" ? "中药材、中草药或饮片" : "药品包装";
+  const subject =
+    mode === "herb"
+      ? "中药材、中草药或饮片实物"
+      : "药品包装、瓶身标签、铝箔板、散装药片胶囊、说明书或处方笺";
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
+    signal: AbortSignal.timeout(45000),
     headers: {
       Authorization: `Bearer ${getAiKey()}`,
       "Content-Type": "application/json"
@@ -603,23 +607,24 @@ async function callVisionIdentification(imageDataUrl, mode) {
     body: JSON.stringify({
       model,
       temperature: 0,
+      max_tokens: 2400,
       response_format: { type: "json_object" },
       messages: [
         {
           role: "system",
           content:
-            "你是谨慎的图文识别器。只根据照片中可见的形态或文字识别每一个独立对象，不诊断、不推荐剂量、不提供处方。一张照片有多盒或多瓶不同药物时，必须逐项输出，不能合并，也不能只返回最清楚的一种。看不清时降低置信度并明确说明。必须输出 JSON。"
+            "你是谨慎的药品标签识别器。先定位每一个独立包装或独立对象，再逐字读取最大、最清晰、最具体的药品名称；品牌名、商品名、通用名和生产企业必须区分，不能把生产企业、广告语、批准文号、规格或用法说明当成药名。只输出照片中确实可见的信息，不诊断、不推荐剂量、不提供处方，也不得凭药名猜测价格。看不清时降低置信度并说明原因。必须输出 JSON。"
         },
         {
           role: "user",
           content: [
             {
               type: "text",
-              text: `请逐项识别照片中的所有${subject}，不同包装、不同颜色或不同药名分别作为独立条目。输出 JSON：{"isMedicine":true或false,"rejectionReason":"照片不是药品、药盒、说明书或处方单时说明原因","candidates":[{"name":"名称","confidence":0到1,"visibleFeatures":["可见特征"]}],"medicines":[{"position":"例如：上/中/下或左/右","name":"包装上的完整药名","genericName":"通用名","activeIngredient":"有效成分","singleDose":"包装或说明书明确写出的每次实际服用量，例如每次1片或0.5mg；只有规格或包装数量时必须留空","dosage":"包装上可见的规格或单片含量","price":"优先读取包装或价签价格；药名明确但未标价时，给出中国常见零售范围‘约¥X-Y/盒或支（市场参考）’；无法判断时写‘需以药房价格为准’","dosageForm":"剂型","strength":"单片或单粒规格","packageSpec":"包装数量，例如100片/盒","frequency":"包装明确写出的频次，否则留空","relation":"饭前/饭后/随餐/睡前，包装明确写出才填","instructions":"仅摘录该药品包装可见说明","confidence":0到1,"visibleFeatures":["用于区分该药品的可见特征"]}],"summary":"不超过120字的谨慎结论","cautions":["需要人工核实的点"]}。medicines 必须包含所有可辨识的不同对象，通常为1到10项；不要只填第一种。相同药品重复出现只输出一次。中药材形态相似时不要给单一确定结论；药品必须优先读取每个包装的文字。价格估算必须明确写“市场参考”，不得说成实际售价；其他看不清的信息不要猜测。`
+              text: `请逐项识别照片中的所有${subject}。不同包装、不同颜色或不同药名分别作为独立条目；同一药品重复出现只输出一次。照片只要含药品或用药资料，isMedicine 就应为 true；仅在完全与药品无关时才为 false。输出 JSON：{"isMedicine":true或false,"rejectionReason":"仅在与药品无关时说明原因","candidates":[{"name":"核实后的药名","confidence":0到1,"visibleFeatures":["名称附近可直接看到的文字"]}],"medicines":[{"position":"例如：上/中/下或左/右","name":"包装上最完整且最具体的药名","genericName":"可见通用名，没有则留空","activeIngredient":"可见有效成分，没有则留空","labelText":"逐字摘录药名、规格和用法附近可见文字","singleDose":"仅填明确写出的每次实际服用量，例如每次1片或每次0.5mg；只有单片规格、包装数量或‘5mg×28片’时必须留空","dosage":"可见的单片或单剂规格，不要把包装数量当单次剂量","price":"只填包装或价签上明确可见的价格，未标价则留空","dosageForm":"剂型","strength":"单片或单粒规格","packageSpec":"包装数量，例如28片/盒","frequency":"明确写出的频次，否则留空","relation":"明确写出的饭前/饭后/随餐/睡前，否则留空","instructions":"仅摘录该药品可见的用法说明","confidence":0到1,"visibleFeatures":["用于区分该药品的可见特征"]}],"summary":"不超过120字的谨慎结论","cautions":["需要人工核实的点"]}。逐项检查是否遗漏左、右、后方的包装。中药材形态相似时不要给单一确定结论，应列出可能候选。药品优先读取每个包装上的文字，不根据外观猜品牌，不估算价格，不把‘国药准字’、生产厂家或规格当成名称。`
             },
             {
               type: "image_url",
-              image_url: { url: imageDataUrl }
+              image_url: { url: imageDataUrl, detail: "high" }
             }
           ]
         }
@@ -654,6 +659,7 @@ async function callVisionIdentification(imageDataUrl, mode) {
       frequency: String(item.frequency || "").slice(0, 40),
       relation: String(item.relation || "").slice(0, 30),
       instructions: String(item.instructions || "").slice(0, 500),
+      labelText: String(item.labelText || "").slice(0, 800),
       confidence:
         typeof item.confidence === "number"
           ? Math.max(0, Math.min(1, item.confidence))
@@ -669,11 +675,18 @@ async function callVisionIdentification(imageDataUrl, mode) {
     ? parsed.candidates
     : []) {
     if (!candidate || typeof candidate.name !== "string") continue;
-    candidateMap.set(candidate.name.slice(0, 40), candidate);
+    const name = candidate.name.trim().slice(0, 40);
+    const key = name.toLowerCase().replace(/[\s，。,.、:：;；()（）]/g, "");
+    if (name && !candidateMap.has(key)) {
+      candidateMap.set(key, { ...candidate, name });
+    }
   }
   for (const medicine of medicines) {
-    if (!candidateMap.has(medicine.name)) {
-      candidateMap.set(medicine.name, {
+    const key = medicine.name
+      .toLowerCase()
+      .replace(/[\s，。,.、:：;；()（）]/g, "");
+    if (key && !candidateMap.has(key)) {
+      candidateMap.set(key, {
         name: medicine.name,
         confidence: medicine.confidence,
         visibleFeatures: medicine.visibleFeatures
@@ -2783,11 +2796,23 @@ const server = createServer(async (request, response) => {
             "AI 识图服务尚未配置。可以改用名称搜索或手动录入。"
         });
       }
-      const result = await callVisionIdentification(
-        body.imageDataUrl,
-        body.mode === "herb" ? "herb" : "medicine"
-      );
-      return json(response, 200, result);
+      try {
+        const result = await callVisionIdentification(
+          body.imageDataUrl,
+          body.mode === "herb" ? "herb" : "medicine"
+        );
+        return json(response, 200, result);
+      } catch (error) {
+        const timedOut =
+          error?.name === "TimeoutError" || error?.name === "AbortError";
+        return json(response, timedOut ? 504 : 502, {
+          error: timedOut
+            ? "智能识图等待超时，请重试或补拍更清晰的照片。"
+            : `智能识图暂未完成：${
+                error instanceof Error ? error.message : "上游服务异常"
+              }`
+        });
+      }
     }
 
     if (shouldServeStatic) return serveStatic(request, response);
