@@ -68,6 +68,9 @@ export function ProfilePage() {
   const auditEvents = useAppStore((state) => state.auditEvents);
   const updateProfile = useAppStore((state) => state.updateProfile);
   const updateConsent = useAppStore((state) => state.updateConsent);
+  const setAutomaticSpeechEnabled = useAppStore(
+    (state) => state.setAutomaticSpeechEnabled
+  );
   const updatePreferences = useAppStore((state) => state.updatePreferences);
   const updateEmergencyContacts = useAppStore(
     (state) => state.updateEmergencyContacts
@@ -657,7 +660,7 @@ export function ProfilePage() {
                       setSpeechLoading(false);
                       stopSpeaking();
                     }
-                    updatePreferences({ soundEnabled: event.target.checked });
+                    setAutomaticSpeechEnabled(event.target.checked);
                     if (event.target.checked) {
                       void previewVoice(
                         preferences.voiceMode,
@@ -1241,7 +1244,7 @@ export function ProfilePage() {
                     setSpeechLoading(false);
                     stopSpeaking();
                   }
-                  updatePreferences({ soundEnabled: event.target.checked });
+                  setAutomaticSpeechEnabled(event.target.checked);
                   if (event.target.checked) {
                     void previewVoice(
                       preferences.voiceMode,

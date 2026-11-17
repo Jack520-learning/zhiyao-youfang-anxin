@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_VOICE_MODE,
+  isLocalSpeechSettingNewer,
   normalizeVoiceMode,
   sanitizeVoicePreferences
 } from "./voiceDefaults";
@@ -41,5 +42,23 @@ describe("voice preference behavior", () => {
     expect(cleaned.voiceMode).toBe("warm");
     expect(cleaned.customVoiceId).toBeUndefined();
     expect(cleaned.customVoices).toEqual([]);
+  });
+
+  it("keeps a newer local automatic speech setting instead of an old cloud value", () => {
+    expect(
+      isLocalSpeechSettingNewer(
+        "2026-11-17T10:00:00.000Z",
+        "2026-11-17T10:05:00.000Z"
+      )
+    ).toBe(true);
+    expect(
+      isLocalSpeechSettingNewer(
+        "2026-11-17T10:10:00.000Z",
+        "2026-11-17T10:05:00.000Z"
+      )
+    ).toBe(false);
+    expect(
+      isLocalSpeechSettingNewer(undefined, "2026-11-17T10:05:00.000Z")
+    ).toBe(true);
   });
 });

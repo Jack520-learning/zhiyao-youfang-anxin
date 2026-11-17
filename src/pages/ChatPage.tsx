@@ -301,7 +301,9 @@ export function ChatPage() {
   const preferences = useAppStore((state) => state.preferences);
   const automaticSpeechEnabled =
     profile.voiceEnabled && preferences.soundEnabled;
-  const updateProfile = useAppStore((state) => state.updateProfile);
+  const setAutomaticSpeechEnabled = useAppStore(
+    (state) => state.setAutomaticSpeechEnabled
+  );
   const updatePreferences = useAppStore((state) => state.updatePreferences);
   const familyCode = useAppStore((state) => state.familyCode);
   const addFamilyAlert = useAppStore((state) => state.addFamilyAlert);
@@ -1901,8 +1903,7 @@ export function ChatPage() {
               }
               onClick={() => {
                 const next = !automaticSpeechEnabled;
-                updateProfile({ voiceEnabled: next });
-                updatePreferences({ soundEnabled: next });
+                setAutomaticSpeechEnabled(next);
                 if (!next) {
                   speechRunRef.current += 1;
                   setSpeakingMessageId("");

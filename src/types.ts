@@ -188,6 +188,7 @@ export interface AppPreferences {
   notificationsEnabled: boolean;
   remindersEnabled: boolean;
   soundEnabled: boolean;
+  speechUpdatedAt?: string;
   voiceMode: "warm" | "clear" | "male" | "calm" | "custom";
   customVoiceId?: string;
   customVoiceName?: string;

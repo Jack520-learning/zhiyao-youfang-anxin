@@ -25,7 +25,10 @@ import {
 } from "../lib/accountApi";
 import { createId } from "../lib/ids";
 import { nowIso } from "../lib/time";
-import { sanitizeVoicePreferences } from "../lib/voiceDefaults";
+import {
+  isLocalSpeechSettingNewer,
+  sanitizeVoicePreferences
+} from "../lib/voiceDefaults";
 import { toChineseErrorMessage } from "../lib/userMessage";
 import {
   preserveLocalConversationImages,
@@ -252,6 +255,7 @@ interface AppActions {
   clearFamilyAccountData: (familyCode: string) => void;
   setRole: (role: UserRole) => void;
   setFamilyCode: (familyCode: string) => void;
+  setAutomaticSpeechEnabled: (enabled: boolean) => void;
   updateProfile: (profile: Partial<ElderProfile>) => void;
   updateConsent: (consent: Partial<ConsentSettings>) => void;
   updatePreferences: (preferences: Partial<AppPreferences>) => void;
@@ -1070,6 +1074,22 @@ export const useAppStore = create<AppStore>()(
             }
           };
         }),
+      setAutomaticSpeechEnabled: (enabled) =>
+        setState((state) => {
+          const updatedAt = nowIso();
+          return {
+            profile: {
+              ...state.profile,
+              voiceEnabled: enabled
+            },
+            preferences: {
+              ...state.preferences,
+              soundEnabled: enabled,
+              speechUpdatedAt: updatedAt
+            },
+            lastLocalSaveAt: updatedAt
+          };
+        }),
       updateProfile: (profile) =>
         setState((state) => ({
           profile: { ...state.profile, ...profile }
@@ -1514,6 +1534,10 @@ export const useAppStore = create<AppStore>()(
           )
             ? state.activeConversationId
             : conversations[0]?.id ?? state.activeConversationId;
+          const keepLocalSpeechSetting = isLocalSpeechSettingNewer(
+            snapshot.preferences?.speechUpdatedAt,
+            state.preferences.speechUpdatedAt
+          );
           const next = {
           profile: {
             ...state.profile,
@@ -1531,7 +1555,9 @@ export const useAppStore = create<AppStore>()(
               snapshot.profile.healthProfilePromptSeen ??
               state.profile.healthProfilePromptSeen,
             voiceEnabled:
-              snapshot.profile.voiceEnabled ?? state.profile.voiceEnabled
+              keepLocalSpeechSetting
+                ? state.profile.voiceEnabled
+                : snapshot.profile.voiceEnabled ?? state.profile.voiceEnabled
           },
           medications: snapshot.medications,
           doseEvents: snapshot.doseEvents,
@@ -1548,6 +1574,13 @@ export const useAppStore = create<AppStore>()(
             ? sanitizeVoicePreferences({
                 ...state.preferences,
                 ...snapshot.preferences,
+                soundEnabled: keepLocalSpeechSetting
+                  ? state.preferences.soundEnabled
+                  : snapshot.preferences.soundEnabled ??
+                    state.preferences.soundEnabled,
+                speechUpdatedAt: keepLocalSpeechSetting
+                  ? state.preferences.speechUpdatedAt
+                  : snapshot.preferences.speechUpdatedAt,
                 customVoices:
                   snapshot.preferences.customVoices ??
                   state.preferences.customVoices

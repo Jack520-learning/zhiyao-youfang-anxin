@@ -52,3 +52,16 @@ export function sanitizeVoicePreferences(
     voiceMode
   };
 }
+
+export function isLocalSpeechSettingNewer(
+  remoteUpdatedAt?: string,
+  localUpdatedAt?: string
+): boolean {
+  if (!localUpdatedAt) return false;
+  if (!remoteUpdatedAt) return true;
+  const remoteTime = new Date(remoteUpdatedAt).getTime();
+  const localTime = new Date(localUpdatedAt).getTime();
+  if (!Number.isFinite(localTime)) return false;
+  if (!Number.isFinite(remoteTime)) return true;
+  return localTime > remoteTime;
+}
