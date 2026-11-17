@@ -253,7 +253,9 @@ function connectedAccounts(account) {
   return Object.values(database.accounts)
     .filter(
       (candidate) =>
-        candidate.id === account.id || accountsShareFamily(account, candidate)
+        account.role === "admin" ||
+        candidate.id === account.id ||
+        accountsShareFamily(account, candidate)
     )
     .sort((left, right) => {
       if (left.role !== right.role) return left.role === "elder" ? -1 : 1;
@@ -2055,7 +2057,12 @@ const server = createServer(async (request, response) => {
         Object.values(database.accounts).find(
           (account) => account.id === accountId
         );
-      if (!target || !accountsShareFamily(currentAccount, target)) {
+      if (
+        !target ||
+        target.disabled ||
+        (currentAccount.role !== "admin" &&
+          !accountsShareFamily(currentAccount, target))
+      ) {
         return json(response, 403, { error: "没有权限切换到该账号" });
       }
       const token = issueSession(target.id);

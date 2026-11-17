@@ -210,6 +210,10 @@ const indexedDbStorage: StateStorage = {
 interface AppActions {
   hydrated: boolean;
   setHydrated: (value: boolean) => void;
+  syncServerAccounts: (
+    serverAccounts: ServerAccount[],
+    token: string
+  ) => void;
   registerAccount: (input: {
     username: string;
     password: string;
@@ -309,6 +313,20 @@ export const useAppStore = create<AppStore>()(
       ...initial,
       hydrated: false,
       setHydrated: (hydrated) => setState({ hydrated }),
+      syncServerAccounts: (serverAccounts, token) =>
+        setState((state) => {
+          const currentAccount = state.accounts.find(
+            (account) => account.id === state.sessionAccountId
+          );
+          return {
+            accounts: mergeServerAccounts(
+              state.accounts,
+              serverAccounts,
+              currentAccount?.serverAccountId || "",
+              token
+            )
+          };
+        }),
       registerAccount: async ({
         username,
         password,

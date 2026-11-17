@@ -36,6 +36,9 @@ export function AdminPage() {
   const sessionAccountId = useAppStore((state) => state.sessionAccountId);
   const accounts = useAppStore((state) => state.accounts);
   const logoutAccount = useAppStore((state) => state.logoutAccount);
+  const syncServerAccounts = useAppStore(
+    (state) => state.syncServerAccounts
+  );
   const currentAccount = accounts.find(
     (account) => account.id === sessionAccountId
   );
@@ -58,17 +61,7 @@ export function AdminPage() {
       const result = await fetchAdminOverview(sessionToken);
       setOverview(result.overview);
       setAdminAccounts(result.accounts);
-      const liveServerIds = new Set(
-        result.accounts.map((account) => account.id)
-      );
-      useAppStore.setState((state) => {
-        const accounts = state.accounts.filter(
-          (account) =>
-            !account.serverAccountId ||
-            liveServerIds.has(account.serverAccountId)
-        );
-        return accounts.length === state.accounts.length ? {} : { accounts };
-      });
+      syncServerAccounts(result.accounts, sessionToken);
     } catch (loadError) {
       if (
         loadError instanceof AccountRequestError &&
