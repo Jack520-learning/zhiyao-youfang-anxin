@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { CloudSnapshot } from "../types";
-import { cloudSnapshotFingerprint } from "./cloudSnapshot";
+import {
+  cloudSnapshotFingerprint,
+  preserveLocalConversationImages,
+  preserveLocalDraftImage
+} from "./cloudSnapshot";
 
 function snapshot(updatedAt: string): CloudSnapshot {
   return {
@@ -67,5 +71,61 @@ describe("cloud snapshot fingerprint", () => {
     expect(cloudSnapshotFingerprint(first)).not.toBe(
       cloudSnapshotFingerprint(next)
     );
+  });
+
+  it("keeps local chat photos when a cloud snapshot omits image data", () => {
+    const localConversation = {
+      id: "conversation-photo",
+      title: "药盒照片",
+      createdAt: "2026-11-16T00:00:00.000Z",
+      updatedAt: "2026-11-16T00:00:00.000Z",
+      messages: [
+        {
+          id: "message-photo",
+          role: "user" as const,
+          content: "拍了一张药盒照片",
+          createdAt: "2026-11-16T00:00:00.000Z",
+          imageDataUrls: ["data:image/jpeg;base64,local"]
+        }
+      ]
+    };
+    const remoteConversation = {
+      ...localConversation,
+      messages: localConversation.messages.map((message) => ({
+        ...message,
+        imageDataUrls: undefined
+      }))
+    };
+
+    expect(
+      preserveLocalConversationImages(
+        [remoteConversation],
+        [localConversation]
+      )?.[0].messages[0].imageDataUrls
+    ).toEqual(["data:image/jpeg;base64,local"]);
+  });
+
+  it("keeps the local intake photo when cloud sync strips it", () => {
+    const draft = {
+      imageDataUrl: undefined,
+      rawText: "识别文字",
+      name: "硝酸甘油片",
+      genericName: "硝酸甘油",
+      ingredientsText: "硝酸甘油",
+      dosage: "",
+      frequency: "按需服用",
+      times: [],
+      relation: "按需",
+      instructions: "",
+      confidence: 0.8,
+      lowConfidenceFields: ["dosage"],
+      createdAt: "2026-11-16T00:00:00.000Z"
+    };
+    expect(
+      preserveLocalDraftImage(draft, {
+        ...draft,
+        imageDataUrl: "data:image/jpeg;base64,draft"
+      })?.imageDataUrl
+    ).toBe("data:image/jpeg;base64,draft");
   });
 });

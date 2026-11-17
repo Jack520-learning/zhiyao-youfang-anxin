@@ -5926,6 +5926,16 @@ img {
   color: var(--ink);
 }
 
+.msg-action-btn:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+
+.msg-action-btn:disabled:hover {
+  background: transparent;
+  color: var(--muted);
+}
+
 .msg-action-btn.active {
   color: var(--primary);
   background: color-mix(in srgb, var(--primary) 12%, transparent);

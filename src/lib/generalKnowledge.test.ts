@@ -18,6 +18,10 @@ describe("general knowledge questions", () => {
     ).toBe(true);
   });
 
+  it("does not classify assistant capability questions as unrelated knowledge", () => {
+    expect(isGeneralKnowledgeQuestion("你能干什么")).toBe(false);
+  });
+
   it("keeps health questions in the medical flow", () => {
     expect(isGeneralKnowledgeQuestion("阿司匹林怎么吃")).toBe(false);
     expect(isGeneralKnowledgeQuestion("高血压该注意什么")).toBe(false);

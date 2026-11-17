@@ -75,6 +75,7 @@ import {
   speakText,
   stopSpeaking
 } from "../lib/speech";
+import { buildFollowUpQuestions } from "../lib/followUpQuestions";
 import { useQwenSpeechRecognition } from "../lib/qwenSpeech";
 import { nowIso, getNextDose, formatMessageTime } from "../lib/time";
 import {
@@ -297,6 +298,8 @@ export function ChatPage() {
   const doseEvents = useAppStore((state) => state.doseEvents);
   const profile = useAppStore((state) => state.profile);
   const preferences = useAppStore((state) => state.preferences);
+  const automaticSpeechEnabled =
+    profile.voiceEnabled && preferences.soundEnabled;
   const updateProfile = useAppStore((state) => state.updateProfile);
   const updatePreferences = useAppStore((state) => state.updatePreferences);
   const familyCode = useAppStore((state) => state.familyCode);
@@ -361,6 +364,14 @@ export function ChatPage() {
   const speech = useQwenSpeechRecognition((transcript) => {
     setInput(transcript);
   });
+
+  useEffect(() => {
+    if (automaticSpeechEnabled) return;
+    speechRunRef.current += 1;
+    setSpeakingMessageId("");
+    setSpeechNotice("");
+    stopSpeaking();
+  }, [automaticSpeechEnabled]);
 
   function updateScrollAvailability() {
     const container = messagesRef.current;
@@ -1012,29 +1023,7 @@ export function ChatPage() {
         addChatMessage(finalMessage, targetConversationId);
       }
     }
-    if (profile.voiceEnabled && preferences.soundEnabled) {
-      const speechRunId = speechRunRef.current + 1;
-      speechRunRef.current = speechRunId;
-      const autoPlayback = speakText(
-        finalMessageContent,
-        true,
-        preferences.voiceMode,
-        preferences.customVoiceId
-      );
-      setSpeakingMessageId(assistantMessageId);
-      void autoPlayback.then((started) => {
-        if (speechRunRef.current !== speechRunId) return;
-        const fallbackNotice = consumeSpeechFallbackNotice();
-        if (fallbackNotice) {
-          updatePreferences({ voiceMode: "warm" });
-          setSpeechNotice(fallbackNotice);
-        }
-        if (!started) {
-          setSpeakingMessageId("");
-          setSpeechNotice("自动朗读暂未开始，可点击回答下方的朗读按钮重试。");
-        }
-      });
-    }
+    autoSpeakAnswer(assistantMessageId, finalMessageContent);
     setStages([
       ...response.stages.map((stage) => ({
         ...stage,
@@ -1316,14 +1305,16 @@ export function ChatPage() {
       ]
         .filter(Boolean)
         .join("\n\n");
+      const photoAssistantMessageId = createId("chat");
       addChatMessage({
-        id: createId("chat"),
+        id: photoAssistantMessageId,
         role: "assistant",
         content,
         createdAt: nowIso(),
         answerMode: "detailed",
         riskCheck
       }, targetConversationId);
+      autoSpeakAnswer(photoAssistantMessageId, cleanAnswerForChat(content));
       setStages(
         riskCheck.level === "unknown"
           ? [
@@ -1541,6 +1532,37 @@ export function ChatPage() {
     }
   }
 
+  function autoSpeakAnswer(messageId: string, text: string) {
+    const latestState = useAppStore.getState();
+    if (
+      !latestState.profile.voiceEnabled ||
+      !latestState.preferences.soundEnabled
+    ) {
+      return;
+    }
+    const speechRunId = speechRunRef.current + 1;
+    speechRunRef.current = speechRunId;
+    const autoPlayback = speakText(
+      text,
+      true,
+      latestState.preferences.voiceMode,
+      latestState.preferences.customVoiceId
+    );
+    setSpeakingMessageId(messageId);
+    void autoPlayback.then((started) => {
+      if (speechRunRef.current !== speechRunId) return;
+      const fallbackNotice = consumeSpeechFallbackNotice();
+      if (fallbackNotice) {
+        updatePreferences({ voiceMode: "warm" });
+        setSpeechNotice(fallbackNotice);
+      }
+      if (!started) {
+        setSpeakingMessageId("");
+        setSpeechNotice("自动朗读暂未开始，可点击回答下方的朗读按钮重试。");
+      }
+    });
+  }
+
   function stopGeneration() {
     generationRunRef.current += 1;
     abortControllerRef.current?.abort();
@@ -1600,10 +1622,12 @@ export function ChatPage() {
 
   function renderMessage(message: ChatMessage) {
     const ts = formatMessageTime(message.createdAt);
+    const messageIndex = messages.findIndex((item) => item.id === message.id);
+    const previousUserMessage = [...messages.slice(0, messageIndex)]
+      .reverse()
+      .find((item) => item.role === "user");
     const isStreaming = Boolean(message.pending);
     const responseMode = message.answerMode ?? "safety";
-    const isQuickAnswer =
-      message.role === "assistant" && responseMode === "quick";
     const showRiskDetails =
       message.role === "assistant" &&
       responseMode === "safety" &&
@@ -1615,12 +1639,26 @@ export function ChatPage() {
       message.role === "assistant" &&
       !isStreaming &&
       !(sending && streamingMessageId === message.id);
-    const canSpeak =
+    const showSpeakAction =
       (message.role === "assistant" || message.role === "user") &&
       Boolean(message.content) &&
       !isStreaming;
-    const isSpeaking = speakingMessageId === message.id;
+    const canSpeak = showSpeakAction && automaticSpeechEnabled;
+    const isSpeaking =
+      automaticSpeechEnabled && speakingMessageId === message.id;
     const isCopied = copiedMessageId === message.id;
+    const followUpQuestions =
+      message.role === "assistant" && message.content && !isStreaming
+        ? buildFollowUpQuestions({
+            query: previousUserMessage?.content || "",
+            answer: message.content,
+            history: messages.slice(0, messageIndex),
+            medicineName: activeConversation?.medicineContext?.name,
+            hasCurrentMedications: medications.some(
+              (medication) => medication.status === "active"
+            )
+          })
+        : [];
 
     return (
       <article
@@ -1664,27 +1702,18 @@ export function ChatPage() {
         {showRiskDetails && message.riskCheck ? (
           <MessageRisk riskCheck={message.riskCheck} />
         ) : null}
-        {message.role === "assistant" &&
-        message.riskCheck &&
-        message.riskCheck.level !== "unknown" &&
-        !isQuickAnswer &&
-        responseMode === "safety" &&
-        !isStreaming ? (
+        {followUpQuestions.length ? (
           <div className="answer-followups">
-            <button
-              type="button"
-              onClick={() => void submitQuestion("请继续说明这个药怎么吃，以及有哪些注意事项")}
-            >
-              继续问怎么吃
-              <ChevronRight size={15} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              onClick={() => void submitQuestion("请核对我现在吃的药有没有重复成分或相互作用")}
-            >
-              核对我现在的药
-              <ChevronRight size={15} aria-hidden="true" />
-            </button>
+            {followUpQuestions.map((question) => (
+              <button
+                type="button"
+                key={question}
+                onClick={() => void submitQuestion(question)}
+              >
+                {question}
+                <ChevronRight size={15} aria-hidden="true" />
+              </button>
+            ))}
           </div>
         ) : null}
         {!isStreaming ? (
@@ -1700,16 +1729,28 @@ export function ChatPage() {
                 {isCopied ? "已复制" : "复制"}
               </button>
             ) : null}
-            {canSpeak ? (
+            {showSpeakAction ? (
               <button
                 type="button"
                 className={`msg-action-btn ${isSpeaking ? "active" : ""}`}
-                title={isSpeaking ? "停止朗读" : "朗读内容"}
+                title={
+                  !automaticSpeechEnabled
+                    ? "自动朗读已关闭"
+                    : isSpeaking
+                      ? "停止朗读"
+                      : "朗读内容"
+                }
+                disabled={!canSpeak}
                 onClick={() =>
                   void toggleSpeakMessage(message.id, message.content)
                 }
               >
-                {isSpeaking ? (
+                {!automaticSpeechEnabled ? (
+                  <>
+                    <VolumeX size={14} aria-hidden="true" />
+                    朗读已关闭
+                  </>
+                ) : isSpeaking ? (
                   <>
                     <Square size={14} aria-hidden="true" />
                     停止
@@ -1789,11 +1830,16 @@ export function ChatPage() {
             <button
               className="icon-btn"
               type="button"
-              aria-label={profile.voiceEnabled ? "停止自动播报" : "开启自动播报"}
-              title={profile.voiceEnabled ? "停止自动播报" : "开启自动播报"}
+              aria-label={
+                automaticSpeechEnabled ? "关闭自动朗读" : "开启自动朗读"
+              }
+              title={
+                automaticSpeechEnabled ? "关闭自动朗读" : "开启自动朗读"
+              }
               onClick={() => {
-                const next = !profile.voiceEnabled;
+                const next = !automaticSpeechEnabled;
                 updateProfile({ voiceEnabled: next });
+                updatePreferences({ soundEnabled: next });
                 if (!next) {
                   speechRunRef.current += 1;
                   setSpeakingMessageId("");
@@ -1802,7 +1848,7 @@ export function ChatPage() {
                 }
               }}
             >
-              {profile.voiceEnabled ? (
+              {automaticSpeechEnabled ? (
                 <Volume2 size={20} aria-hidden="true" />
               ) : (
                 <VolumeX size={20} aria-hidden="true" />

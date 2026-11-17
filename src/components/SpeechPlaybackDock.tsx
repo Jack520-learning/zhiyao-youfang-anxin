@@ -5,9 +5,13 @@ import {
   stopSpeaking,
   type SpeechStatus
 } from "../lib/speech";
+import { useAppStore } from "../store/useAppStore";
 
 export function SpeechPlaybackDock() {
   const [status, setStatus] = useState<SpeechStatus>("idle");
+  const speechEnabled = useAppStore(
+    (state) => state.profile.voiceEnabled && state.preferences.soundEnabled
+  );
 
   useEffect(() => {
     const update = () => setStatus(getSpeechStatus());
@@ -20,7 +24,7 @@ export function SpeechPlaybackDock() {
     };
   }, []);
 
-  if (status === "idle") return null;
+  if (!speechEnabled || status === "idle") return null;
 
   return (
     <aside className="speech-playback-dock" aria-live="polite">

@@ -24,6 +24,7 @@ import {
 import { fileToCompressedDataUrl } from "../lib/image";
 import { createId } from "../lib/ids";
 import { requestDoseSuggestion } from "../lib/doseAutofill";
+import { mergeMedicationEvidence } from "../lib/evidence";
 import { checkNewMedication } from "../lib/riskEngine";
 import {
   frequencyOptions,
@@ -67,6 +68,35 @@ export function resolveIntakeEntryPhase({
   if (captureMode) return "upload";
   if (reviewMode || hasDraft) return "review";
   return "upload";
+}
+
+export function getInsufficientMedicationFields(
+  draft: IntakeDraft
+): string[] {
+  const labels: Record<string, string> = {
+    name: "药名",
+    genericName: "通用名",
+    ingredientsText: "有效成分",
+    dosage: "每次服用剂量",
+    strength: "单片规格",
+    packageSpec: "包装数量",
+    frequency: "服用频次",
+    relation: "饭前饭后",
+    instructions: "说明书用法"
+  };
+  const missing = [
+    !draft.name.trim() ? "药名" : "",
+    !draft.dosage.trim() ? "每次服用剂量" : "",
+    !draft.strength?.trim() ? "单片规格" : "",
+    !draft.packageSpec?.trim() ? "包装数量" : "",
+    !draft.frequency.trim() ? "服用频次" : "",
+    !draft.relation.trim() ? "饭前饭后" : "",
+    !draft.instructions.trim() ? "说明书用法" : ""
+  ].filter(Boolean);
+  const lowConfidence = draft.lowConfidenceFields
+    .map((field) => labels[field])
+    .filter(Boolean);
+  return Array.from(new Set([...missing, ...lowConfidence]));
 }
 
 function splitIngredients(value: string): string[] {
@@ -127,9 +157,15 @@ export function AddMedicationPage({
   const [riskCheck, setRiskCheck] = useState<RiskCheck>();
   const [candidateMedication, setCandidateMedication] = useState<Medication>();
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [evidenceCameraOpen, setEvidenceCameraOpen] = useState(false);
+  const [evidenceProcessing, setEvidenceProcessing] = useState(false);
+  const [evidenceStatus, setEvidenceStatus] = useState("");
+  const [evidenceImages, setEvidenceImages] = useState<string[]>([]);
   const initialCameraOpened = useRef(false);
   const libraryInputRef = useRef<HTMLInputElement>(null);
+  const evidenceLibraryInputRef = useRef<HTMLInputElement>(null);
   const progressTickerRef = useRef<number | undefined>(undefined);
+  const latestDraftRef = useRef<IntakeDraft | undefined>(initialDraft);
 
   useEffect(() => {
     if (!captureMode || initialCameraOpened.current) return;
@@ -142,6 +178,10 @@ export function AddMedicationPage({
     const timer = window.setTimeout(() => saveIntakeDraft(draft), 250);
     return () => window.clearTimeout(timer);
   }, [draft, phase, saveIntakeDraft]);
+
+  useEffect(() => {
+    latestDraftRef.current = draft;
+  }, [draft]);
 
   useEffect(
     () => () => {
@@ -210,6 +250,8 @@ export function AddMedicationPage({
 
   async function processImage(dataUrl: string) {
     setPhase("recognizing");
+    setEvidenceStatus("");
+    setEvidenceImages([]);
     setProgress(0.03);
     setProgressLabel("正在保存原图");
     setError("");
@@ -331,6 +373,108 @@ export function AddMedicationPage({
     }
   }
 
+  async function supplementDraftWithImage(imageDataUrl: string) {
+    if (!latestDraftRef.current || evidenceProcessing) return;
+    setEvidenceProcessing(true);
+    setEvidenceStatus("正在读取补充照片中的药名、用法和规格…");
+    setEvidenceImages((current) => [...current, imageDataUrl].slice(-3));
+    try {
+      const visionPromise = requestVisionIdentification(
+        imageDataUrl,
+        "medicine",
+        50000
+      ).catch(() => null);
+      let recognized: IntakeDraft;
+      try {
+        recognized = await recognizeMedicineImage(
+          imageDataUrl,
+          (_value, label) => {
+            setEvidenceStatus(label || "正在识别补充照片");
+          }
+        );
+      } catch {
+        recognized = createManualDraft(imageDataUrl);
+      }
+      setEvidenceStatus("正在核对补充照片是否属于当前药物…");
+      const vision = await visionPromise;
+      const evidenceDrafts = buildDraftsFromVision(
+        imageDataUrl,
+        recognized,
+        vision
+      );
+      const currentDraft = latestDraftRef.current;
+      if (!currentDraft) return;
+      const merges = evidenceDrafts.map((evidenceDraft) =>
+        mergeMedicationEvidence(currentDraft, evidenceDraft)
+      );
+      const successful = merges
+        .filter((result) => !result.rejectedReason)
+        .sort(
+          (left, right) =>
+            right.mergedFields.length - left.mergedFields.length
+        );
+      const best = successful[0];
+      if (!best) {
+        setEvidenceStatus(
+          merges[0]?.rejectedReason ||
+            "没有从补充照片中读取到可合并的药品信息。"
+        );
+        return;
+      }
+      if (!best.mergedFields.length) {
+        setEvidenceStatus(
+          "补充照片已读取，但没有发现比当前字段更明确的新信息。请补拍说明书中的“用法用量”。"
+        );
+        return;
+      }
+      setDraft(best.draft);
+      setDetectedDrafts((current) =>
+        current.length
+          ? current.map((item, index) =>
+              index === activeDraftIndex ? best.draft : item
+            )
+          : [best.draft]
+      );
+      saveIntakeDraft(best.draft);
+      setError("");
+      setEvidenceStatus(
+        `已补充并合并：${best.mergedFields
+          .map((field) => {
+            const labels: Record<string, string> = {
+              name: "药名",
+              genericName: "通用名",
+              ingredientsText: "有效成分",
+              dosage: "每次剂量",
+              strength: "单片规格",
+              packageSpec: "包装数量",
+              frequency: "服用频次",
+              relation: "饭前饭后",
+              instructions: "说明书用法",
+              price: "参考价格"
+            };
+            return labels[field] || field;
+          })
+          .join("、")}。请再次核对。`
+      );
+    } catch {
+      setEvidenceStatus(
+        "补充照片识别暂未完成，请确认照片清晰后重试。"
+      );
+    } finally {
+      setEvidenceProcessing(false);
+    }
+  }
+
+  async function onEvidenceFileChange(file: File | undefined) {
+    if (!file) return;
+    try {
+      const dataUrl = await fileToCompressedDataUrl(file);
+      await supplementDraftWithImage(dataUrl);
+    } catch {
+      setEvidenceStatus("补充照片读取失败，请换一张清晰照片。");
+    }
+  }
+
   function updateField<K extends keyof IntakeDraft>(field: K, value: IntakeDraft[K]) {
     if (!draft) return;
     const nextDraft = {
@@ -386,6 +530,8 @@ export function AddMedicationPage({
     saveIntakeDraft(selected);
     setRiskCheck(undefined);
     setCandidateMedication(undefined);
+    setEvidenceStatus("");
+    setEvidenceImages([]);
     setPhase("review");
   }
 
@@ -395,6 +541,8 @@ export function AddMedicationPage({
     setDetectedDrafts([manual]);
     setActiveDraftIndex(0);
     setError("");
+    setEvidenceStatus("");
+    setEvidenceImages([]);
     setPhase("review");
   }
 
@@ -550,6 +698,10 @@ export function AddMedicationPage({
       navigate(`/medications/${medication.id}`);
     }
   }
+
+  const insufficientFields = draft
+    ? getInsufficientMedicationFields(draft)
+    : [];
 
   return (
     <div className={embedded ? "embedded-add-medication" : "page"}>
@@ -745,6 +897,88 @@ export function AddMedicationPage({
               <div className="notice" style={{ marginBottom: 18 }}>
                 <Sparkles size={20} aria-hidden="true" />
                 {autoFillStatus}
+              </div>
+            ) : null}
+            {insufficientFields.length ||
+            evidenceStatus ||
+            evidenceProcessing ? (
+              <div
+                className="notice warm"
+                style={{ marginBottom: 18, alignItems: "flex-start" }}
+                role="status"
+              >
+                <FileImage size={21} aria-hidden="true" />
+                <div style={{ display: "grid", gap: 8 }}>
+                  <strong>
+                    {insufficientFields.length
+                      ? "药物信息不足，可补拍说明书或另一面包装"
+                      : "补充佐证核对结果"}
+                  </strong>
+                  {insufficientFields.length ? (
+                    <span>
+                      当前还缺少或需复核：
+                      {insufficientFields.join("、")}。补拍内容只会合并到当前药物；
+                      药名不一致时不会自动覆盖。
+                    </span>
+                  ) : null}
+                  <div className="header-actions">
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={evidenceProcessing}
+                      onClick={() => setEvidenceCameraOpen(true)}
+                    >
+                      {evidenceProcessing ? (
+                        <LoaderCircle
+                          size={18}
+                          className="spin"
+                          aria-hidden="true"
+                        />
+                      ) : (
+                        <Camera size={18} aria-hidden="true" />
+                      )}
+                      拍说明书补充
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={evidenceProcessing}
+                      onClick={() => evidenceLibraryInputRef.current?.click()}
+                    >
+                      <FileImage size={18} aria-hidden="true" />
+                      从相册添加佐证
+                    </button>
+                  </div>
+                  {evidenceStatus ? (
+                    <span className="field-hint">{evidenceStatus}</span>
+                  ) : null}
+                  {evidenceImages.length ? (
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(110px, 1fr))",
+                        gap: 8
+                      }}
+                    >
+                      {evidenceImages.map((image, index) => (
+                        <img
+                          key={`${image.slice(-20)}-${index}`}
+                          src={image}
+                          alt={`补充佐证照片 ${index + 1}`}
+                          style={{
+                            width: "100%",
+                            maxHeight: 150,
+                            objectFit: "contain",
+                            border: "1px solid var(--line)",
+                            borderRadius: 12,
+                            background: "var(--surface)"
+                          }}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               </div>
             ) : null}
             {draft.dosageSource ? (
@@ -1007,6 +1241,18 @@ export function AddMedicationPage({
           void onFileChange(file);
         }}
       />
+      <input
+        ref={evidenceLibraryInputRef}
+        className="visually-hidden-file"
+        type="file"
+        accept="image/*"
+        aria-label="从相册选择说明书或包装佐证照片"
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          void onEvidenceFileChange(file);
+        }}
+      />
       <CameraCaptureModal
         open={cameraOpen}
         onClose={() => {
@@ -1017,6 +1263,16 @@ export function AddMedicationPage({
           setCameraOpen(false);
           void processImage(imageDataUrl);
         }}
+      />
+      <CameraCaptureModal
+        open={evidenceCameraOpen}
+        onClose={() => setEvidenceCameraOpen(false)}
+        onCapture={(imageDataUrl) => {
+          setEvidenceCameraOpen(false);
+          void supplementDraftWithImage(imageDataUrl);
+        }}
+        eyebrow="补充佐证"
+        title="拍清说明书中的药名和用法用量"
       />
     </div>
   );

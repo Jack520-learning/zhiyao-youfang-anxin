@@ -37,6 +37,7 @@ export function isDailyConversationQuery(query: string): boolean {
   if (hasMedicationTopicIntent(query)) return false;
   return (
     isEmotionalDiscomfortQuery(query) ||
+    isAssistantIdentityQuery(query) ||
     /你好|您好|嗨|在吗|你是谁|你叫什么|你是什么|你是做什么|你能做什么|早上好|上午好|中午好|下午好|晚上好|谢谢|感谢|再见|晚安|心情|开心|难过|不高兴|烦|累|无聊|陪我|聊聊天|说说话|笑话|故事|唱歌|天气|下雨|今天.*太阳|太阳.*(大|晒|出来)|新闻|吃饭了吗|吃了吗|散步|电视|音乐|孩子|孙子|孙女|老伴|家人|睡得好|昨晚|今天过得|今天怎么样|你喜欢|你喜欢什么/.test(
       normalized
     )
@@ -44,7 +45,7 @@ export function isDailyConversationQuery(query: string): boolean {
 }
 
 export function isAssistantIdentityQuery(query: string): boolean {
-  return /你是谁|你叫什么|你是什么|你是做什么|你能做什么|介绍一下你自己|你有什么功能/.test(
+  return /你是谁|你叫什么|你是什么|你是做什么|你能做什么|你能干什么|你会做什么|你能帮我做什么|你能帮我干什么|介绍一下你自己|你有什么功能|你会哪些功能/.test(
     normalize(query)
   );
 }
@@ -79,6 +80,21 @@ export function buildAssistantIntroduction(profileName = ""): string {
   return `${salutation}我是智药有方·安心药伴，您的家庭用药管家和用药助手。`;
 }
 
+export function buildAssistantIdentityReply(
+  query: string,
+  profileName = ""
+): string {
+  if (
+    /能做什么|能干什么|会做什么|能帮我做什么|能帮我干什么|有什么功能|会哪些功能/.test(
+      normalize(query)
+    )
+  ) {
+    const salutation = profileName.trim() ? `${profileName.trim()}，` : "";
+    return `${salutation}我能帮您拍照识药、拍照加药、核对联合用药、回答用药安全问题和安排服药提醒。`;
+  }
+  return buildAssistantIntroduction(profileName);
+}
+
 function dailyReply(
   query: string,
   profile: ElderProfile,
@@ -93,7 +109,7 @@ function dailyReply(
     return "听起来您现在心里有些难受，我愿意陪您慢慢说。是某件事让您烦心，还是一种说不清的压抑？如果这种痛苦已经难以承受，或出现伤害自己的念头，请马上联系家人并拨打 120。";
   }
   if (isAssistantIdentityQuery(query)) {
-    return buildAssistantIntroduction(name);
+    return buildAssistantIdentityReply(query, name);
   }
   if (/你好|您好|嗨|早上好|上午好|中午好|下午好|晚上好/.test(normalized)) {
     return `${greeting}您好，我在呢。今天想随便聊聊，还是想让我帮您看看用药问题？`;

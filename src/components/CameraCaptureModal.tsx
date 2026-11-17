@@ -5,11 +5,15 @@ import { fileToCompressedDataUrl } from "../lib/image";
 export function CameraCaptureModal({
   open,
   onClose,
-  onCapture
+  onCapture,
+  eyebrow = "拍照识药",
+  title = "把药盒放在画面中间"
 }: {
   open: boolean;
   onClose: () => void;
   onCapture: (imageDataUrl: string) => void;
+  eyebrow?: string;
+  title?: string;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -132,8 +136,8 @@ export function CameraCaptureModal({
       >
         <div className="camera-header">
           <div>
-            <p className="eyebrow">拍照识药</p>
-            <h2 id="camera-title">把药盒放在画面中间</h2>
+            <p className="eyebrow">{eyebrow}</p>
+            <h2 id="camera-title">{title}</h2>
           </div>
           <button type="button" className="icon-btn" aria-label="关闭相机" onClick={close}>
             <X size={22} />

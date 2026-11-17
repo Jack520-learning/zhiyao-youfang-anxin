@@ -16,7 +16,7 @@ import {
   formatConditionGuidance
 } from "../catalog/conditionGuidance";
 import { buildUnavailableAnswer } from "./unavailableAnswer";
-import { buildAssistantIntroduction } from "./dailyConversation";
+import { buildAssistantIdentityReply } from "./dailyConversation";
 
 export const knowledge = knowledgeData as SharedKnowledgeBase;
 
@@ -836,8 +836,8 @@ export function answerWithRules(
           : "您好！我是智药有方的小助手，专门帮您核对用药、解答吃药时的安全问题。您今天想聊点什么？"
     },
     {
-      re: /你是谁|你是.*吗|你叫什么|介绍一下你自己|你能做什么|你有什么功能/,
-      reply: () => buildAssistantIntroduction(profile?.name)
+      re: /你是谁|你是.*吗|你叫什么|介绍一下你自己|你能做什么|你能干什么|你会做什么|你有什么功能/,
+      reply: () => buildAssistantIdentityReply(normalizedQuery, profile?.name)
     },
     {
       re: /谢谢|感谢|多谢|thank|好的|没问题|好极了|太棒了/,

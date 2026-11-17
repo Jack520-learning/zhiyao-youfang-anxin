@@ -27,6 +27,10 @@ import { nowIso } from "../lib/time";
 import { sanitizeVoicePreferences } from "../lib/voiceDefaults";
 import { toChineseErrorMessage } from "../lib/userMessage";
 import {
+  preserveLocalConversationImages,
+  preserveLocalDraftImage
+} from "../lib/cloudSnapshot";
+import {
   collectTrackableRiskChecks,
   isTrackableRiskCheck
 } from "../lib/riskTracking";
@@ -1449,7 +1453,10 @@ export const useAppStore = create<AppStore>()(
             snapshot.familyAlerts ?? state.familyAlerts
           );
           const conversations =
-            snapshot.conversations ?? state.conversations;
+            preserveLocalConversationImages(
+              snapshot.conversations,
+              state.conversations
+            ) ?? state.conversations;
           const activeConversationId = conversations.some(
             (conversation) =>
               conversation.id === state.activeConversationId
@@ -1495,7 +1502,10 @@ export const useAppStore = create<AppStore>()(
                   state.preferences.customVoices
               })
             : state.preferences,
-          intakeDraft: snapshot.intakeDraft ?? state.intakeDraft,
+          intakeDraft: preserveLocalDraftImage(
+            snapshot.intakeDraft,
+            state.intakeDraft
+          ),
           lastSyncedAt: snapshot.updatedAt,
           hydrated: true
           };

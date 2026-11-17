@@ -53,6 +53,14 @@ describe("daily conversation", () => {
     expect(response.message).not.toContain("回答边界");
   });
 
+  it("answers capability questions directly without the unrelated-knowledge warning", () => {
+    const response = buildDailyConversationResponse("你能干什么", profile);
+    expect(response.message).toContain("拍照识药");
+    expect(response.message).toContain("核对联合用药");
+    expect(response.message).not.toContain("健康用药无关");
+    expect(response.message).not.toContain("温馨提示");
+  });
+
   it("prioritizes medication and alcohol safety over family-chat keywords", () => {
     const query = "我老伴吃头孢了，晚上亲戚聚餐，能不能喝点酒。";
     expect(isDailyConversationQuery(query)).toBe(false);
