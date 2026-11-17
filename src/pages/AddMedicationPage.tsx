@@ -52,6 +52,23 @@ interface AddMedicationPageProps {
   onExit?: () => void;
 }
 
+export function resolveIntakeEntryPhase({
+  manualMode,
+  captureMode,
+  reviewMode,
+  hasDraft
+}: {
+  manualMode: boolean;
+  captureMode: boolean;
+  reviewMode: boolean;
+  hasDraft: boolean;
+}): Phase {
+  if (manualMode) return "review";
+  if (captureMode) return "upload";
+  if (reviewMode || hasDraft) return "review";
+  return "upload";
+}
+
 function splitIngredients(value: string): string[] {
   return value
     .split(/[、,，/\s]+/)
@@ -70,6 +87,7 @@ export function AddMedicationPage({
   const manualMode = manualOnOpen || searchParams.get("mode") === "manual";
   const captureMode =
     captureOnOpen || searchParams.get("capture") === "1";
+  const reviewMode = searchParams.get("review") === "1";
   const origin = searchParams.get("from");
   const backPath = origin === "chat" ? "/chat" : origin === "today" ? "/today" : "/medications";
   const backLabel = origin === "chat" ? "返回问药识药" : origin === "today" ? "返回今日" : "返回用药清单";
@@ -82,24 +100,23 @@ export function AddMedicationPage({
   const medications = useAppStore((state) => state.medications);
   const saveIntakeDraft = useAppStore((state) => state.saveIntakeDraft);
   const addMedication = useAppStore((state) => state.addMedication);
-  const [phase, setPhase] = useState<Phase>(() =>
-    manualMode
-      ? "review"
-      : captureMode
-        ? "upload"
-        : existingDraft?.imageDataUrl
-          ? "review"
-          : "upload"
-  );
-  const [draft, setDraft] = useState<IntakeDraft | undefined>(() =>
+  const initialDraft: IntakeDraft | undefined =
     manualMode
       ? createManualDraft()
       : captureMode
         ? undefined
-        : existingDraft
+        : existingDraft ?? (reviewMode ? createManualDraft() : undefined);
+  const [phase, setPhase] = useState<Phase>(() =>
+    resolveIntakeEntryPhase({
+      manualMode,
+      captureMode,
+      reviewMode,
+      hasDraft: Boolean(initialDraft)
+    })
   );
-  const [detectedDrafts, setDetectedDrafts] = useState<IntakeDraft[]>(() =>
-    existingDraft ? [existingDraft] : []
+  const [draft, setDraft] = useState<IntakeDraft | undefined>(initialDraft);
+  const [detectedDrafts, setDetectedDrafts] = useState<IntakeDraft[]>(
+    initialDraft ? [initialDraft] : []
   );
   const [activeDraftIndex, setActiveDraftIndex] = useState(0);
   const [progress, setProgress] = useState(0);

@@ -382,7 +382,7 @@ export function ChatPage() {
       behavior: "smooth"
     });
     setShowScrollToBottom(false);
-  }, [messages, sending, stages]);
+  }, [messages, sending, stages, photoBusy, photoProgress]);
 
   useEffect(() => {
     const container = messagesRef.current;
@@ -1050,7 +1050,8 @@ export function ChatPage() {
     if (!imageDataUrl || photoBusy) return;
     setView("conversation");
     setPhotoBusy(true);
-    setPhotoProgress("正在读取照片");
+    setPhotoProgress("正在读取药盒图片和文字");
+    setPhotoNotice("");
     autoScrollRef.current = true;
     const targetConversationId =
       useAppStore.getState().activeConversationId;
@@ -1076,7 +1077,9 @@ export function ChatPage() {
       } catch {
         draft = createManualDraft(imageDataUrl);
       }
+      setPhotoProgress("正在核对药名、用法和当前用药风险");
       const vision = await visionPromise;
+      setPhotoProgress("正在整理识别结果和风险提示");
       const activeMedications = medications.filter(
         (medication) => medication.status === "active"
       );
@@ -1968,7 +1971,9 @@ export function ChatPage() {
                     <button
                       type="button"
                       className="text-link"
-                      onClick={() => navigate("/add-medication?from=chat")}
+                      onClick={() =>
+                        navigate("/add-medication?from=chat&review=1")
+                      }
                     >
                       去核对并加入用药
                     </button>
@@ -1982,6 +1987,32 @@ export function ChatPage() {
                 onScroll={updateScrollAvailability}
               >
                 {messages.map(renderMessage)}
+                {photoBusy ? (
+                  <article className="message assistant">
+                    <div className="message-role">智药有方</div>
+                    <div className="message-bubble">
+                      <span
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: 10,
+                          lineHeight: 1.6
+                        }}
+                      >
+                        <LoaderCircle
+                          size={20}
+                          className="spin"
+                          aria-hidden="true"
+                        />
+                        <span>
+                          <strong>正在核对这张药盒照片</strong>
+                          <br />
+                          {photoProgress || "正在准备识别"}
+                        </span>
+                      </span>
+                    </div>
+                  </article>
+                ) : null}
                 {sending && !streamingMessageId ? (
                   <article className="message assistant">
                     <div className="message-role">智药有方</div>
