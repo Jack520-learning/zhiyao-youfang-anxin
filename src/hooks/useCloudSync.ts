@@ -6,7 +6,8 @@ import {
 } from "../lib/cloud";
 import {
   AccountRequestError,
-  fetchAdminOverview
+  fetchAdminOverview,
+  fetchServerAccounts
 } from "../lib/accountApi";
 import {
   cloudSnapshotFingerprint,
@@ -72,6 +73,43 @@ export function useCloudSync() {
       ),
     []
   );
+
+  useEffect(() => {
+    if (!hydrated || !sessionToken || role === "admin") return;
+    let cancelled = false;
+
+    async function refreshAccounts() {
+      try {
+        const result = await fetchServerAccounts(sessionToken);
+        if (cancelled) return;
+        useAppStore
+          .getState()
+          .syncServerAccounts(result.accounts, sessionToken);
+      } catch (error) {
+        if (
+          !cancelled &&
+          error instanceof AccountRequestError &&
+          [401, 403].includes(error.status)
+        ) {
+          useAppStore.getState().logoutAccount();
+        }
+      }
+    }
+
+    void refreshAccounts();
+    const interval = window.setInterval(refreshAccounts, 15_000);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refreshAccounts();
+    };
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [hydrated, role, sessionToken, connectionTick]);
 
   useEffect(() => {
     if (role !== "admin") return;

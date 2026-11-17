@@ -254,6 +254,7 @@ function connectedAccounts(account) {
     .filter(
       (candidate) =>
         account.role === "admin" ||
+        candidate.role === "admin" ||
         candidate.id === account.id ||
         accountsShareFamily(account, candidate)
     )

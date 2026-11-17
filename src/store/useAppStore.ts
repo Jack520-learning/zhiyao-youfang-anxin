@@ -173,7 +173,9 @@ function mergeServerAccounts(
     .map(normalizeAccount)
     .filter(
       (account) =>
-        !account.serverAccountId || serverIds.has(account.serverAccountId)
+        account.role === "admin" ||
+        !account.serverAccountId ||
+        serverIds.has(account.serverAccountId)
     );
   for (const serverAccount of serverAccounts) {
     const index = merged.findIndex(
@@ -725,6 +727,16 @@ export const useAppStore = create<AppStore>()(
           .map(normalizeAccount)
           .find((item) => item.id === accountId);
         if (!selectedAccount) return { ok: false, error: "账号不存在" };
+        if (
+          selectedAccount.role === "admin" &&
+          selectedAccount.id !== state.sessionAccountId &&
+          !selectedAccount.sessionToken
+        ) {
+          return {
+            ok: false,
+            error: "后台管理员会话已失效，请通过“登录其他账号”重新登录。"
+          };
+        }
         const currentAccount = activeLocalAccount(
           state.accounts.map(normalizeAccount),
           state.sessionAccountId || ""
