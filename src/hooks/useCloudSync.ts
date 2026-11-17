@@ -4,6 +4,10 @@ import {
   fetchFamilySnapshotState,
   syncCloudSnapshot
 } from "../lib/cloud";
+import {
+  AccountRequestError,
+  fetchAdminOverview
+} from "../lib/accountApi";
 import { cloudSnapshotFingerprint } from "../lib/cloudSnapshot";
 import { useAppStore } from "../store/useAppStore";
 import { isChatGenerationActive } from "../lib/chatSyncGuard";
@@ -20,6 +24,11 @@ export function useCloudSync() {
   const pendingElderWriteRef = useRef(false);
   const hydrated = useAppStore((state) => state.hydrated);
   const sessionAccountId = useAppStore((state) => state.sessionAccountId);
+  const sessionToken = useAppStore(
+    (state) =>
+      state.accounts.find((account) => account.id === state.sessionAccountId)
+        ?.sessionToken || ""
+  );
   const role = useAppStore((state) => state.role);
   const familyCode = useAppStore((state) => state.familyCode);
   const medications = useAppStore((state) => state.medications);
@@ -49,6 +58,51 @@ export function useCloudSync() {
       window.removeEventListener("offline", retry);
     };
   }, []);
+
+  useEffect(() => {
+    if (role !== "admin") return;
+    if (!sessionToken) {
+      setStatus("idle");
+      return;
+    }
+    let cancelled = false;
+
+    async function verifyAdminSync() {
+      if (!navigator.onLine) {
+        if (!cancelled) setStatus("offline");
+        return;
+      }
+      setStatus((current) => (current === "synced" ? current : "syncing"));
+      try {
+        await fetchAdminOverview(sessionToken);
+        if (!cancelled) setStatus("synced");
+      } catch (error) {
+        if (cancelled) return;
+        if (
+          error instanceof AccountRequestError &&
+          [401, 403].includes(error.status)
+        ) {
+          useAppStore.getState().logoutAccount();
+          return;
+        }
+        setStatus("offline");
+      }
+    }
+
+    void verifyAdminSync();
+    const interval = window.setInterval(verifyAdminSync, 10_000);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void verifyAdminSync();
+    };
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [role, sessionToken, connectionTick]);
 
   // After login/register, push local data to server immediately if the server
   // doesn't have a snapshot yet. This ensures cross-device accounts see data

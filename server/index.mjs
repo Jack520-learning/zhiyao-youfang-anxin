@@ -33,7 +33,15 @@ const initialDatabase = {
 let database = await loadDatabase();
 let dynamicKnowledge = await loadDynamicKnowledge();
 database.accounts ??= {};
+database.families ??= {};
 database.sessions ??= {};
+for (const account of Object.values(database.accounts)) {
+  if (account.role === "admin") {
+    account.familyCode = "";
+    account.linkedFamilyCodes = [];
+  }
+}
+delete database.families.ADMIN;
 let writeQueue = Promise.resolve();
 let dynamicKnowledgeWriteQueue = Promise.resolve();
 const familyEventClients = new Map();
@@ -1861,7 +1869,7 @@ const server = createServer(async (request, response) => {
             ? "family"
             : "elder";
       const familyCode =
-        role === "admin" ? "ADMIN" : sanitizeFamilyCode(body.familyCode);
+        role === "admin" ? "" : sanitizeFamilyCode(body.familyCode);
       if (!usernamePattern.test(username)) {
         return json(response, 400, {
           error: "账号需为 3 到 24 位中文、字母、数字或下划线"
@@ -2368,16 +2376,30 @@ const server = createServer(async (request, response) => {
       if (target.id === account.id) {
         return json(response, 400, { error: "不能删除当前登录的管理员账号" });
       }
-      if (target.role !== "admin") {
-        return json(response, 400, {
-          error: "此接口只允许删除其他管理员账号"
-        });
-      }
       const adminCount = Object.values(database.accounts).filter(
         (item) => item.role === "admin"
       ).length;
-      if (adminCount <= 1) {
+      if (target.role === "admin" && adminCount <= 1) {
         return json(response, 400, { error: "必须至少保留一个管理员账号" });
+      }
+      if (target.role === "elder") {
+        const deletedCode = target.familyCode;
+        delete database.families[deletedCode];
+        for (const linkedAccount of Object.values(database.accounts)) {
+          if (
+            linkedAccount.id === target.id ||
+            !accountCodes(linkedAccount).includes(deletedCode)
+          ) {
+            continue;
+          }
+          const remainingCodes = accountCodes(linkedAccount).filter(
+            (code) => code !== deletedCode
+          );
+          linkedAccount.linkedFamilyCodes = remainingCodes;
+          if (linkedAccount.familyCode === deletedCode) {
+            linkedAccount.familyCode = remainingCodes[0] || "";
+          }
+        }
       }
       delete database.accounts[target.username];
       for (const [token, session] of Object.entries(database.sessions)) {

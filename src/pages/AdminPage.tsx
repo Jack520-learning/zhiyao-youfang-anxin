@@ -58,6 +58,17 @@ export function AdminPage() {
       const result = await fetchAdminOverview(sessionToken);
       setOverview(result.overview);
       setAdminAccounts(result.accounts);
+      const liveServerIds = new Set(
+        result.accounts.map((account) => account.id)
+      );
+      useAppStore.setState((state) => {
+        const accounts = state.accounts.filter(
+          (account) =>
+            !account.serverAccountId ||
+            liveServerIds.has(account.serverAccountId)
+        );
+        return accounts.length === state.accounts.length ? {} : { accounts };
+      });
     } catch (loadError) {
       if (
         loadError instanceof AccountRequestError &&
@@ -297,8 +308,10 @@ export function AdminPage() {
               <span>
                 <strong>{account.displayName}</strong>
                 <small>
-                  {roleLabels[account.role]} · {account.username} · 家庭码{" "}
-                  {account.familyCode || "无"}
+                  {roleLabels[account.role]} · {account.username}
+                  {account.role === "admin"
+                    ? null
+                    : ` · 家庭码 ${account.familyCode || "无"}`}
                 </small>
               </span>
               <span className={`chip ${account.disabled ? "risk-medium" : ""}`}>
