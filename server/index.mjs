@@ -1855,16 +1855,6 @@ const server = createServer(async (request, response) => {
       if (database.accounts[username]) {
         return json(response, 409, { error: "这个账号已经注册，请直接登录" });
       }
-      if (
-        role === "admin" &&
-        Object.values(database.accounts).some(
-          (account) => account.role === "admin"
-        )
-      ) {
-        return json(response, 403, {
-          error: "后台管理员已经创建，请直接登录"
-        });
-      }
       const codeExists = Object.values(database.accounts).some(
         (account) =>
           account.role === "elder" &&

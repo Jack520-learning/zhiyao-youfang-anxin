@@ -140,18 +140,6 @@ export function AuthGate() {
                 </button>
                 <button
                   type="button"
-                  className={role === "admin" ? "active" : ""}
-                  aria-pressed={role === "admin"}
-                  onClick={() => setRole("admin")}
-                >
-                  <Settings2 size={24} aria-hidden="true" />
-                  <span>
-                    <strong>后台管理员</strong>
-                    <small>管理账号、效果与质量评估</small>
-                  </span>
-                </button>
-                <button
-                  type="button"
                   className={role === "family" ? "active" : ""}
                   aria-pressed={role === "family"}
                   onClick={() => setRole("family")}
@@ -160,6 +148,18 @@ export function AuthGate() {
                   <span>
                     <strong>我是家属</strong>
                     <small>凭家庭码查看摘要</small>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className={role === "admin" ? "active" : ""}
+                  aria-pressed={role === "admin"}
+                  onClick={() => setRole("admin")}
+                >
+                  <Settings2 size={24} aria-hidden="true" />
+                  <span>
+                    <strong>后台管理员</strong>
+                    <small>管理账号、效果与质量评估</small>
                   </span>
                 </button>
               </fieldset>
@@ -220,7 +220,7 @@ export function AuthGate() {
               {role === "admin" ? (
                 <div className="notice">
                   <ShieldCheck size={20} aria-hidden="true" />
-                  首次注册会创建唯一后台管理员账号，之后请直接登录。管理员不绑定家庭连接码。
+                  注册成功后会直接进入后台管理端。管理员不绑定家庭连接码。
                 </div>
               ) : role === "family" ? (
                 <label className="auth-field">
