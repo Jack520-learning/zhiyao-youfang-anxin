@@ -38,18 +38,17 @@ describe("daily conversation", () => {
     expect(isDailyConversationQuery("你是谁")).toBe(true);
     expect(isAssistantIdentityQuery("你能做什么")).toBe(true);
     expect(resolveAdaptiveAnswerMode("陪我聊聊天吧", "safety")).toBe("quick");
-    expect(resolveAdaptiveAnswerMode("你是谁", "quick")).toBe("detailed");
+    expect(resolveAdaptiveAnswerMode("你是谁", "detailed")).toBe("quick");
   });
 
   it("answers identity questions as natural daily chat without a warning", () => {
     const response = buildDailyConversationResponse("你是谁", profile);
     expect(response.conversationOnly).toBe(true);
-    expect(response.message).toContain("家庭用药管家");
-    expect(response.message).toContain("普通问药");
-    expect(response.message).toContain("用药档案");
-    expect(response.message).toContain("具体问题");
-    expect(response.message).toContain("拍照识药");
-    expect(response.message).toContain("医生或药师");
+    expect(response.message).toBe(
+      "王阿姨，我是智药有方·安心药伴，您的家庭用药管家和用药助手。"
+    );
+    expect(response.message).not.toContain("普通问药");
+    expect(response.message).not.toContain("回答方式");
     expect(response.message).not.toContain("温馨提示");
     expect(response.message).not.toContain("回答边界");
   });

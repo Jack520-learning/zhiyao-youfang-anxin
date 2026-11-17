@@ -80,7 +80,6 @@ import { nowIso, getNextDose, formatMessageTime } from "../lib/time";
 import {
   buildDailyConversationResponse,
   hasMedicationTopicIntent,
-  isAssistantIdentityQuery,
   isDailyConversationQuery,
   isContextualDailyReply,
   resolveAdaptiveAnswerMode
@@ -571,8 +570,6 @@ export function ChatPage() {
       !hasExplicitMedicationIntent &&
       (isDailyConversationQuery(clean) ||
         isContextualDailyReply(clean, previousAssistantMessage?.content));
-    const assistantIdentityQuery =
-      dailyConversation && isAssistantIdentityQuery(clean);
     const currentConversationDraft =
       currentConversation?.medicineContext ?? stateAfterMessage.intakeDraft;
     const draftContextQuestion =
@@ -598,9 +595,7 @@ export function ChatPage() {
       isGeneralKnowledgeQuestion(contextualQuestion, Boolean(composerSkill));
     const effectiveAnswerMode =
       dailyConversation
-        ? assistantIdentityQuery
-          ? "detailed"
-          : "quick"
+        ? "quick"
         : resolveAdaptiveAnswerMode(contextualQuestion, answerMode);
     setThinkingLabel(
       dailyConversation

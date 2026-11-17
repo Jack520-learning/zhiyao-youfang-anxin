@@ -70,22 +70,13 @@ export function resolveAdaptiveAnswerMode(
   query: string,
   requestedMode: AnswerMode
 ): AnswerMode {
-  if (isAssistantIdentityQuery(query)) return "detailed";
   if (isDailyConversationQuery(query)) return "quick";
   return requestedMode;
 }
 
 export function buildAssistantIntroduction(profileName = ""): string {
   const salutation = profileName.trim() ? `${profileName.trim()}，` : "";
-  return [
-    `${salutation}我是智药有方·安心药伴，是您的家庭用药管家，也是平时的用药助手。`,
-    "我的回答方式和普通问药不完全一样：",
-    "1. 普通问药常直接给出一个通用结论；我会先结合您的用药档案、过敏史、慢病和正在服用的药，再回答。",
-    "2. 普通问药容易套用同一份模板；我会先听清您问的是“怎么吃”“漏服怎么办”，还是“哪里不舒服”，再按具体问题组织回答。",
-    "3. 遇到身体不适，我会先看有没有需要立即求助的信号，再说明判断依据、现在该做什么和何时就医，不会把不同症状混在一起。",
-    "4. 除了问答，我还能帮您拍照识药、拍照加药、核对多药冲突和安排服药提醒。",
-    "您可以把我当成家里的用药管家，直接说“我哪里不舒服”或“今天这些药怎么安排”。涉及诊断、处方和停药时，我仍会提醒您让医生或药师确认。"
-  ].join("\n\n");
+  return `${salutation}我是智药有方·安心药伴，您的家庭用药管家和用药助手。`;
 }
 
 function dailyReply(
