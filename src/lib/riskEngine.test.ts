@@ -222,4 +222,22 @@ describe("riskEngine", () => {
     expect(result.message).not.toMatch(/每\s*4\s*-\s*6\s*小时/);
     expect(result.message).not.toMatch(/每\s*6\s*-\s*8\s*小时/);
   });
+
+  it("answers heart discomfort from the actual complaint instead of a dizziness template", () => {
+    const result = answerWithRules("我心脏不舒服。", [], profile);
+    expect(result.riskCheck.title).toContain("心脏不适");
+    expect(result.message).not.toContain("心脏不适怎么判断");
+    expect(result.message).not.toMatch(/^##\s+/m);
+    expect(result.message).toContain("120");
+    expect(result.message).not.toContain("仅凭头晕");
+    expect(result.message).not.toContain("服药后的不适怎么判断");
+  });
+
+  it("asks for the specific body area when discomfort is unspecified", () => {
+    const result = answerWithRules("我今天有点不舒服", [], profile);
+    expect(result.riskCheck.title).toContain("具体不适部位");
+    expect(result.message).toContain("具体不适部位");
+    expect(result.message).not.toContain("仅凭头晕");
+    expect(result.message).toContain("120");
+  });
 });

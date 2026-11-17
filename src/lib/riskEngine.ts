@@ -16,6 +16,7 @@ import {
   formatConditionGuidance
 } from "../catalog/conditionGuidance";
 import { buildUnavailableAnswer } from "./unavailableAnswer";
+import { buildAssistantIntroduction } from "./dailyConversation";
 
 export const knowledge = knowledgeData as SharedKnowledgeBase;
 
@@ -282,6 +283,15 @@ function questionHeading(query: string): string {
   if (/胸痛|呼吸困难|喘不上|意识不清|昏迷|抽搐|大出血/.test(normalized)) {
     return "紧急情况先这样处理";
   }
+  if (
+    /(心脏|心口|心前区|胸口|胸前|胸部)/.test(normalized) &&
+    /(不舒服|难受|不适|疼|痛|闷|心慌|悸)/.test(normalized)
+  ) {
+    return "心脏不适怎么判断";
+  }
+  if (/头晕|头昏|眩晕/.test(normalized)) {
+    return "头晕怎么判断";
+  }
   if (/漏服|忘了吃|忘记吃|少吃一次|补服|补吃/.test(normalized)) {
     return "这次漏服怎么处理";
   }
@@ -291,8 +301,11 @@ function questionHeading(query: string): string {
   if (/多少钱|价格|价钱|最便宜|哪里买|购买/.test(normalized)) {
     return "价格与购买核对";
   }
-  if (/副作用|不良反应|难受|不舒服/.test(normalized)) {
+  if (/副作用|不良反应/.test(normalized)) {
     return "服药后的不适怎么判断";
+  }
+  if (/不舒服|难受|不适/.test(normalized)) {
+    return "身体不适怎么判断";
   }
   if (/怎么吃|怎么用|什么时候吃|几点吃|饭前|饭后|吃几次|剂量|用量/.test(normalized)) {
     return "具体服药方法";
@@ -312,7 +325,8 @@ function questionHeading(query: string): string {
 export function buildRulesMessage(
   check: RiskCheck,
   mode: AnswerMode,
-  query = ""
+  query = "",
+  options: { hideHeading?: boolean } = {}
 ): string {
   const levelLabel = check.level === "emergency"
     ? "紧急"
@@ -335,7 +349,7 @@ export function buildRulesMessage(
       ? `\n\n### 判断依据\n${check.reasons.map((r) => `- ${r}`).join("\n")}`
       : "";
     return [
-      `## ${questionHeading(query)}的详细说明`,
+      options.hideHeading ? "" : `## ${questionHeading(query)}的详细说明`,
       `**风险等级：${levelLabel}**`,
       "### 完整解释",
       check.summary,
@@ -344,7 +358,9 @@ export function buildRulesMessage(
       check.nextStep,
       "### 需要注意",
       "以上内容基于当前档案、说明书信息和确定性安全规则生成；个体诊断、停药和剂量调整仍需医生或药师确认。"
-    ].join("\n\n");
+    ]
+      .filter((block) => (options.hideHeading ? Boolean(block) : true))
+      .join("\n\n");
   }
 
   const urgent =
@@ -355,7 +371,7 @@ export function buildRulesMessage(
     ? `\n\n### 为什么\n- ${check.reasons[0]}`
     : "";
   return [
-    `## ${questionHeading(query)}的安全要点`,
+    options.hideHeading ? "" : `## ${questionHeading(query)}的安全要点`,
     `${urgent}${check.summary}`,
     safetyReason.trim(),
     "### 现在先做",
@@ -745,16 +761,53 @@ export function answerWithRules(
     };
   }
 
-  if (normalizedQuery.includes("头晕") || normalizedQuery.includes("不舒服")) {
+  if (
+    /(心脏|心口|心前区|胸口|胸前|胸部)/.test(normalizedQuery) &&
+    /(不舒服|难受|不适|疼|痛|闷|心慌|悸)/.test(normalizedQuery)
+  ) {
+    const check = makeCheck(
+      {
+        level: "medium",
+        title: "心脏不适先排查急症信号",
+        summary:
+          "您说的是心脏位置不舒服，这不是普通的“服药后不适”，也不能套用头晕的判断。心脏不适可能表现为压榨感、疼痛、心慌或说不清的不适；新出现、反复出现或持续加重时，需要尽快让医生评估。",
+        nextStep:
+          "先停止活动并坐下。只要出现胸痛或胸闷持续不缓解、喘不上气、大汗、恶心、明显心慌、快晕倒，或不适放射到手臂、肩背、下颌，请立即拨打 120，不要自行开车。若目前只是短暂轻微不适，也请记录发生时间、持续多久和最近一次服药，并今天联系医生或药师。",
+        reasons: [
+          "具体主诉是心脏位置不适，不能按泛泛的服药后不适回答",
+          "已优先核对急性心血管危险信号",
+          "症状无法仅凭对话判断原因"
+        ],
+        sourceIds: ["src-emergency", "src-no-evidence"],
+        involvedMedicationIds: currentMedications.map(
+          (medication) => medication.id
+        )
+      },
+      currentMedications
+    );
+    return {
+      message: buildRulesMessage(check, mode, query, { hideHeading: true }),
+      riskCheck: check,
+      stages: [
+        { id: "intent", label: "识别具体部位为心脏", status: "done" },
+        { id: "emergency", label: "核对急性心血管危险信号", status: "done" },
+        { id: "profile", label: "读取近期用药", status: "done" },
+        { id: "risk", label: "给出心脏不适处置边界", status: "done" }
+      ],
+      mode: "rules"
+    };
+  }
+
+  if (/头晕|头昏|眩晕/.test(normalizedQuery)) {
     const check = makeCheck(
       {
         level: "unknown",
-        title: "先确认身体状态，暂不归因于药物",
+        title: "先确认头晕伴随症状，暂不归因于药物",
         summary:
-          "仅凭头晕不能判断是哪种药造成的。请先确认有没有胸痛、呼吸困难、意识不清或突然口角歪斜。",
+          "头晕可能与血压波动、心律失常、脱水、药物或其他原因有关，需要先看伴随症状，不能直接认定是哪种药造成的。",
         nextStep:
-          "如果出现上述情况，立即使用紧急求助；如果没有，可以记录发生时间和最近一次服药，再联系医生或药师。",
-      reasons: ["症状不能直接归因于药物", "当前知识库未覆盖该具体症状"],
+          "先坐下或躺下，避免跌倒。若伴胸痛、呼吸困难、意识不清、突然口角歪斜或一侧无力，请立即拨打 120；若没有这些信号，可测量血压并记录发生时间和最近一次服药，再联系医生或药师。",
+        reasons: ["识别到具体主诉为头晕", "症状不能直接归因于药物"],
         sourceIds: ["src-emergency", "src-no-evidence"],
         involvedMedicationIds: currentMedications.map((medication) => medication.id)
       },
@@ -784,8 +837,7 @@ export function answerWithRules(
     },
     {
       re: /你是谁|你是.*吗|你叫什么|介绍一下你自己|你能做什么|你有什么功能/,
-      reply: () =>
-        "我是智药有方·安心药伴的智能小助手，主要能帮您做这些事：\n\n• 核对药盒照片，识别药物名称和用法\n• 提醒按时吃药、检查药物之间有没有相互作用\n• 回答常见的吃药安全问题（比如漏服了怎么办、饭前饭后吃）\n• 紧急情况下帮您快速判断是否需要就医\n\n有任何吃药相关的问题都可以直接问我～"
+      reply: () => buildAssistantIntroduction(profile?.name)
     },
     {
       re: /谢谢|感谢|多谢|thank|好的|没问题|好极了|太棒了/,
@@ -950,6 +1002,37 @@ export function answerWithRules(
         { id: "intent", label: "识别症状咨询", status: "done" },
         { id: "rag", label: "匹配非处方安全建议", status: "done" },
         { id: "risk", label: "标注非诊断性质", status: "done" }
+      ],
+      mode: "rules"
+    };
+  }
+
+  if (/不舒服|难受|不适/.test(normalizedQuery)) {
+    const check = makeCheck(
+      {
+        level: "unknown",
+        title: "先补充具体不适部位和表现",
+        summary: `您说的是“${query.slice(0, 30)}”，目前还不能确定具体原因。请说明具体不适部位、持续多久，以及是疼、闷、晕、恶心还是其他感觉。`,
+        nextStep:
+          "如果伴胸痛、呼吸困难、意识异常、明显出血或突然一侧无力，请立即拨打 120。若症状较轻，也请记录发生时间和最近一次服药，再联系医生或药师。",
+        reasons: [
+          "识别到身体不适主诉，但缺少具体部位和伴随症状",
+          "不用其他症状的模板代替当前主诉"
+        ],
+        sourceIds: ["src-emergency", "src-no-evidence"],
+        involvedMedicationIds: currentMedications.map(
+          (medication) => medication.id
+        )
+      },
+      currentMedications
+    );
+    return {
+      message: buildRulesMessage(check, mode, query),
+      riskCheck: check,
+      stages: [
+        { id: "intent", label: "识别身体不适主诉", status: "done" },
+        { id: "clarify", label: "确认需要补充的具体症状", status: "done" },
+        { id: "risk", label: "标注紧急危险信号", status: "done" }
       ],
       mode: "rules"
     };
