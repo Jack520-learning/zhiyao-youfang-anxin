@@ -37,22 +37,23 @@ export function AdminPage() {
   const currentAccount = accounts.find(
     (account) => account.id === sessionAccountId
   );
+  const sessionToken = currentAccount?.sessionToken || "";
   const [overview, setOverview] = useState<AdminOverview>();
   const [adminAccounts, setAdminAccounts] = useState<AdminAccountSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [updatingId, setUpdatingId] = useState("");
 
-  async function loadOverview() {
-    if (!currentAccount?.sessionToken) {
+  async function loadOverview(showLoading = true) {
+    if (!sessionToken) {
       setError("当前管理员缺少有效会话，请重新登录。");
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (showLoading) setLoading(true);
     setError("");
     try {
-      const result = await fetchAdminOverview(currentAccount.sessionToken);
+      const result = await fetchAdminOverview(sessionToken);
       setOverview(result.overview);
       setAdminAccounts(result.accounts);
     } catch (loadError) {
@@ -60,13 +61,46 @@ export function AdminPage() {
         loadError instanceof Error ? loadError.message : "后台数据加载失败"
       );
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }
 
   useEffect(() => {
-    if (role === "admin") void loadOverview();
-  }, [role, currentAccount?.sessionToken]);
+    if (role !== "admin") return;
+    let cancelled = false;
+    let refreshTimer = 0;
+
+    const refresh = () => {
+      if (cancelled) return;
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        if (!cancelled) void loadOverview(false);
+      }, 150);
+    };
+
+    void loadOverview();
+    if (!sessionToken) return;
+
+    const source = new EventSource(
+      `/api/admin/events?token=${encodeURIComponent(sessionToken)}`
+    );
+    source.onmessage = refresh;
+    const interval = window.setInterval(refresh, 10_000);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(refreshTimer);
+      source.close();
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [role, sessionToken]);
 
   if (role !== "admin") return <Navigate to="/chat" replace />;
 

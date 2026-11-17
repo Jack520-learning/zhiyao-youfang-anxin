@@ -37,6 +37,7 @@ database.sessions ??= {};
 let writeQueue = Promise.resolve();
 let dynamicKnowledgeWriteQueue = Promise.resolve();
 const familyEventClients = new Map();
+const adminEventClients = new Set();
 const scrypt = promisify(scryptCallback);
 const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const usernamePattern = /^[a-zA-Z0-9_\u4e00-\u9fa5]{3,24}$/u;
@@ -50,6 +51,18 @@ function broadcastFamily(familyCode, payload) {
       response.write(message);
     } catch {
       clients.delete(response);
+    }
+  }
+}
+
+function broadcastAdmin(payload) {
+  if (!adminEventClients.size) return;
+  const message = `data: ${JSON.stringify(payload)}\n\n`;
+  for (const response of adminEventClients) {
+    try {
+      response.write(message);
+    } catch {
+      adminEventClients.delete(response);
     }
   }
 }
@@ -87,9 +100,13 @@ function saveDynamicKnowledge() {
 }
 
 function saveDatabase() {
-  writeQueue = writeQueue.then(() =>
-    writeFile(dataPath, JSON.stringify(database, null, 2))
-  );
+  writeQueue = writeQueue.then(async () => {
+    await writeFile(dataPath, JSON.stringify(database, null, 2));
+    broadcastAdmin({
+      type: "database-updated",
+      updatedAt: new Date().toISOString()
+    });
+  });
   return writeQueue;
 }
 
@@ -2161,6 +2178,45 @@ const server = createServer(async (request, response) => {
       return json(response, 200, { ok: true });
     }
 
+    if (url.pathname === "/api/admin/events" && request.method === "GET") {
+      const token = String(url.searchParams.get("token") || "");
+      const session = database.sessions[token];
+      const account = session
+        ? Object.values(database.accounts).find(
+            (item) => item.id === session.accountId
+          )
+        : null;
+      if (
+        !account ||
+        account.role !== "admin" ||
+        new Date(session.expiresAt).getTime() <= Date.now()
+      ) {
+        return json(response, 403, { error: "需要有效的后台管理员会话" });
+      }
+      response.writeHead(200, {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no"
+      });
+      response.write("retry: 2000\n\n");
+      response.write(
+        `data: ${JSON.stringify({
+          type: "connected",
+          updatedAt: new Date().toISOString()
+        })}\n\n`
+      );
+      adminEventClients.add(response);
+      const heartbeat = setInterval(() => {
+        response.write(`event: heartbeat\ndata: ${Date.now()}\n\n`);
+      }, 20_000);
+      request.on("close", () => {
+        clearInterval(heartbeat);
+        adminEventClients.delete(response);
+      });
+      return;
+    }
+
     if (url.pathname === "/api/admin/overview" && request.method === "GET") {
       const { account } = authenticatedAccount(request);
       if (!account || account.role !== "admin") {
@@ -2245,6 +2301,41 @@ const server = createServer(async (request, response) => {
         ok: true,
         account: publicAccount(target)
       });
+    }
+
+    if (
+      url.pathname === "/api/admin/accounts/delete" &&
+      request.method === "POST"
+    ) {
+      const { account } = authenticatedAccount(request);
+      if (!account || account.role !== "admin") {
+        return json(response, 403, { error: "需要后台管理员权限" });
+      }
+      const body = await readJson(request, 64 * 1024);
+      const target = Object.values(database.accounts).find(
+        (item) => item.id === body.accountId
+      );
+      if (!target) return json(response, 404, { error: "账号不存在" });
+      if (target.id === account.id) {
+        return json(response, 400, { error: "不能删除当前登录的管理员账号" });
+      }
+      if (target.role !== "admin") {
+        return json(response, 400, {
+          error: "此接口只允许删除其他管理员账号"
+        });
+      }
+      const adminCount = Object.values(database.accounts).filter(
+        (item) => item.role === "admin"
+      ).length;
+      if (adminCount <= 1) {
+        return json(response, 400, { error: "必须至少保留一个管理员账号" });
+      }
+      delete database.accounts[target.username];
+      for (const [token, session] of Object.entries(database.sessions)) {
+        if (session.accountId === target.id) delete database.sessions[token];
+      }
+      await saveDatabase();
+      return json(response, 200, { ok: true, accountId: target.id });
     }
 
     if (url.pathname === "/api/mcp" && request.method === "POST") {
