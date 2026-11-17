@@ -174,6 +174,7 @@ let preferredVoiceMode: VoiceMode = DEFAULT_VOICE_MODE;
 let currentAudio: HTMLAudioElement | null = null;
 let speechRequestVersion = 0;
 let speechPending = false;
+let speechSequenceActive = false;
 let speechAbortController: AbortController | null = null;
 const speechUrlCache = new Map<
   string,
@@ -198,6 +199,12 @@ function emitSpeechState() {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event("speech-state-change"));
   }
+}
+
+function finishSpeechSequence() {
+  if (!speechSequenceActive) return;
+  speechSequenceActive = false;
+  emitSpeechState();
 }
 
 function naturalSpeechText(text: string): string {
@@ -243,6 +250,7 @@ export async function speakText(
 ): Promise<boolean> {
   if (!enabled || !text.trim()) return Promise.resolve(false);
   stopSpeaking();
+  speechSequenceActive = true;
   preferredVoiceMode = voiceMode;
   const requestVersion = speechRequestVersion;
   const abortController = new AbortController();
@@ -252,7 +260,11 @@ export async function speakText(
   const cached = getCachedSpeechAudio(text, voiceMode, customVoiceId);
   try {
     if (cached) {
-      return await playAudioUrl(cached.audioUrl, requestVersion);
+      return await playAudioUrl(
+        cached.audioUrl,
+        requestVersion,
+        finishSpeechSequence
+      );
     }
     return await playServerAudio(
       text,
@@ -262,6 +274,7 @@ export async function speakText(
       abortController.signal
     );
   } catch {
+    finishSpeechSequence();
     return false;
   } finally {
     if (speechAbortController === abortController) {
@@ -303,11 +316,16 @@ async function playAudioUrl(
   const audio = new Audio(audioUrl);
   currentAudio = audio;
   audio.onended = () => {
-    if (currentAudio === audio) currentAudio = null;
+    const isCurrentRequest =
+      requestVersion === speechRequestVersion && currentAudio === audio;
+    if (isCurrentRequest) currentAudio = null;
     emitSpeechState();
-    onEnded?.();
+    if (isCurrentRequest) onEnded?.();
   };
   audio.onerror = () => {
+    if (requestVersion === speechRequestVersion) {
+      finishSpeechSequence();
+    }
     if (currentAudio === audio) currentAudio = null;
     emitSpeechState();
   };
@@ -357,9 +375,14 @@ async function playServerAudio(
         requestVersion !== speechRequestVersion ||
         index + 1 >= chunks.length
       ) {
+        if (requestVersion === speechRequestVersion) {
+          finishSpeechSequence();
+        }
         return;
       }
-      void playChunk(index + 1, nextPrepared).catch(() => undefined);
+      void playChunk(index + 1, nextPrepared).catch(() => {
+        finishSpeechSequence();
+      });
     });
   }
   return playChunk(0);
@@ -468,8 +491,11 @@ export function getSpeechPlaybackState(): SpeechPlaybackState {
 }
 
 export function getSpeechStatus(): SpeechStatus {
+  const playbackState = getSpeechPlaybackState();
+  if (playbackState !== "idle") return playbackState;
   if (speechPending) return "loading";
-  return getSpeechPlaybackState();
+  if (speechSequenceActive) return "speaking";
+  return playbackState;
 }
 
 export function pauseSpeaking(): boolean {
@@ -493,6 +519,7 @@ export function resumeSpeaking(): boolean {
 export function stopSpeaking() {
   speechRequestVersion += 1;
   speechPending = false;
+  speechSequenceActive = false;
   speechAbortController?.abort();
   speechAbortController = null;
   if (currentAudio) {

@@ -297,6 +297,110 @@ describe("speech playback start", () => {
     expect(getSpeechStatus()).toBe("idle");
   });
 
+  it("keeps playback active while moving between long-answer chunks", async () => {
+    const audios: FakeAudio[] = [];
+    class FakeAudio {
+      paused = false;
+      currentTime = 0;
+      onended: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      constructor(public src: string) {
+        audios.push(this);
+      }
+      play() {
+        return Promise.resolve();
+      }
+      pause() {
+        this.paused = true;
+      }
+    }
+    vi.stubGlobal("Audio", FakeAudio);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            audioUrl: "https://audio.example/chunk.wav",
+            voice: "longanhuan_v3.1"
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      )
+    );
+    const states: string[] = [];
+    const onChange = () => states.push(getSpeechStatus());
+    window.addEventListener("speech-state-change", onChange);
+    const text = [
+      "这是需要连续朗读的第一段内容，用来检查长回答不会在分段时被误判为停止。".repeat(3),
+      "这是第二段内容，应该在第一段结束后立即继续，不出现等待或丢失状态。".repeat(3),
+      "这是最后一段内容，播放结束后才允许恢复空闲状态。".repeat(3)
+    ].join("。");
+
+    await expect(speakText(text, true, "warm")).resolves.toBe(true);
+    expect(audios).toHaveLength(1);
+    expect(getSpeechStatus()).toBe("speaking");
+
+    states.length = 0;
+    audios[0].onended?.();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(audios.length).toBeGreaterThan(1);
+    expect(states).not.toContain("idle");
+    expect(getSpeechStatus()).toBe("speaking");
+    stopSpeaking();
+    expect(getSpeechStatus()).toBe("idle");
+    window.removeEventListener("speech-state-change", onChange);
+  });
+
+  it("lets a new answer take over without the previous answer ending the new playback", async () => {
+    const audios: FakeAudio[] = [];
+    class FakeAudio {
+      paused = false;
+      currentTime = 0;
+      onended: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      constructor(public src: string) {
+        audios.push(this);
+      }
+      play() {
+        return Promise.resolve();
+      }
+      pause() {
+        this.paused = true;
+      }
+    }
+    vi.stubGlobal("Audio", FakeAudio);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            audioUrl: "https://audio.example/switch.wav",
+            voice: "longanhuan_v3.1"
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      )
+    );
+
+    await expect(
+      speakText(
+        "旧回答内容很长，需要连续朗读，并准备切换到下一段回答。".repeat(8),
+        true,
+        "warm"
+      )
+    ).resolves.toBe(true);
+    await expect(
+      speakText("新的回答现在开始朗读。", true, "warm")
+    ).resolves.toBe(true);
+    expect(audios.length).toBeGreaterThanOrEqual(2);
+
+    audios[0].onended?.();
+    expect(getSpeechStatus()).toBe("speaking");
+    audios[1].onended?.();
+    expect(getSpeechStatus()).toBe("idle");
+    stopSpeaking();
+  });
+
   it("deduplicates background preparation for the same message and voice", async () => {
     const fetchMock = vi.fn(async () =>
       new Response(
