@@ -166,6 +166,12 @@ export interface AdminOverview {
   linkedFamilies: number;
   syncedFamilies: number;
   medicationRecords: number;
+  activeMedicationRecords: number;
+  doseRecords: number;
+  takenDoseRecords: number;
+  familyAlertRecords: number;
+  handledFamilyAlertRecords: number;
+  conversationRecords: number;
   riskRecords: number;
   generatedAt: string;
 }

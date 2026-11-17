@@ -8,33 +8,86 @@ import {
   TrendingUp,
   UsersRound
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { buildProactiveRiskInsights } from "../lib/proactiveRisk";
-import { trackableRiskChecks } from "../lib/riskTracking";
+import {
+  AccountRequestError,
+  fetchAdminOverview,
+  type AdminOverview
+} from "../lib/accountApi";
 import { useAppStore } from "../store/useAppStore";
 
 export function ImpactPage() {
   const navigate = useNavigate();
   const role = useAppStore((state) => state.role);
-  const medications = useAppStore((state) => state.medications);
-  const doseEvents = useAppStore((state) => state.doseEvents);
-  const riskChecks = useAppStore((state) => state.riskChecks);
-  const familyAlerts = useAppStore((state) => state.familyAlerts);
-  const conversations = useAppStore((state) => state.conversations);
-  const activeMedications = medications.filter(
-    (medication) => medication.status === "active"
-  );
-  const trackedRiskChecks = trackableRiskChecks(riskChecks);
-  const takenCount = doseEvents.filter(
-    (event) => event.status === "taken"
-  ).length;
-  const handledAlerts = familyAlerts.filter((alert) => alert.handledAt).length;
-  const proactiveInsights = buildProactiveRiskInsights({
-    medications,
-    doseEvents,
-    riskChecks,
-    familyAlerts
-  });
+  const sessionAccountId = useAppStore((state) => state.sessionAccountId);
+  const accounts = useAppStore((state) => state.accounts);
+  const logoutAccount = useAppStore((state) => state.logoutAccount);
+  const sessionToken =
+    accounts.find((account) => account.id === sessionAccountId)
+      ?.sessionToken || "";
+  const [overview, setOverview] = useState<AdminOverview>();
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (role !== "admin") return;
+    let cancelled = false;
+    let refreshTimer = 0;
+
+    async function loadOverview() {
+      if (!sessionToken) {
+        setError("当前管理员缺少有效会话，请重新登录。");
+        return;
+      }
+      try {
+        const result = await fetchAdminOverview(sessionToken);
+        if (cancelled) return;
+        setOverview(result.overview);
+        setError("");
+      } catch (loadError) {
+        if (cancelled) return;
+        if (
+          loadError instanceof AccountRequestError &&
+          [401, 403].includes(loadError.status)
+        ) {
+          logoutAccount();
+          return;
+        }
+        setError(
+          loadError instanceof Error ? loadError.message : "运行数据加载失败"
+        );
+      }
+    }
+
+    const refresh = () => {
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        if (!cancelled) void loadOverview();
+      }, 150);
+    };
+
+    void loadOverview();
+    if (!sessionToken) return;
+    const source = new EventSource(
+      `/api/admin/events?token=${encodeURIComponent(sessionToken)}`
+    );
+    source.onmessage = refresh;
+    const interval = window.setInterval(refresh, 10_000);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(refreshTimer);
+      source.close();
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [logoutAccount, role, sessionToken]);
 
   if (role !== "admin") {
     return <Navigate to={role === "family" ? "/family" : "/chat"} replace />;
@@ -43,23 +96,23 @@ export function ImpactPage() {
   const metrics = [
     {
       label: "当前用药",
-      value: activeMedications.length,
+      value: overview?.activeMedicationRecords ?? "—",
       note: "种正在管理"
     },
     {
       label: "安全核查",
-      value: trackedRiskChecks.length,
+      value: overview?.riskRecords ?? "—",
       note: "次规则交叉核对"
     },
     {
       label: "服药确认",
-      value: takenCount,
+      value: overview?.takenDoseRecords ?? "—",
       note: "次已记录操作"
     },
     {
       label: "主动趋势",
-      value: proactiveInsights.length,
-      note: "项近期风险分析"
+      value: overview?.familyAlertRecords ?? "—",
+      note: "项家庭风险提醒"
     }
   ];
 
@@ -78,6 +131,12 @@ export function ImpactPage() {
           运行数据
         </span>
       </header>
+
+      {error ? (
+        <div className="notice warm" role="alert">
+          {error}
+        </div>
+      ) : null}
 
       <div className="impact-metrics">
         {metrics.map((metric) => (
@@ -199,7 +258,8 @@ export function ImpactPage() {
           产品不诊断疾病、不开处方、不代替老人决定停药或补服，也不从药品销售中获取推荐佣金。真实医疗决策仍由医生、药师和老人家庭共同完成。
         </p>
         <span>
-          已分析对话 {conversations.length} 个 · 已处理家庭异常 {handledAlerts} 条
+          已分析对话 {overview?.conversationRecords ?? "—"} 个 · 已处理家庭异常{" "}
+          {overview?.handledFamilyAlertRecords ?? "—"} 条
         </span>
       </section>
     </div>

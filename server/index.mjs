@@ -2243,6 +2243,41 @@ const server = createServer(async (request, response) => {
       const snapshots = familyRecords
         .map((family) => family.snapshot)
         .filter(Boolean);
+      const activeMedicationRecords = snapshots.reduce(
+        (total, snapshot) =>
+          total +
+          (snapshot.medications || []).filter(
+            (medication) => medication.status === "active"
+          ).length,
+        0
+      );
+      const doseRecords = snapshots.reduce(
+        (total, snapshot) => total + (snapshot.doseEvents?.length || 0),
+        0
+      );
+      const takenDoseRecords = snapshots.reduce(
+        (total, snapshot) =>
+          total +
+          (snapshot.doseEvents || []).filter(
+            (doseEvent) => doseEvent.status === "taken"
+          ).length,
+        0
+      );
+      const familyAlertRecords = snapshots.reduce(
+        (total, snapshot) => total + (snapshot.familyAlerts?.length || 0),
+        0
+      );
+      const handledFamilyAlertRecords = snapshots.reduce(
+        (total, snapshot) =>
+          total +
+          (snapshot.familyAlerts || []).filter((alert) => alert.handledAt)
+            .length,
+        0
+      );
+      const conversationRecords = snapshots.reduce(
+        (total, snapshot) => total + (snapshot.conversations?.length || 0),
+        0
+      );
       return json(response, 200, {
         overview: {
           totalAccounts: allAccounts.length,
@@ -2258,6 +2293,12 @@ const server = createServer(async (request, response) => {
             (total, snapshot) => total + (snapshot.medications?.length || 0),
             0
           ),
+          activeMedicationRecords,
+          doseRecords,
+          takenDoseRecords,
+          familyAlertRecords,
+          handledFamilyAlertRecords,
+          conversationRecords,
           riskRecords: snapshots.reduce(
             (total, snapshot) => total + (snapshot.riskChecks?.length || 0),
             0
