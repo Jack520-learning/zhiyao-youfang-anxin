@@ -7,6 +7,7 @@ import {
 } from "./cloud";
 import {
   cloudSnapshotFingerprint,
+  mergeConversationHistory,
   preserveLocalConversationImages,
   preserveLocalDraftImage
 } from "./cloudSnapshot";
@@ -136,6 +137,52 @@ describe("cloud snapshot fingerprint", () => {
         imageDataUrl: "data:image/jpeg;base64,draft"
       })?.imageDataUrl
     ).toBe("data:image/jpeg;base64,draft");
+  });
+
+  it("keeps both sides of a conversation conflict without dropping a new answer", () => {
+    const remoteConversation = snapshot(
+      "2026-11-16T00:00:00.000Z"
+    ).conversations![0];
+    const localConversation = {
+      ...remoteConversation,
+      updatedAt: "2026-11-16T00:05:00.000Z",
+      messages: [
+        {
+          id: "question-1",
+          role: "user" as const,
+          content: "布洛芬有什么副作用？",
+          createdAt: "2026-11-16T00:04:00.000Z"
+        },
+        {
+          id: "answer-1",
+          role: "assistant" as const,
+          content: "常见副作用包括胃部不适，请按说明书使用。",
+          createdAt: "2026-11-16T00:05:00.000Z"
+        }
+      ]
+    };
+    const remoteOnly = {
+      ...remoteConversation,
+      id: "conversation-remote",
+      title: "另一台设备的问题",
+      updatedAt: "2026-11-16T00:03:00.000Z"
+    };
+
+    const merged = mergeConversationHistory(
+      [remoteConversation, remoteOnly],
+      [localConversation]
+    );
+
+    expect(merged).toHaveLength(2);
+    expect(
+      merged.find((conversation) => conversation.id === "conversation-1")
+        ?.messages
+    ).toHaveLength(2);
+    expect(
+      merged
+        .find((conversation) => conversation.id === "conversation-1")
+        ?.messages.find((message) => message.id === "answer-1")?.content
+    ).toContain("胃部不适");
   });
 });
 

@@ -8,9 +8,15 @@ import {
   AccountRequestError,
   fetchAdminOverview
 } from "../lib/accountApi";
-import { cloudSnapshotFingerprint } from "../lib/cloudSnapshot";
+import {
+  cloudSnapshotFingerprint,
+  mergeConversationHistory
+} from "../lib/cloudSnapshot";
 import { useAppStore } from "../store/useAppStore";
-import { isChatGenerationActive } from "../lib/chatSyncGuard";
+import {
+  isChatGenerationActive,
+  subscribeChatGenerationEnded
+} from "../lib/chatSyncGuard";
 
 export type SyncStatus = "idle" | "syncing" | "synced" | "offline" | "error";
 
@@ -58,6 +64,14 @@ export function useCloudSync() {
       window.removeEventListener("offline", retry);
     };
   }, []);
+
+  useEffect(
+    () =>
+      subscribeChatGenerationEnded(() =>
+        setConnectionTick((value) => value + 1)
+      ),
+    []
+  );
 
   useEffect(() => {
     if (role !== "admin") return;
@@ -154,6 +168,7 @@ export function useCloudSync() {
     if (!hydrated || !sessionAccountId || !familyCode || role !== "elder") {
       return;
     }
+    if (isChatGenerationActive()) return;
     const key = `${sessionAccountId}:${familyCode}`;
     if (!initialSyncDoneRef.current[key]) return;
     pendingElderWriteRef.current = true;
@@ -180,11 +195,22 @@ export function useCloudSync() {
         setStatus("synced");
       } catch (error) {
         if (error instanceof CloudRevisionConflictError) {
-          lastUploadedElderFingerprintRef.current =
-            cloudSnapshotFingerprint(error.snapshot);
-          useAppStore.getState().mergeFamilySummary(error.snapshot);
+          const localSnapshot = useAppStore.getState().getCloudSnapshot();
+          const mergedSnapshot = {
+            ...error.snapshot,
+            conversations: mergeConversationHistory(
+              error.snapshot.conversations,
+              localSnapshot.conversations
+            )
+          };
+          lastUploadedElderFingerprintRef.current = "";
+          useAppStore.getState().mergeFamilySummary(mergedSnapshot);
           useAppStore.getState().markSynced(error.revision);
-          setStatus("synced");
+          setStatus("syncing");
+          window.setTimeout(
+            () => setConnectionTick((value) => value + 1),
+            250
+          );
           return;
         }
         setStatus("offline");
