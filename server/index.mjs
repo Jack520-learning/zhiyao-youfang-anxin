@@ -258,6 +258,10 @@ function accountSnapshot(account) {
   return database.families[account.familyCode]?.snapshot || null;
 }
 
+function accountRevision(account) {
+  return database.families[account.familyCode]?.revision || 0;
+}
+
 const mcpTools = [
   {
     name: "get_active_medications",
@@ -1913,7 +1917,8 @@ const server = createServer(async (request, response) => {
         token,
         account: publicAccount(account),
         accounts: connectedAccounts(account),
-        snapshot: accountSnapshot(account)
+        snapshot: accountSnapshot(account),
+        revision: accountRevision(account)
       });
     }
 
@@ -1934,7 +1939,8 @@ const server = createServer(async (request, response) => {
         token,
         account: publicAccount(account),
         accounts: connectedAccounts(account),
-        snapshot: accountSnapshot(account)
+        snapshot: accountSnapshot(account),
+        revision: accountRevision(account)
       });
     }
 
@@ -1944,7 +1950,8 @@ const server = createServer(async (request, response) => {
       return json(response, 200, {
         account: publicAccount(account),
         accounts: connectedAccounts(account),
-        snapshot: accountSnapshot(account)
+        snapshot: accountSnapshot(account),
+        revision: accountRevision(account)
       });
     }
 
@@ -2049,7 +2056,8 @@ const server = createServer(async (request, response) => {
         token,
         account: publicAccount(target),
         accounts: connectedAccounts(target),
-        snapshot: accountSnapshot(target)
+        snapshot: accountSnapshot(target),
+        revision: accountRevision(target)
       });
     }
 
@@ -2596,6 +2604,19 @@ const server = createServer(async (request, response) => {
         snapshot: null,
         subscriptions: []
       });
+      const expectedRevision = Number(request.headers["if-match"]);
+      const currentRevision = family.revision || 0;
+      if (
+        request.headers["if-match"] !== undefined &&
+        Number.isInteger(expectedRevision) &&
+        expectedRevision !== currentRevision
+      ) {
+        return json(response, 409, {
+          error: "云端数据已在其他设备更新",
+          revision: currentRevision,
+          snapshot: family.snapshot
+        });
+      }
       const previousSnapshot = family.snapshot;
       const nextSnapshot = publicSnapshot(body);
       const previousAlerts = new Map(
@@ -2779,6 +2800,10 @@ const server = createServer(async (request, response) => {
       }
       if (request.method === "GET") {
         if (!family?.snapshot) return json(response, 404, { error: "未找到家庭" });
+        response.setHeader(
+          "X-Cloud-Revision",
+          String(family.revision || 0)
+        );
         return json(response, 200, {
           ...family.snapshot,
           riskChecks: mergeRiskChecks(

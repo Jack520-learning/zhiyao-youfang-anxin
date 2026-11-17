@@ -12,6 +12,7 @@ import {
   verifyPassword
 } from "../lib/auth";
 import {
+  AccountRequestError,
   createServerLinkedAccount,
   deleteServerAccount,
   loginServerAccount,
@@ -164,7 +165,13 @@ function mergeServerAccounts(
   activeServerAccountId: string,
   token: string
 ): LocalAccount[] {
-  const merged = localAccounts.map(normalizeAccount);
+  const serverIds = new Set(serverAccounts.map((account) => account.id));
+  const merged = localAccounts
+    .map(normalizeAccount)
+    .filter(
+      (account) =>
+        !account.serverAccountId || serverIds.has(account.serverAccountId)
+    );
   for (const serverAccount of serverAccounts) {
     const index = merged.findIndex(
       (account) =>
@@ -374,7 +381,10 @@ export const useAppStore = create<AppStore>()(
         };
         const latest = getState();
         const blankWorkspace = serverSession.snapshot
-          ? workspaceFromCloud(serverSession.snapshot)
+          ? workspaceFromCloud(
+              serverSession.snapshot,
+              serverSession.revision
+            )
           : createBlankWorkspace(cleanFamilyCode);
         if (role === "elder") {
           blankWorkspace.profile = {
@@ -577,6 +587,12 @@ export const useAppStore = create<AppStore>()(
             password
           );
         } catch (error) {
+          if (
+            error instanceof AccountRequestError &&
+            error.status === 401
+          ) {
+            return { ok: false, error: error.message };
+          }
           serverError = toChineseErrorMessage(
             error,
             "无法连接账号服务，请检查网络后重试。"
@@ -625,10 +641,12 @@ export const useAppStore = create<AppStore>()(
           const targetKey = workspaceKey(account.id, account.familyCode);
           const existingWorkspace = workspaces[targetKey];
           const targetWorkspace =
-            existingWorkspace ||
-            (serverSession.snapshot
-              ? workspaceFromCloud(serverSession.snapshot)
-              : createBlankWorkspace(account.familyCode));
+            serverSession.snapshot
+              ? workspaceFromCloud(
+                  serverSession.snapshot,
+                  serverSession.revision
+                )
+              : existingWorkspace || createBlankWorkspace(account.familyCode);
           setState({
             ...workspacePatch(targetWorkspace),
             accounts,
@@ -721,10 +739,12 @@ export const useAppStore = create<AppStore>()(
         const targetKey = workspaceKey(account.id, account.familyCode);
         const existingWorkspace = workspaces[targetKey];
         const targetWorkspace =
-          existingWorkspace ||
-          (serverSession?.snapshot
-            ? workspaceFromCloud(serverSession.snapshot)
-            : createBlankWorkspace(account.familyCode));
+          serverSession?.snapshot
+            ? workspaceFromCloud(
+                serverSession.snapshot,
+                serverSession.revision
+              )
+            : existingWorkspace || createBlankWorkspace(account.familyCode);
         setState({
           ...workspacePatch(targetWorkspace),
           accounts,

@@ -16,6 +16,7 @@ import { herbs } from "../catalog/herbs";
 import { medicines } from "../catalog/medicines";
 import { safetyScenarios } from "../evaluation/safetyScenarios";
 import {
+  AccountRequestError,
   fetchAdminOverview,
   setAdminAccountDisabled,
   type AdminAccountSummary,
@@ -34,6 +35,7 @@ export function AdminPage() {
   const role = useAppStore((state) => state.role);
   const sessionAccountId = useAppStore((state) => state.sessionAccountId);
   const accounts = useAppStore((state) => state.accounts);
+  const logoutAccount = useAppStore((state) => state.logoutAccount);
   const currentAccount = accounts.find(
     (account) => account.id === sessionAccountId
   );
@@ -57,6 +59,13 @@ export function AdminPage() {
       setOverview(result.overview);
       setAdminAccounts(result.accounts);
     } catch (loadError) {
+      if (
+        loadError instanceof AccountRequestError &&
+        [401, 403].includes(loadError.status)
+      ) {
+        logoutAccount();
+        return;
+      }
       setError(
         loadError instanceof Error ? loadError.message : "后台数据加载失败"
       );

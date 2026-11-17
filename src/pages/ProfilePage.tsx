@@ -408,7 +408,11 @@ export function ProfilePage() {
       if (role === "family") {
         await updateFamilyEmergencyContacts(familyCode, cleaned);
       } else {
-        await syncCloudSnapshot(useAppStore.getState().getCloudSnapshot());
+        const state = useAppStore.getState();
+        await syncCloudSnapshot(
+          state.getCloudSnapshot(),
+          state.cloudRevision
+        );
       }
     } catch {
       setToast("联系人已保存在本机，但家庭端同步暂时失败，请检查连接");

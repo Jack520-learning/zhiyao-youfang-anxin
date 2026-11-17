@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CloudSnapshot } from "../types";
+import {
+  CloudRevisionConflictError,
+  fetchFamilySnapshotState,
+  syncCloudSnapshot
+} from "./cloud";
 import {
   cloudSnapshotFingerprint,
   preserveLocalConversationImages,
@@ -45,6 +50,10 @@ function snapshot(updatedAt: string): CloudSnapshot {
     ]
   };
 }
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("cloud snapshot fingerprint", () => {
   it("ignores the timestamp so a device does not re-upload unchanged data", () => {
@@ -127,5 +136,84 @@ describe("cloud snapshot fingerprint", () => {
         imageDataUrl: "data:image/jpeg;base64,draft"
       })?.imageDataUrl
     ).toBe("data:image/jpeg;base64,draft");
+  });
+});
+
+describe("cloud revision sync", () => {
+  it("reads the server revision together with a family snapshot", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify(snapshot("2026-11-16T00:00:00.000Z")),
+          {
+            status: 200,
+            headers: {
+              "Content-Type": "application/json",
+              "X-Cloud-Revision": "7"
+            }
+          }
+        )
+      )
+    );
+
+    const result = await fetchFamilySnapshotState("123456");
+
+    expect(result?.revision).toBe(7);
+    expect(result?.snapshot.familyCode).toBe("123456");
+  });
+
+  it("sends the known revision and exposes a newer remote snapshot", async () => {
+    const remote = snapshot("2026-11-16T00:05:00.000Z");
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: "云端数据已在其他设备更新",
+          revision: 8,
+          snapshot: remote
+        }),
+        {
+          status: 409,
+          headers: { "Content-Type": "application/json" }
+        }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      syncCloudSnapshot(snapshot("2026-11-16T00:00:00.000Z"), 7)
+    ).rejects.toEqual(
+      expect.objectContaining({
+        name: "CloudRevisionConflictError",
+        revision: 8,
+        snapshot: remote
+      })
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/sync",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "If-Match": "7" })
+      })
+    );
+  });
+
+  it("marks conflicts with a dedicated error type", async () => {
+    const remote = snapshot("2026-11-16T00:05:00.000Z");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ revision: 3, snapshot: remote }),
+          {
+            status: 409,
+            headers: { "Content-Type": "application/json" }
+          }
+        )
+      )
+    );
+
+    await expect(syncCloudSnapshot(remote, 2)).rejects.toBeInstanceOf(
+      CloudRevisionConflictError
+    );
   });
 });

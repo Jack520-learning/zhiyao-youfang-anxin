@@ -16,6 +16,17 @@ export interface AccountSessionResponse {
   account: ServerAccount;
   accounts: ServerAccount[];
   snapshot?: CloudSnapshot | null;
+  revision?: number;
+}
+
+export class AccountRequestError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "AccountRequestError";
+    this.status = status;
+  }
 }
 
 interface AccountRequest {
@@ -48,7 +59,10 @@ async function accountRequest<T>(
     error?: string;
   };
   if (!response.ok) {
-    throw new Error(payload.error || `账号服务请求失败：${response.status}`);
+    throw new AccountRequestError(
+      payload.error || `账号服务请求失败：${response.status}`,
+      response.status
+    );
   }
   return payload as T;
 }

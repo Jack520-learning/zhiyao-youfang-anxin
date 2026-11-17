@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  AccountRequestError,
   createServerLinkedAccount,
   loginServerAccount
 } from "./accountApi";
@@ -73,6 +74,28 @@ describe("account service client", () => {
         headers: expect.objectContaining({
           Authorization: "Bearer session-token"
         })
+      })
+    );
+  });
+
+  it("preserves an authoritative login rejection from the server", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: "账号或密码不正确" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" }
+        })
+      )
+    );
+
+    await expect(
+      loginServerAccount("deleted-account", "secret123")
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<AccountRequestError>>({
+        name: "AccountRequestError",
+        status: 401,
+        message: "账号或密码不正确"
       })
     );
   });

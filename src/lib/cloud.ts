@@ -1,5 +1,22 @@
 import type { CloudSnapshot, EmergencyContact } from "../types";
 
+export interface FamilySnapshotState {
+  snapshot: CloudSnapshot;
+  revision: number;
+}
+
+export class CloudRevisionConflictError extends Error {
+  revision: number;
+  snapshot: CloudSnapshot;
+
+  constructor(snapshot: CloudSnapshot, revision: number) {
+    super("云端数据已在其他设备更新");
+    this.name = "CloudRevisionConflictError";
+    this.revision = revision;
+    this.snapshot = snapshot;
+  }
+}
+
 export async function sendConcernAlert(input: {
   familyCode: string;
   elderName: string;
@@ -13,12 +30,32 @@ export async function sendConcernAlert(input: {
   if (!response.ok) throw new Error("家属提醒发送失败");
 }
 
-export async function syncCloudSnapshot(snapshot: CloudSnapshot): Promise<number> {
+export async function syncCloudSnapshot(
+  snapshot: CloudSnapshot,
+  baseRevision?: number
+): Promise<number> {
   const response = await fetch("/api/sync", {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(Number.isInteger(baseRevision)
+        ? { "If-Match": String(baseRevision) }
+        : {})
+    },
     body: JSON.stringify(snapshot)
   });
+  if (response.status === 409) {
+    const conflict = (await response.json().catch(() => ({}))) as {
+      revision?: number;
+      snapshot?: CloudSnapshot;
+    };
+    if (conflict.snapshot) {
+      throw new CloudRevisionConflictError(
+        conflict.snapshot,
+        conflict.revision || 0
+      );
+    }
+  }
   if (!response.ok) {
     throw new Error(`同步失败：${response.status}`);
   }
@@ -29,12 +66,21 @@ export async function syncCloudSnapshot(snapshot: CloudSnapshot): Promise<number
 export async function fetchFamilySnapshot(
   familyCode: string
 ): Promise<CloudSnapshot | null> {
+  return (await fetchFamilySnapshotState(familyCode))?.snapshot ?? null;
+}
+
+export async function fetchFamilySnapshotState(
+  familyCode: string
+): Promise<FamilySnapshotState | null> {
   const response = await fetch(
     `/api/family/${encodeURIComponent(familyCode.toUpperCase())}`
   );
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`读取失败：${response.status}`);
-  return (await response.json()) as CloudSnapshot;
+  return {
+    snapshot: (await response.json()) as CloudSnapshot,
+    revision: Number(response.headers.get("X-Cloud-Revision")) || 0
+  };
 }
 
 export async function deleteCloudFamily(familyCode: string): Promise<void> {

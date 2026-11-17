@@ -103,7 +103,8 @@ export function createBlankWorkspace(familyCode: string): AccountWorkspace {
 }
 
 export function workspaceFromCloud(
-  snapshot: CloudSnapshot
+  snapshot: CloudSnapshot,
+  cloudRevision?: number
 ): AccountWorkspace {
   const workspace = createBlankWorkspace(snapshot.familyCode);
   return {
@@ -145,7 +146,8 @@ export function workspaceFromCloud(
         })
       : workspace.preferences,
     intakeDraft: snapshot.intakeDraft ?? workspace.intakeDraft,
-    lastSyncedAt: snapshot.updatedAt
+    lastSyncedAt: snapshot.updatedAt,
+    cloudRevision
   };
 }
 

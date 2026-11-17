@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  fetchFamilySnapshot,
+  CloudRevisionConflictError,
+  fetchFamilySnapshotState,
   syncCloudSnapshot
 } from "../lib/cloud";
 import { cloudSnapshotFingerprint } from "../lib/cloudSnapshot";
@@ -36,6 +37,7 @@ export function useCloudSync() {
     lastFamilyUpdateRef.current = "";
     lastUploadedElderFingerprintRef.current = "";
     pendingElderWriteRef.current = false;
+    initialSyncDoneRef.current = {};
   }, [sessionAccountId, familyCode, role]);
 
   useEffect(() => {
@@ -65,25 +67,32 @@ export function useCloudSync() {
 
     async function bootstrapSync() {
       try {
-        const existing = await fetchFamilySnapshot(familyCode);
-        // If the server already has data, no need to push empty initial state.
-        // Only push when server is empty — that's the first-login case.
-        if (!existing) {
+        const existing = await fetchFamilySnapshotState(familyCode);
+        if (existing) {
+          const remoteFingerprint = cloudSnapshotFingerprint(
+            existing.snapshot
+          );
+          lastUploadedElderFingerprintRef.current = remoteFingerprint;
+          useAppStore.getState().mergeFamilySummary(existing.snapshot);
+          useAppStore.getState().markSynced(existing.revision);
+        } else {
           const snapshot = useAppStore.getState().getCloudSnapshot();
           const revision = await syncCloudSnapshot(
-            snapshot
+            snapshot,
+            useAppStore.getState().cloudRevision ?? 0
           );
           lastUploadedElderFingerprintRef.current =
             cloudSnapshotFingerprint(snapshot);
           useAppStore.getState().markSynced(revision);
         }
         initialSyncDoneRef.current[key] = true;
+        setConnectionTick((value) => value + 1);
       } catch {
-        // Non-blocking — the regular writer/polling loops will catch up.
+        initialSyncDoneRef.current[key] = false;
       }
     }
     void bootstrapSync();
-  }, [hydrated, sessionAccountId, familyCode, role]);
+  }, [hydrated, sessionAccountId, familyCode, role, connectionTick]);
 
   // The elder device is the writer. Debouncing prevents one request for every
   // keystroke or short-lived status change.
@@ -91,6 +100,8 @@ export function useCloudSync() {
     if (!hydrated || !sessionAccountId || !familyCode || role !== "elder") {
       return;
     }
+    const key = `${sessionAccountId}:${familyCode}`;
+    if (!initialSyncDoneRef.current[key]) return;
     pendingElderWriteRef.current = true;
     const timer = window.setTimeout(async () => {
       if (!navigator.onLine) {
@@ -106,11 +117,22 @@ export function useCloudSync() {
           setStatus("synced");
           return;
         }
-        const revision = await syncCloudSnapshot(snapshot);
+        const revision = await syncCloudSnapshot(
+          snapshot,
+          useAppStore.getState().cloudRevision
+        );
         lastUploadedElderFingerprintRef.current = fingerprint;
         useAppStore.getState().markSynced(revision);
         setStatus("synced");
-      } catch {
+      } catch (error) {
+        if (error instanceof CloudRevisionConflictError) {
+          lastUploadedElderFingerprintRef.current =
+            cloudSnapshotFingerprint(error.snapshot);
+          useAppStore.getState().mergeFamilySummary(error.snapshot);
+          useAppStore.getState().markSynced(error.revision);
+          setStatus("synced");
+          return;
+        }
         setStatus("offline");
       } finally {
         pendingElderWriteRef.current = false;
@@ -151,10 +173,12 @@ export function useCloudSync() {
     async function loadElderSnapshot() {
       if (isChatGenerationActive()) return;
       try {
-        const snapshot = await fetchFamilySnapshot(familyCode);
+        const remote = await fetchFamilySnapshotState(familyCode);
+        const snapshot = remote?.snapshot;
         if (
           cancelled ||
           !snapshot ||
+          !remote ||
           isChatGenerationActive()
         ) {
           return;
@@ -168,11 +192,13 @@ export function useCloudSync() {
         const remoteFingerprint = cloudSnapshotFingerprint(snapshot);
         if (remoteFingerprint === localFingerprint) {
           lastUploadedElderFingerprintRef.current = remoteFingerprint;
+          useAppStore.getState().markSynced(remote.revision);
           setStatus("synced");
           return;
         }
         lastUploadedElderFingerprintRef.current = remoteFingerprint;
         useAppStore.getState().mergeFamilySummary(snapshot);
+        useAppStore.getState().markSynced(remote.revision);
         setStatus("synced");
       } catch {
         // The regular writer reports connection status.
@@ -227,9 +253,10 @@ export function useCloudSync() {
         return;
       }
       try {
-        const snapshot = await fetchFamilySnapshot(familyCode);
+        const remote = await fetchFamilySnapshotState(familyCode);
+        const snapshot = remote?.snapshot;
         if (cancelled) return;
-        if (!snapshot) {
+        if (!remote || !snapshot) {
           setStatus("idle");
           return;
         }
@@ -237,6 +264,7 @@ export function useCloudSync() {
           lastFamilyUpdateRef.current = snapshot.updatedAt;
           useAppStore.getState().mergeFamilySummary(snapshot);
         }
+        useAppStore.getState().markSynced(remote.revision);
         setStatus("synced");
       } catch {
         if (!cancelled && firstLoad) setStatus("error");
