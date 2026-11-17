@@ -43,7 +43,22 @@ describe("conversation memory", () => {
         ]
       })
     ).toBe(
-      "上一轮问题：我拍了一张药盒照片\n这一轮接着问：硝酸甘油片 如果漏服时间比较久，应该联系谁？"
+      "硝酸甘油片 如果漏服时间比较久，应该联系谁？"
     );
+  });
+
+  it("does not let an older topic override the current herb question", () => {
+    expect(
+      buildRecentConversationQuestion({
+        query: "这种中药材和我现在吃的西药有冲突吗？",
+        medicineName: "蒲公英",
+        recentMessages: [
+          {
+            role: "user",
+            content: "蒲公英的传统功用是什么？"
+          }
+        ]
+      })
+    ).toBe("蒲公英 这种中药材和我现在吃的西药有冲突吗？");
   });
 });

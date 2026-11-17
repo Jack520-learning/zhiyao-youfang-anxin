@@ -39,6 +39,7 @@ export function buildRecentConversationQuestion(input: {
     medicineName && !query.includes(medicineName)
       ? `${medicineName} ${query}`
       : query;
+  if (medicineName) return resolvedQuery;
   const previousUserQuestion = [...(input.recentMessages || [])]
     .reverse()
     .find((message) => message.role === "user")?.content;
