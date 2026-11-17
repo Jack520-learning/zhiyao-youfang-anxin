@@ -238,7 +238,8 @@ interface AppActions {
     password: string
   ) => Promise<{ ok: boolean; error?: string }>;
   switchAccount: (
-    accountId: string
+    accountId: string,
+    options?: { adminPassword?: string }
   ) => Promise<{ ok: boolean; error?: string }>;
   verifyAccountPassword: (
     accountId: string,
@@ -721,7 +722,7 @@ export const useAppStore = create<AppStore>()(
           error: serverError || "账号或密码不正确"
         };
       },
-      switchAccount: async (accountId) => {
+      switchAccount: async (accountId, options) => {
         const state = getState();
         const selectedAccount = state.accounts
           .map(normalizeAccount)
@@ -730,11 +731,11 @@ export const useAppStore = create<AppStore>()(
         if (
           selectedAccount.role === "admin" &&
           selectedAccount.id !== state.sessionAccountId &&
-          !selectedAccount.sessionToken
+          !options?.adminPassword
         ) {
           return {
             ok: false,
-            error: "后台管理员会话已失效，请通过“登录其他账号”重新登录。"
+            error: "请输入后台管理员密码后再切换。"
           };
         }
         const currentAccount = activeLocalAccount(
@@ -748,10 +749,20 @@ export const useAppStore = create<AppStore>()(
               currentAccount.sessionToken,
               {
                 accountId: selectedAccount.serverAccountId,
-                username: selectedAccount.username
+                username: selectedAccount.username,
+                password: options?.adminPassword
               }
             );
-          } catch {
+          } catch (error) {
+            if (selectedAccount.role === "admin") {
+              return {
+                ok: false,
+                error:
+                  error instanceof AccountRequestError
+                    ? error.message
+                    : "管理员密码验证失败，请重新输入。"
+              };
+            }
             // Local switching remains available as a temporary offline fallback.
           }
         }

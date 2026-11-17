@@ -2058,11 +2058,20 @@ const server = createServer(async (request, response) => {
         Object.values(database.accounts).find(
           (account) => account.id === accountId
         );
-      if (
-        !target ||
-        target.disabled ||
-        (currentAccount.role !== "admin" &&
-          !accountsShareFamily(currentAccount, target))
+      if (!target || target.disabled) {
+        return json(response, 403, { error: "没有权限切换到该账号" });
+      }
+      if (target.role === "admin" && target.id !== currentAccount.id) {
+        const valid = await verifyAccountPassword(
+          String(body.password || ""),
+          target
+        );
+        if (!valid) {
+          return json(response, 401, { error: "管理员密码不正确" });
+        }
+      } else if (
+        currentAccount.role !== "admin" &&
+        !accountsShareFamily(currentAccount, target)
       ) {
         return json(response, 403, { error: "没有权限切换到该账号" });
       }

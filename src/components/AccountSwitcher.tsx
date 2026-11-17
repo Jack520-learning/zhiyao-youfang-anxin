@@ -68,6 +68,12 @@ export function AccountSwitcher({
   const [editError, setEditError] = useState("");
   const [editNotice, setEditNotice] = useState("");
   const [editing, setEditing] = useState(false);
+  const [adminSwitchTarget, setAdminSwitchTarget] = useState<LocalAccount>();
+  const [adminSwitchPassword, setAdminSwitchPassword] = useState("");
+  const [adminSwitchError, setAdminSwitchError] = useState("");
+  const [adminSwitchBusy, setAdminSwitchBusy] = useState(false);
+  const [showAdminSwitchPassword, setShowAdminSwitchPassword] =
+    useState(false);
 
   useEffect(() => {
     if (open) return;
@@ -91,6 +97,11 @@ export function AccountSwitcher({
     setEditConfirmPassword("");
     setEditError("");
     setEditNotice("");
+    setAdminSwitchTarget(undefined);
+    setAdminSwitchPassword("");
+    setAdminSwitchError("");
+    setAdminSwitchBusy(false);
+    setShowAdminSwitchPassword(false);
   }, [open]);
 
   if (!open) return null;
@@ -117,14 +128,7 @@ export function AccountSwitcher({
     }
   ];
 
-  async function switchTo(account: LocalAccount) {
-    if (account.id !== sessionAccountId) {
-      const result = await switchAccount(account.id);
-      if (!result.ok) {
-        setDeleteNotice(result.error || "账号切换失败");
-        return;
-      }
-    }
+  async function completeSwitch(account: LocalAccount) {
     onClose();
     navigate(
       account.role === "admin"
@@ -133,6 +137,50 @@ export function AccountSwitcher({
           ? "/family"
           : "/"
     );
+  }
+
+  async function switchTo(account: LocalAccount) {
+    if (account.id !== sessionAccountId) {
+      if (account.role === "admin") {
+        setAdminSwitchTarget(account);
+        setAdminSwitchPassword("");
+        setAdminSwitchError("");
+        setShowAdminSwitchPassword(false);
+        setDeleteNotice("");
+        return;
+      }
+      const result = await switchAccount(account.id);
+      if (!result.ok) {
+        setDeleteNotice(result.error || "账号切换失败");
+        return;
+      }
+    }
+    await completeSwitch(account);
+  }
+
+  async function confirmAdminSwitch() {
+    if (!adminSwitchTarget) return;
+    if (!adminSwitchPassword) {
+      setAdminSwitchError("请输入后台管理员密码");
+      return;
+    }
+    setAdminSwitchBusy(true);
+    setAdminSwitchError("");
+    try {
+      const result = await switchAccount(adminSwitchTarget.id, {
+        adminPassword: adminSwitchPassword
+      });
+      if (!result.ok) {
+        setAdminSwitchError(result.error || "管理员密码验证失败");
+        return;
+      }
+      const target = adminSwitchTarget;
+      setAdminSwitchTarget(undefined);
+      setAdminSwitchPassword("");
+      await completeSwitch(target);
+    } finally {
+      setAdminSwitchBusy(false);
+    }
   }
 
   function closeSwitcher() {
@@ -154,6 +202,11 @@ export function AccountSwitcher({
     setEditConfirmPassword("");
     setEditError("");
     setEditNotice("");
+    setAdminSwitchTarget(undefined);
+    setAdminSwitchPassword("");
+    setAdminSwitchError("");
+    setAdminSwitchBusy(false);
+    setShowAdminSwitchPassword(false);
     onClose();
   }
 
@@ -747,6 +800,97 @@ export function AccountSwitcher({
           <div className="notice account-delete-notice" role="status">
             {deleteNotice}
           </div>
+        ) : null}
+        {adminSwitchTarget ? (
+          <section className="account-switch-auth-panel">
+            <div>
+              <h3>
+                切换到后台管理端：{adminSwitchTarget.displayName}
+              </h3>
+              <p>
+                请输入管理员账号 {adminSwitchTarget.username} 的密码。验证通过后才会进入后台。
+              </p>
+            </div>
+            <label className="field">
+              <span className="field-label">后台管理员密码</span>
+              <div style={{ position: "relative" }}>
+                <input
+                  className="input"
+                  type={showAdminSwitchPassword ? "text" : "password"}
+                  value={adminSwitchPassword}
+                  onChange={(event) =>
+                    setAdminSwitchPassword(event.target.value)
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void confirmAdminSwitch();
+                    }
+                  }}
+                  autoComplete="current-password"
+                  placeholder={`账号：${adminSwitchTarget.username}`}
+                  style={{ paddingRight: 42 }}
+                />
+                <button
+                  type="button"
+                  className="icon-btn"
+                  style={{
+                    position: "absolute",
+                    right: 6,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "transparent",
+                    border: "none"
+                  }}
+                  aria-label={
+                    showAdminSwitchPassword ? "隐藏管理员密码" : "显示管理员密码"
+                  }
+                  onClick={() =>
+                    setShowAdminSwitchPassword((value) => !value)
+                  }
+                >
+                  {showAdminSwitchPassword ? (
+                    <EyeOff size={18} aria-hidden="true" />
+                  ) : (
+                    <Eye size={18} aria-hidden="true" />
+                  )}
+                </button>
+              </div>
+            </label>
+            {adminSwitchError ? (
+              <p className="auth-error" role="alert">
+                {adminSwitchError}
+              </p>
+            ) : null}
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={adminSwitchBusy}
+                onClick={() => void confirmAdminSwitch()}
+              >
+                {adminSwitchBusy ? (
+                  <LoaderCircle size={19} className="spin" />
+                ) : (
+                  <LogIn size={19} aria-hidden="true" />
+                )}
+                {adminSwitchBusy ? "正在验证" : "验证并进入后台"}
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={adminSwitchBusy}
+                onClick={() => {
+                  setAdminSwitchTarget(undefined);
+                  setAdminSwitchPassword("");
+                  setAdminSwitchError("");
+                  setShowAdminSwitchPassword(false);
+                }}
+              >
+                取消
+              </button>
+            </div>
+          </section>
         ) : null}
         {deleteTarget ? (
           <section className="account-delete-panel">

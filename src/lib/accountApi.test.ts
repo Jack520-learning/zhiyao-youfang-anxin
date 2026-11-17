@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AccountRequestError,
   createServerLinkedAccount,
-  loginServerAccount
+  loginServerAccount,
+  switchServerAccount
 } from "./accountApi";
 
 afterEach(() => {
@@ -96,6 +97,43 @@ describe("account service client", () => {
         name: "AccountRequestError",
         status: 401,
         message: "账号或密码不正确"
+      })
+    );
+  });
+
+  it("sends the administrator password when switching to a management account", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          token: "admin-session",
+          account: {
+            id: "admin-1",
+            username: "manage",
+            displayName: "管理员",
+            role: "admin",
+            familyCode: "",
+            linkedFamilyCodes: [],
+            createdAt: "2026-01-01T00:00:00.000Z"
+          },
+          accounts: []
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await switchServerAccount("current-session", {
+      accountId: "admin-1",
+      password: "admin-password"
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/switch",
+      expect.objectContaining({
+        body: JSON.stringify({
+          accountId: "admin-1",
+          password: "admin-password"
+        })
       })
     );
   });

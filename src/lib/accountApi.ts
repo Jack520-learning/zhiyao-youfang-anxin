@@ -105,7 +105,7 @@ export function createServerLinkedAccount(
 
 export function switchServerAccount(
   token: string,
-  account: { accountId?: string; username?: string }
+  account: { accountId?: string; username?: string; password?: string }
 ): Promise<AccountSessionResponse> {
   return accountRequest("/api/auth/switch", {
     method: "POST",

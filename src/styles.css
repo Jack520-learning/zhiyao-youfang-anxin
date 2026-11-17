@@ -4082,6 +4082,32 @@ img {
   margin-top: 12px;
 }
 
+.account-switch-auth-panel {
+  display: grid;
+  gap: 13px;
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  background: var(--surface-soft);
+}
+
+.account-switch-auth-panel h3 {
+  color: var(--ink);
+  font-size: calc(17px * var(--font-scale));
+}
+
+.account-switch-auth-panel p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: calc(12px * var(--font-scale));
+  line-height: 1.6;
+}
+
+.account-switch-auth-panel .modal-actions {
+  margin-top: 0;
+}
+
 .account-delete-panel {
   display: grid;
   gap: 13px;
